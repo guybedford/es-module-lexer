@@ -52,7 +52,7 @@ exports.toString();
 // Dynamic imports are indicated by imports[1].d !== -1
 // In this case the "d" index is the start of the dynamic import
 // Returns true
-imports[1].d === -1;
+imports[1].d !== -1;
 
 // Returns "'asdf'"
 source.substring(imports[1].s, imports[1].e);
