@@ -1,0 +1,18 @@
+{
+  "name": "es-module-lexer",
+  "version": "0.1.0",
+  "description": "Lexes ES modules returning their import/export metadata",
+  "main": "lexer.js",
+  "scripts": {
+    "test": "mocha -r esm -u tdd test/unit.js",
+    "bench": "node -r esm bench"
+  },
+  "author": "Guy Bedford",
+  "license": "MIT",
+  "devDependencies": {
+    "esm": "^3.0.84",
+    "kleur": "^2.0.2",
+    "mocha": "^5.2.0",
+    "pretty-ms": "^5.0.0"
+  }
+}
