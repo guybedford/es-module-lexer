@@ -49,10 +49,10 @@ source.substring(imports[0].s, imports[0].e);
 // Returns "p,q"
 exports.toString();
 
-// Dynamic imports are indicated by imports[1].d !== -1
+// Dynamic imports are indicated by imports[1].d > -1
 // In this case the "d" index is the start of the dynamic import
 // Returns true
-imports[1].d !== -1;
+imports[1].d > -1;
 
 // Returns "'asdf'"
 source.substring(imports[1].s, imports[1].e);
@@ -61,7 +61,7 @@ source.substring(imports[1].d, imports[1].s);
 
 // import.meta is indicated by imports[2].d === -2
 // Returns true
-imports[2].d === -1;
+imports[2].d === -2;
 // Returns "import /*comment!*/.meta"
 source.substring(imports[2].s, imports[2].e);
 ```
