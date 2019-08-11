@@ -2,19 +2,27 @@
   "name": "es-module-lexer",
   "version": "0.1.2",
   "description": "Lexes ES modules returning their import/export metadata",
-  "main": "lexer.js",
+  "main": "dist/lexer.js",
+  "module": "lexer.js",
   "scripts": {
     "test": "mocha -r esm -u tdd test/unit.js",
+    "build": "babel lexer.js --out-dir dist --plugins @babel/plugin-transform-modules-commonjs",
     "bench": "node -r esm bench"
   },
   "author": "Guy Bedford",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.5.5",
+    "@babel/cli": "^7.5.5",
+    "@babel/plugin-transform-modules-commonjs": "^7.5.0",
     "esm": "^3.0.84",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
     "pretty-ms": "^5.0.0"
   },
-  "files": ["lexer.js"],
+  "files": [
+    "lexer.js",
+    "dist"
+  ],
   "type": "module"
 }
