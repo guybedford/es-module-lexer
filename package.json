@@ -6,7 +6,7 @@
   "module": "lexer.js",
   "scripts": {
     "test": "mocha -r esm -u tdd test/unit.js",
-    "build": "babel lexer.js --out-dir dist --plugins @babel/plugin-transform-modules-commonjs",
+    "build": "babel lexer.js --out-dir dist",
     "bench": "node -r esm bench"
   },
   "author": "Guy Bedford",
