@@ -4,7 +4,8 @@
       "@babel/plugin-transform-modules-commonjs",
       {
         "strict": true
-      }
-    ]
+      },
+    ],
+    "add-module-exports"
   ]
 }
