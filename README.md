@@ -8,13 +8,9 @@ The output interfaces use minification-friendly names.
 
 ### Usage
 
-> Note: this module is exposed as an ES module build only (lexer.js contains `export default analyze(source) { ... }`).
-
 ```
 npm install es-module-lexer
 ```
-
-Using `node --experimental-modules` -
 
 ```js
 import analyze from 'es-module-lexer';
