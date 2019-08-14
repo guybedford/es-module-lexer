@@ -26,5 +26,13 @@
     "lexer.js",
     "dist"
   ],
-  "type": "module"
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guybedford/es-module-lexer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guybedford/es-module-lexer/issues"
+  },
+  "homepage": "https://github.com/guybedford/es-module-lexer#readme"
 }
