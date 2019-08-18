@@ -1,23 +1,17 @@
-export default function analyzeModuleSyntax (_str) {
-  str = _str;
-  baseParse();
-  return [oImports, oExports];
-}
-
 // State:
 // (for perf, works because this runs sync)
 let i, charCode, str,
   lastTokenIndex,
   lastOpenTokenIndex,
   lastTokenIndexStack,
-  dynamicImportStack,
   braceDepth,
   templateDepth,
   templateStack,
   oImports,
   oExports;
 
-function baseParse () {
+export default function analyzeModuleSyntax (_str) {
+  str = _str;
   lastTokenIndex = lastOpenTokenIndex = -1;
   oImports = [];
   oExports = [];
@@ -25,7 +19,6 @@ function baseParse () {
   templateDepth = 0;
   templateStack = [];
   lastTokenIndexStack = [];
-  dynamicImportStack = [];
   i = -1;
 
   /*
@@ -100,6 +93,8 @@ function baseParse () {
   }
   if (braceDepth || templateDepth || lastTokenIndexStack.length)
     syntaxError();
+
+  return [oImports, oExports];
 }
 
 function parseNext () {
@@ -129,14 +124,8 @@ function parseNext () {
       if (!lastTokenIndexStack)
         syntaxError();
       lastOpenTokenIndex = lastTokenIndexStack.pop();
-      if (dynamicImportStack.length && lastOpenTokenIndex == dynamicImportStack[dynamicImportStack.length - 1]) {
-        for (let j = 0; j < oImports.length; j++)
-          if (oImports[j].d === lastOpenTokenIndex) {
-            oImports[j].e = i;
-            break;
-          }
-        dynamicImportStack.pop();
-      }
+      if (oImports.length && oImports[oImports.length - 1].d === lastOpenTokenIndex)
+        oImports[oImports.length - 1].e = i;
       return;
 
     case 39/*'*/:
@@ -163,8 +152,7 @@ function parseNext () {
           lastTokenIndexStack.push(start);
           if (str.charCodeAt(lastTokenIndex) === 46/*.*/)
             return;
-          // dynamic import indicated by positive d, which will be set to closing paren index
-          dynamicImportStack.push(start);
+          // dynamic import indicated by positive d
           oImports.push({ s: i + 1, e: undefined, d: start });
           return;
         // import.meta
