@@ -69,24 +69,27 @@ Benchmarks can be run with `npm run bench`.
 Current results:
 
 ```
-bench/samples/d3.js (497K)
-> Cold: 55ms
-> Warm: 7ms (average of 25 runs)
-bench/samples/d3.min.js (268K)
-> Cold: 13ms
-> Warm: 5ms (average of 25 runs)
-bench/samples/magic-string.js (35K)
-> Cold: 4ms
-> Warm: 0ms (average of 25 runs)
-bench/samples/magic-string.min.js (20K)
-> Cold: 0ms
-> Warm: 0ms (average of 25 runs)
-bench/samples/rollup.js (881K)
-> Cold: 27ms
-> Warm: 13ms (average of 25 runs)
-bench/samples/rollup.min.js (420K)
-> Cold: 8ms
-> Warm: 8ms (average of 25 runs)
+Cold Run, All Samples
+bench/samples/*.js (2195 KiB)
+> 179ms
+
+Warm Runs (average of 25 runs)
+bench/samples/d3.js (508 KiB)
+> 6.84ms
+bench/samples/d3.min.js (274 KiB)
+> 3.16ms
+bench/samples/magic-string.js (35 KiB)
+> 0.6ms
+bench/samples/magic-string.min.js (20 KiB)
+> 0ms
+bench/samples/rollup.js (929 KiB)
+> 8.64ms
+bench/samples/rollup.min.js (429 KiB)
+> 5.12ms
+
+Warm Runs, All Samples (average of 25 runs)
+bench/samples/*.js (2195 KiB)
+> 24.24ms
 ```
 
 ### Limitations

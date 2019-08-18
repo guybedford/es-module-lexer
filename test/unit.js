@@ -43,6 +43,11 @@ suite('Lexer', () => {
     assert.equal(imports[0].e, 21);
   });
 
+  test('return bracket division', () => {
+    const source = `function variance(){return s/(a-1)}`;
+    const [imports, exports] = parse(source);
+  });
+
   test('Simple reexport', () => {
     const source = `
       export { hello as default } from "test-dep";
@@ -141,6 +146,10 @@ suite('Lexer', () => {
 
   test('Comments', () => {
     const source = `
+//
+function x() {
+}
+
       /**/
       // '
       /* / */
@@ -148,7 +157,6 @@ suite('Lexer', () => {
 
          * export { b }
       \\*/export { a }
-
 
       function () {
         /***/
@@ -217,6 +225,7 @@ suite('Lexer', () => {
       ('a')/i'/g;
       /asdf/ / /as'df/; // '
       \`\${/test/ + 5}\`
+      /regex/ / x;
       function () {
         return /*asdf8*// 5/;
       }
