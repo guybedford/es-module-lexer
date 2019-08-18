@@ -35,26 +35,39 @@ function timeRun (code) {
 }
 
 console.log('Cold Run, All Samples');
+let totalSize = 0;
 {
 	let total = 0;
-	let totalSize = 0;
 	files.forEach(({ code, size }) => {
 		totalSize += size;
 		total += timeRun(code);
 	});
 	console.log(c.bold.cyan(`bench/samples/*.js (${Math.round(totalSize / 1e3)} KiB)`));
 	console.log(`> ${c.bold.green(total + 'ms')}`);
+	gc();
 }
 
-console.log('\nWarn Runs');
+console.log(`\nWarm Runs (average of ${n} runs)`);
 files.forEach(({ file, code, size }) => {
 	console.log(c.bold.cyan(`${file} (${Math.round(size / 1e3)} KiB)`));
 
 	let total = 0;
 	for (let i = 0; i < n; i++) {
-		gc();
 		total += timeRun(code);
+		gc();
 	}
 
-	console.log(`> ${c.bold.green((total / n) + 'ms')} (average of ${n} runs)`);
+	console.log(`> ${c.bold.green((total / n) + 'ms')}`);
 });
+
+console.log(`\nWarm Runs, All Samples (average of ${n} runs)`);
+{
+	let total = 0;
+	for (let i = 0; i < n; i++) {
+		files.forEach(({ code }) => {
+			total += timeRun(code);
+		});
+	}
+	console.log(c.bold.cyan(`bench/samples/*.js (${Math.round(totalSize / 1e3)} KiB)`));
+	console.log(`> ${c.bold.green((total / n) + 'ms')}`);
+}
