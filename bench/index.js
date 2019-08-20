@@ -4,7 +4,6 @@
 
 import fs from 'fs';
 import c from 'kleur';
-import parse, { init } from '../dist/lexer.js';
 
 const n = 25;
 
@@ -20,14 +19,22 @@ const files = fs.readdirSync('test/samples')
 		};
 	});
 
-function timeRun (code) {
-	const start = process.hrtime.bigint();
-	const parsed = parse(code);
-	const end = process.hrtime.bigint(start);
-	return Math.round(Number(end - start) / 1e6);
-}
+Promise.resolve().then(async () => {
+	function timeRun (code) {
+		const start = process.hrtime.bigint();
+		const parsed = parse(code);
+		const end = process.hrtime.bigint();
+		return Math.round(Number(end - start) / 1e6);
+	}
 
-init.then(() => {
+	console.log('Module load time');
+	{
+		const start = process.hrtime.bigint();
+		var { init, default: parse } = await import('../dist/lexer.js');
+		await init;
+		console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+	}
+
 	console.log('Cold Run, All Samples');
 	let totalSize = 0;
 	{
