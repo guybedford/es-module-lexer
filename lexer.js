@@ -156,7 +156,7 @@ function tryParseImportStatement () {
 function tryParseExportStatement () {
   if (readPrecedingKeyword(i + 5) !== 'export' || readToWsOrPunctuator(i + 6) !== '')
     return;
-        
+
   let name;
   charCode = str.charCodeAt(i += 6);
   commentWhitespace();
@@ -268,13 +268,11 @@ function commentWhitespace () {
 
 function templateString () {
   while (charCode = str.charCodeAt(++i)) {
-    if (charCode === 36/*$*/) {
-      charCode = str.charCodeAt(++i);
-      if (charCode === 123/*{*/) {
-        templateStack.push(templateDepth);
-        templateDepth = ++braceDepth;
-        return;
-      }
+    if (charCode === 36/*$*/ && str.charCodeAt(i + 1) === 123/*{*/) {
+      charCode = str.charCodeAt(i += 2);
+      templateStack.push(templateDepth);
+      templateDepth = ++braceDepth;
+      return;
     }
     else if (charCode === 96/*`*/) {
       return;
