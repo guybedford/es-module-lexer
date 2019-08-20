@@ -2,11 +2,11 @@
 
 A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly to do very fast source analysis for ES modules only.
+A very small single JS file (4KiB gzipped) that includes inlined Web Assembly to [very fast](#benchmarks) source analysis for ES modules only.
 
-Outputs the list of exports and locations of import specifiers, including dynamic import and import meta.
+Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
-Comprehensively handles the JS language grammar while remaining small and fast ([see bencharmks](#benchmarks)).
+_Comprehensively handles the JS language grammar while remaining small and fast - can parse 2MB of JavaScript in under 30ms from a completely cold start, and in just 20ms after a few runs, [see benchmarks](#benchmarks) for more info._
 
 ### Usage
 
