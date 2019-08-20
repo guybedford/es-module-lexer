@@ -15,7 +15,10 @@ npm install es-module-lexer
 ```
 
 ```js
-import analyze from 'es-module-lexer';
+import { init, parse } from 'es-module-lexer';
+
+// Wait for WebAssembly to load. Alternatively use parse asynchronously.
+await init();
 
 // Note: Parsing error messages thrown are not user friendly
 //       and only provide stack information in the lexer itself.
@@ -35,7 +38,7 @@ const source = `
 `;
 
 try {
-  var [imports, exports] = analyze(source);  
+  var [imports, exports] = parse(source);  
 }
 catch (e) {
   console.log('Parsing failure');

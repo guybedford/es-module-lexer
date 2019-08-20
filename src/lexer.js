@@ -1,6 +1,6 @@
-export { initPromise as init }
+export { initPromise as init, analyze as parse }
 
-export default function analyze (source) {
+export function analyze (source) {
   if (!parse)
     return initPromise.then(() => analyze(source));
 

@@ -1,5 +1,5 @@
 import assert from 'assert';
-import parse, { init } from '../dist/lexer.js';
+import { parse, init } from '../dist/lexer.js';
 
 suite('Lexer', () => {
   test('Simple export with unicode conversions', async () => {

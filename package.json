@@ -17,7 +17,6 @@
     "@babel/cli": "^7.5.5",
     "@babel/core": "^7.5.5",
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
-    "babel-plugin-add-module-exports": "^1.0.2",
     "esm": "^3.0.84",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
