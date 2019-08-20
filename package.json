@@ -2,12 +2,13 @@
   "name": "es-module-lexer",
   "version": "0.2.0",
   "description": "Lexes ES modules returning their import/export metadata",
-  "main": "dist/lexer.js",
-  "module": "lexer.js",
+  "main": "dist/lexer.cjs",
+  "module": "dist/lexer.js",
   "scripts": {
-    "test": "mocha -r esm -u tdd test/unit.js",
-    "build": "babel lexer.js --out-dir dist",
-    "bench": "node --expose-gc -r esm bench",
+    "test": "mocha -r esm -b -u tdd test/*.js",
+    "build": "node --experimental-modules build.js && babel dist/lexer.js | terser -o dist/lexer.cjs.js",
+    "build-wasm": "make lib/lexer.wasm && node --experimental-modules build.js",
+    "bench": "node --experimental-modules --expose-gc bench/index.js",
     "prepublishOnly": "npm run build"
   },
   "author": "Guy Bedford",
@@ -19,10 +20,10 @@
     "babel-plugin-add-module-exports": "^1.0.2",
     "esm": "^3.0.84",
     "kleur": "^2.0.2",
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "terser": "^4.1.4"
   },
   "files": [
-    "lexer.js",
     "dist"
   ],
   "type": "module",
