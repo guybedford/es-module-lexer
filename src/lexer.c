@@ -4,9 +4,6 @@
 
 const bool DEBUG = true;
 
-// PERF TODOs:
-// - try replacing jsIndex with a running indexOffset so only pos gets incremented usually
-
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
   // stack allocations
@@ -27,7 +24,7 @@ bool parse () {
   openTokenPosStack = &openTokenPosStack_[0];
 
   pos = (void*)source - 1;
-  jsIndex = -1;
+  jsIndexOffset = (void*)source;
   uchar_t ch = '\0';
   uchar_t* end = pos + SOURCE_LEN;
   while (pos < end) {
@@ -57,7 +54,7 @@ bool parse () {
           return syntaxError(), false;
         lastOpenTokenPos = openTokenPosStack[--openTokenPosStackDepth];
         if (import_write_head != NULL && import_write_head->dynamicPos == lastOpenTokenPos) {
-          import_write_head->end = jsIndex;
+          import_write_head->end = pos - jsIndexOffset;
           import_write_head->endPos = pos;
         }
       break;
@@ -134,10 +131,10 @@ void tryParseImportStatement () {
   if (!readPrecedingKeyword6(pos + 5, 'i', 'm', 'p', 'o', 'r', 't'))
     return;
 
-  uint32_t startIndex = jsIndex;
+  uint32_t startIndex = pos - jsIndexOffset;
   uchar_t* startPos = pos;
 
-  pos += 6, jsIndex += 6;
+  pos += 6;
 
   uchar_t ch = commentWhitespace();
   
@@ -148,7 +145,7 @@ void tryParseImportStatement () {
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
-      addImport(jsIndex + 1, 0, 0, startIndex, startPos);
+      addImport(pos - jsIndexOffset + 1, 0, 0, startIndex, startPos);
       return;
     // import.meta
     case '.':
@@ -156,7 +153,7 @@ void tryParseImportStatement () {
       ch = commentWhitespace();
       // import.meta indicated by d == -2
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
-        addImport(startIndex, jsIndex + 4, pos + 4, -2, NULL);
+        addImport(startIndex, pos - jsIndexOffset + 4, pos + 4, -2, NULL);
       return;
     
     default:
@@ -172,7 +169,7 @@ void tryParseImportStatement () {
         readImportString();
       }
       else {
-        pos--, jsIndex--;
+        pos--;
       }
   }
 }
@@ -181,7 +178,7 @@ void tryParseExportStatement () {
   if (!readPrecedingKeyword6(pos + 5, 'e', 'x', 'p', 'o', 'r', 't'))
     return;
 
-  pos += 6, jsIndex += 6;
+  pos += 6;
 
   uchar_t* curPos = pos;
 
@@ -193,36 +190,36 @@ void tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 'd':
-      addExport(jsIndex, jsIndex + 7);
+      addExport(pos - jsIndexOffset, pos - jsIndexOffset + 7);
       return;
 
     // export async? function*? name () {
     case 'a':
-      pos += 5, jsIndex += 5;
+      pos += 5;
       commentWhitespace();
     // fallthrough
     case 'f':
-      pos += 8, jsIndex += 8;
+      pos += 8;
       ch = commentWhitespace();
       if (ch == '*') {
-        pos++, jsIndex++;
+        pos++;
         ch = commentWhitespace();
       }
-      uint32_t startIndex = jsIndex;
+      uint32_t startIndex = pos - jsIndexOffset;
       ch = readToWsOrPunctuator(ch);
-      addExport(startIndex, jsIndex);
+      addExport(startIndex, pos - jsIndexOffset);
       return;
 
     case 'c':
       if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuator(*(pos + 5))) {
-        pos += 5, jsIndex += 5;
+        pos += 5;
         ch = commentWhitespace();
-        uint32_t startIndex = jsIndex;
+        uint32_t startIndex = pos - jsIndexOffset;
         ch = readToWsOrPunctuator(ch);
-        addExport(startIndex, jsIndex);
+        addExport(startIndex, pos - jsIndexOffset);
         return;
       }
-      pos += 2, jsIndex += 2;
+      pos += 2;
     // fallthrough
 
     // export var/let/const name = ...(, name = ...)+
@@ -230,16 +227,16 @@ void tryParseExportStatement () {
     case 'l':
       // destructured initializations not currently supported (skipped for { or [)
       // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-      pos += 3, jsIndex += 3;
+      pos += 3;
       do {
         ch = commentWhitespace();
-        uint32_t startIndex = jsIndex;
+        uint32_t startIndex = pos - jsIndexOffset;
         ch = readToWsOrPunctuator(ch);
         // stops on [ { destructurings
-        if (jsIndex == startIndex)
+        if (pos - jsIndexOffset == startIndex)
           return;
-        addExport(startIndex, jsIndex);
-        pos++, jsIndex++;
+        addExport(startIndex, pos - jsIndexOffset);
+        pos++;
       } while (ch == ',');
       return;
 
@@ -248,22 +245,22 @@ void tryParseExportStatement () {
       nextChar(ch);
       ch = commentWhitespace();
       do {
-        uint32_t startIndex = jsIndex;
+        uint32_t startIndex = pos - jsIndexOffset;
         readToWsOrPunctuator(ch);
-        uint32_t endIndex = jsIndex;
+        uint32_t endIndex = pos - jsIndexOffset;
         ch = commentWhitespace();
         // as
         if (ch == 'a') {
-          pos += 2, jsIndex += 2;
+          pos += 2;
           ch = commentWhitespace();
-          startIndex = jsIndex;
+          startIndex = pos - jsIndexOffset;
           readToWsOrPunctuator(ch);
-          endIndex = jsIndex;
+          endIndex = pos - jsIndexOffset;
           ch = commentWhitespace();
         }
         // ,
         if (ch == ',') {
-          pos++, jsIndex++;
+          pos++;
           ch = commentWhitespace();
         }
         addExport(startIndex, endIndex);
@@ -274,10 +271,10 @@ void tryParseExportStatement () {
     
     // export *
     case '*':
-      pos++, jsIndex++;
+      pos++;
       ch = commentWhitespace();
       if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
-        pos += 4, jsIndex += 4;
+        pos += 4;
         readImportString();
       }
   }
@@ -288,17 +285,17 @@ void readImportString () {
   uchar_t ch;
   while (ch = readChar()) {
     if (ch == '\'') {
-      startIndex = jsIndex + 1;
+      startIndex = pos - jsIndexOffset + 1;
       nextChar(ch);
       singleQuoteString();
-      addImport(startIndex, jsIndex, pos, -1, NULL);
+      addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
       return;
     }
     if (ch == '"') {
-      startIndex = jsIndex + 1;
+      startIndex = pos - jsIndexOffset + 1;
       nextChar(ch);
       doubleQuoteString();
-      addImport(startIndex, jsIndex, pos, -1, NULL);
+      addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
       return;
     }
     nextChar(ch);
@@ -327,11 +324,11 @@ uchar_t commentWhitespace () {
 }
 
 void templateString () {
-  pos++, jsIndex++;
+  pos++;
   uchar_t ch;
   while (ch = readChar()) {
     if (ch == '$') {
-      pos++, jsIndex++;
+      pos++;
       ch = readChar();
       if (ch == '{') {
         templateStack[templateStackDepth++] = templateDepth;
@@ -343,7 +340,7 @@ void templateString () {
       return;
     }
     else if (ch == '\\') {
-      pos++, jsIndex++;
+      pos++;
       ch = readChar();
     }
     nextChar(ch);
@@ -352,11 +349,11 @@ void templateString () {
 }
 
 void blockComment () {
-  pos += 2, jsIndex += 2;
+  pos += 2;
   uchar_t ch;
   while (ch = readChar()) {
     if (ch == '*') {
-      pos++, jsIndex++;
+      pos++;
       ch = readChar();
       if (ch == '/')
         return;
@@ -367,7 +364,7 @@ void blockComment () {
 }
 
 void lineComment () {
-  pos++, jsIndex++;
+  pos++;
   uchar_t ch;
   while (ch = readChar()) {
     if (ch == '\n' || ch == '\r')
@@ -378,12 +375,12 @@ void lineComment () {
 
 void singleQuoteString () {
   uchar_t ch;
-  pos++, jsIndex++;
+  pos++;
   while (ch = readChar()) {
     if (ch == '\'')
       return;
     if (ch == '\\')
-      pos++, jsIndex++, ch = readChar();
+      pos++, ch = readChar();
     else if (isBr(ch))
       break;
     nextChar(ch);
@@ -393,12 +390,12 @@ void singleQuoteString () {
 
 void doubleQuoteString () {
   uchar_t ch;
-  pos++, jsIndex++;
+  pos++;
   while (ch = readChar()) {
     if (ch == '"')
       return;
     if (ch == '\\')
-      pos++, jsIndex++, ch = readChar();
+      pos++, ch = readChar();
     else if (isBr(ch))
       break;
     nextChar(ch);
@@ -408,12 +405,12 @@ void doubleQuoteString () {
 
 uchar_t regexCharacterClass () {
   uchar_t ch;
-  pos++, jsIndex++;
+  pos++;
   while (ch = readChar()) {
     if (ch == ']')
       return ch;
     if (ch == '\\')
-      pos++, jsIndex++, ch = readChar();
+      pos++, ch = readChar();
     else if (ch == '\n' || ch == '\r')
       break;
     nextChar(ch);
@@ -424,14 +421,14 @@ uchar_t regexCharacterClass () {
 
 void regularExpression () {
   uchar_t ch;
-  pos++, jsIndex++;
+  pos++;
   while (ch = readChar()) {
     if (ch == '/')
       return;
     if (ch == '[')
       ch = regexCharacterClass();
     else if (ch == '\\')
-      pos++, jsIndex++, ch = readChar();
+      pos++, ch = readChar();
     else if (ch == '\n' || ch == '\r')
       break;
     nextChar(ch);
@@ -632,7 +629,7 @@ void nextChar (uchar_t ch) {
   // we should always skip over surrogates
   if (ch >= 0x80)
     return nextCharSurrogate(ch);
-  pos++, jsIndex++;
+  pos++;
 }
 
 // Proper UTF-16 length counting against UTF-8 representation
@@ -642,20 +639,20 @@ void nextCharSurrogate (uchar_t ch) {
   if (ch >= 0xC0) {
     if (ch >= 0xE0) {
       if (ch >= 0xF0) {
-        jsIndex += 2;
+        jsIndexOffset += 2;
         pos += 4;
       }
       else {
         uchar_t ch2 = *(pos + 2);
         if (ch2 > 0xBF || ch2 == 0xBF && *(pos + 3) >= 0xBF)
-          jsIndex += 2;
+          jsIndexOffset++;
         else
-          jsIndex++;
+          jsIndexOffset += 2;
         pos += 3;
       }
     }
     else {
-      jsIndex++;
+      jsIndexOffset++;
       pos += 2;
     }
   }
@@ -681,6 +678,6 @@ void bail (uint32_t error) {
 
 void syntaxError () {
   has_error = true;
-  parse_error = jsIndex;
+  parse_error = pos - jsIndexOffset;
   pos = (void*)source + SOURCE_LEN;
 }

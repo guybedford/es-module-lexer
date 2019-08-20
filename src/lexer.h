@@ -46,8 +46,8 @@ char braceDepth;
 uchar_t* lastTokenPos;
 uchar_t* lastOpenTokenPos;
 uchar_t* pos;
-// js string index (accounting for different codepoint lengths)
-uint32_t jsIndex;
+// js string index offset (accounting for different codepoint lengths)
+uchar_t* jsIndexOffset;
 char* templateStack;
 uchar_t** openTokenPosStack;
 
