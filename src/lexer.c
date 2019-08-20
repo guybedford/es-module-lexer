@@ -139,16 +139,8 @@ void tryParseImportStatement () {
 
   pos += 6, jsIndex += 6;
 
-  uchar_t ch = readChar();
-  if (ch != '.' && ch != '.' && ch != '\'' && ch != '"') {
-    ch = readToWsOrPunctuator(ch);
-    if (pos != startPos + 6) {
-      pos--, jsIndex--;
-      return;
-    }
-  }
+  uchar_t ch = commentWhitespace();
   
-  ch = commentWhitespace();
   switch (ch) {
     // dynamic import
     case '(':
@@ -166,10 +158,22 @@ void tryParseImportStatement () {
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
         addImport(startIndex, jsIndex + 4, pos + 4, -2, NULL);
       return;
-  }
-  // import statement (only permitted at base-level)
-  if (openTokenPosStackDepth == 0) {
-    readImportString();
+    
+    default:
+      // no space after "import" -> not an import keyword
+      if (pos == startPos + 6)
+        break;
+    case '"':
+    case '\'':
+    case '{':
+    case '*':
+      // import statement (only permitted at base-level)
+      if (openTokenPosStackDepth == 0) {
+        readImportString();
+      }
+      else {
+        pos--, jsIndex--;
+      }
   }
 }
 
@@ -305,10 +309,7 @@ void readImportString () {
 uchar_t commentWhitespace () {
   uchar_t ch;
   while (ch = readChar()) {
-    if (!isBrOrWs(ch)) {
-      return ch;
-    }
-    else if (ch == '/') {
+    if (ch == '/') {
       uchar_t next_ch = *(pos + 1);
       if (next_ch == '/')
         lineComment();
@@ -316,6 +317,9 @@ uchar_t commentWhitespace () {
         blockComment();
       else
         return ch;
+    }
+    else if (!isBrOrWs(ch)) {
+      return ch;
     }
     nextChar(ch);
   }

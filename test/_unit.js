@@ -12,7 +12,7 @@ suite('Lexer', () => {
     assert.equal(exports[1], 'q');
   });
 
-  test('Simple import', async () => {
+  test('Simple import', () => {
     const source = `
       import test from "test";
       console.log(test);
@@ -24,6 +24,25 @@ suite('Lexer', () => {
     assert.equal(source.slice(s, e), 'test');
 
     assert.equal(exports.length, 0);
+  });
+
+  test('Import/Export with comments', () => {
+    const source = `
+      import/* 'x' */ 'a';
+
+      import /* 'x' */ 'b';
+
+      export {
+        a,
+        // b,
+        /* c */ d
+      };
+    `;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 2);
+    assert.equal(source.slice(imports[0].s, imports[0].e), 'a');
+    assert.equal(source.slice(imports[1].s, imports[1].e), 'b');
+    assert.equal(exports.toString(), 'a,d');
   });
 
   test('Minified import syntax', () => {
