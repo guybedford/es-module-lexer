@@ -156,7 +156,7 @@ function tryParseImportStatement () {
 function tryParseExportStatement () {
   if (readPrecedingKeyword(i + 5) !== 'export' || readToWsOrPunctuator(i + 6) !== '')
     return;
-        
+
   let name;
   charCode = str.charCodeAt(i += 6);
   commentWhitespace();
@@ -194,12 +194,42 @@ function tryParseExportStatement () {
     // export var/let/const name = ...(, name = ...)+
     case 118/*v*/:
     case 108/*l*/:
+      charCode = str.charCodeAt(i += 3);
+      commentWhitespace();
+
+      // export var/let/const { ... } =
+      if (i === 20/*{*/) {
+        charCode = str.charCodeAt(++i);
+        commentWhitespace();
+        do {
+          name = readToWsOrPunctuator(i);
+          charCode = str.charCodeAt(i += name.length);
+          commentWhitespace();
+          // :
+          if (charCode === 58/*:*/) {
+            charCode = str.charCodeAt(++i);
+            commentWhitespace();
+            name = readToWsOrPunctuator(i);
+            charCode = str.charCodeAt(i += name.length);
+            commentWhitespace();
+          }
+          // ,
+          if (charCode === 44) {
+            charCode = str.charCodeAt(++i);
+            commentWhitespace();
+          }
+          oExports.push(name);
+          if (!charCode)
+            syntaxError();
+        } while (charCode !== 125/*}*/);
+      }
+
       /*
-        * destructured initializations not currently supported (skipped for { or [)
-        * also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
+        * export vat/let/const [,,,] is currently noy supported
+        * lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
         */
       do {
-        charCode = str.charCodeAt(i += 3);
+        // charCode = str.charCodeAt(i += 3);
         commentWhitespace();
         name = readToWsOrPunctuator(i);
         // stops on [ { destructurings
