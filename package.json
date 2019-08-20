@@ -5,8 +5,9 @@
   "main": "dist/lexer.js",
   "module": "lexer.js",
   "scripts": {
-    "test": "mocha -r esm -u tdd test/unit.js",
-    "build": "babel lexer.js --out-dir dist",
+    "test": "mocha -r esm -b -u tdd test/*.js",
+    "build": "node --experimental-modules build.js && babel dist/lexer.js | terser -o dist/lexer.cjs.js",
+    "build-wasm": "npm run make && node --experimental-modules build.js",
     "bench": "node --expose-gc -r esm bench",
     "prepublishOnly": "npm run build"
   },
@@ -19,7 +20,8 @@
     "babel-plugin-add-module-exports": "^1.0.2",
     "esm": "^3.0.84",
     "kleur": "^2.0.2",
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "terser": "^4.1.4"
   },
   "files": [
     "lexer.js",

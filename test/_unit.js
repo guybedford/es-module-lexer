@@ -1,15 +1,18 @@
 import assert from 'assert';
-import analyzeModuleSyntax from '../lexer.js';
-
-function parse (source) {
-  const result = analyzeModuleSyntax(source);
-  if (result[2])
-    throw result[2];
-  return result;
-}
+import parse, { init } from '../dist/lexer.js';
 
 suite('Lexer', () => {
-  test('Simple import', () => {
+  test('Simple export with unicode conversions', async () => {
+    await init;
+    const source = `export var p𓀀s,q`;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 0);
+    assert.equal(exports.length, 2);
+    assert.equal(exports[0], 'p𓀀s');
+    assert.equal(exports[1], 'q');
+  });
+
+  test('Simple import', async () => {
     const source = `
       import test from "test";
       console.log(test);
@@ -145,7 +148,10 @@ suite('Lexer', () => {
   });
 
   test('Comments', () => {
-    const source = `
+    const source = `/*
+    VERSION
+  */import util from 'util';
+  
 //
 function x() {
 }
@@ -163,7 +169,8 @@ function x() {
       }
     `
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 0);
+    assert.equal(imports.length, 1);
+    assert.equal(source.slice(imports[0].s, imports[0].e), 'util');
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'a');
   });
@@ -179,7 +186,7 @@ function x() {
         }
       \`
       export { a }
-    `
+    `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 2);
     assert.notEqual(imports[0].d, -1);
