@@ -1,10 +1,12 @@
 # ES Module Lexer
 
-JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
+A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
-Very small (< 500 lines) and fast ES module lexer.
+A very small single JS file (4KiB gzipped) that includes inlined Web Assembly to do very fast source analysis for ES modules only.
 
-The output interfaces use minification-friendly names.
+Outputs the list of exports and locations of import specifiers, including dynamic import and import meta.
+
+Comprehensively handles the JS language grammar while remaining small and fast ([see bencharmks](#benchmarks)).
 
 ### Usage
 
@@ -69,28 +71,42 @@ Benchmarks can be run with `npm run bench`.
 Current results:
 
 ```
+Module load time
+> 6ms
 Cold Run, All Samples
-bench/samples/*.js (2195 KiB)
-> 179ms
+test/samples/*.js (2150 KiB)
+> 29ms
 
 Warm Runs (average of 25 runs)
-bench/samples/d3.js (508 KiB)
-> 6.84ms
-bench/samples/d3.min.js (274 KiB)
-> 3.16ms
-bench/samples/magic-string.js (35 KiB)
-> 0.6ms
-bench/samples/magic-string.min.js (20 KiB)
-> 0ms
-bench/samples/rollup.js (929 KiB)
-> 8.64ms
-bench/samples/rollup.min.js (429 KiB)
-> 5.12ms
+test/samples/d3.js (491 KiB)
+> 5.6ms
+test/samples/d3.min.js (274 KiB)
+> 3.44ms
+test/samples/magic-string.js (34 KiB)
+> 0.36ms
+test/samples/magic-string.min.js (20 KiB)
+> 0.04ms
+test/samples/rollup.js (902 KiB)
+> 9.24ms
+test/samples/rollup.min.js (429 KiB)
+> 5.24ms
 
 Warm Runs, All Samples (average of 25 runs)
-bench/samples/*.js (2195 KiB)
-> 24.24ms
+test/samples/*.js (2150 KiB)
+> 24.8ms
 ```
+
+### Building
+
+To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
+
+The Makefile assumes that the `clang` in PATH corresponds to LLVM 8 (provided by WASI SDK as well, or a standard clang 8 install can be used as well), and that `../wasi-sdk-6` contains the SDK as extracted above, which is important to locate the WASI sysroot.
+
+The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
+
+On Windows it may be preferable to use the Linux subsystem.
+
+After the Web Assembly build, the CJS build can be triggered via `npm run build`.
 
 ### Limitations
 

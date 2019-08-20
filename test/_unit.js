@@ -243,4 +243,20 @@ function x() {
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'a');
   });
+
+  test('Template string expression ambiguity', () => {
+    const source = `
+      \`$\`
+      import 'a';
+      \`\`
+      export { b };
+      \`a$b\`
+      import(\`$\`);
+      \`{$}\`
+    `;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 2);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'b');
+  });
 });

@@ -335,7 +335,7 @@ void templateString () {
         return;
       }
     }
-    else if (ch == '`') {
+    if (ch == '`') {
       return;
     }
     else if (ch == '\\') {
