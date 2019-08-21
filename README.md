@@ -10,10 +10,6 @@ For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in
 
 _Comprehensively handles the JS language grammar while remaining small and fast - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
-### Environment Support
-
-Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#search=web%20assembly).
-
 ### Usage
 
 ```
@@ -81,6 +77,31 @@ import { init, parse } from 'es-module-lexer/dist/es-module-lexer.js';
 })();
 ```
 
+### Environment Support
+
+Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#search=web%20assembly).
+
+### Grammar Support
+
+* Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
+* Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
+
+### Limitations
+
+The lexing approach is designed to deal with the full language grammar including RegEx / division operator ambiguity through backtracking and paren / brace tracking.
+
+The only limitation to the reduced parser is that the "exports" list may not correctly gather all export identifiers in the following edge cases:
+
+```js
+// Only "a" is detected as an export, "q" isn't
+export var a = 'asdf', q = z;
+
+// "b" is not detected as an export
+export var { a: b } = asdf;
+```
+
+The above cases are handled gracefully in that the lexer will keep going fine, it will just not properly detect the export names above.
+
 ### Benchmarks
 
 Benchmarks can be run with `npm run bench`.
@@ -126,27 +147,6 @@ The build through the Makefile is then run via `make lib/lexer.wasm`, which can 
 On Windows it may be preferable to use the Linux subsystem.
 
 After the Web Assembly build, the CJS build can be triggered via `npm run build`.
-
-### Grammar Support
-
-* Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
-* Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
-
-### Limitations
-
-The lexing approach is designed to deal with the full language grammar including RegEx / division operator ambiguity through backtracking and paren / brace tracking.
-
-The only limitation to the reduced parser is that the "exports" list may not correctly gather all export identifiers in the following edge cases:
-
-```js
-// Only "a" is detected as an export, "q" isn't
-export var a = 'asdf', q = z;
-
-// "b" is not detected as an export
-export var { a: b } = asdf;
-```
-
-The above cases are handled gracefully in that the lexer will keep going fine, it will just not properly detect the export names above.
 
 ### License
 
