@@ -25,13 +25,12 @@ export function parse (source) {
 
 const wasmBinary = 'WASM_BINARY';
 
-let wasmBuffer, encode;
+let wasmBuffer;
+let encode = typeof TextEncoder !== 'undefined' ? str => new TextEncoder().encode(str) : Buffer.from;
 if (typeof Buffer !== 'undefined') {
   wasmBuffer = Buffer.from(wasmBinary, 'base64');
-  encode = Buffer.from;
 }
 else {
-  encode = str => new TextEncoder().encode(str);
   const str = atob(wasmBinary);
   const len = str.length;
   wasmBuffer = new Uint8Array(len);
