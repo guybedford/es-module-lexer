@@ -1,6 +1,6 @@
 {
   "name": "es-module-lexer",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Lexes ES modules returning their import/export metadata",
   "main": "dist/lexer.cjs",
   "module": "dist/lexer.js",

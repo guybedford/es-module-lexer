@@ -1,3 +1,6 @@
+0.3.5
+* Fix Node.js 10 memory grow support for globals without a value getter (https://github.com/guybedford/es-module-lexer/issues/14)
+
 0.3.4
 * Use UTF16 encoding for better performance, and removing reliance on TextEncoder (https://github.com/guybedford/es-module-lexer/pull/15)
 
