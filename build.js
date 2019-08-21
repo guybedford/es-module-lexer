@@ -1,7 +1,7 @@
 import fs from 'fs';
 import terser from 'terser';
 
-const MINIFY = false;
+const MINIFY = true;
 
 const wasmBuffer = fs.readFileSync('./lib/lexer.wasm');
 const jsSource = fs.readFileSync('./src/lexer.js').toString();

@@ -1,3 +1,6 @@
+0.3.2
+* Fix export declaration parse bugs (https://github.com/guybedford/es-module-lexer/pull/11)
+
 0.3.1
 * Fix up the ESM and CJS interfaces to use named exports
 
