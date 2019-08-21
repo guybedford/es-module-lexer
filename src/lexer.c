@@ -164,13 +164,19 @@ void tryParseImportStatement () {
     case '\'':
     case '{':
     case '*':
-      // import statement (only permitted at base-level)
-      if (openTokenPosStackDepth == 0) {
-        readImportString();
-      }
-      else {
+      // import statement only permitted at base-level
+      if (openTokenPosStackDepth != 0) {
         pos--;
+        return;
       }
+      while (ch = readChar()) {
+        if (ch == '\'' || ch == '"') {
+          readImportString(ch);
+          return;
+        }
+        nextChar(ch);
+      }
+      syntaxError();
   }
 }
 
@@ -234,6 +240,11 @@ void tryParseExportStatement () {
         ch = commentWhitespace();
         uint32_t startIndex = pos - jsIndexOffset;
         ch = readToWsOrPunctuator(ch);
+        if (ch == '{' || ch == '[') {
+          // we don't yet handle destructuring
+          pos--;
+          return;
+        }
         // stops on [ { destructurings
         if (pos - jsIndexOffset == startIndex)
           return;
@@ -277,32 +288,28 @@ void tryParseExportStatement () {
       ch = commentWhitespace();
       if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
         pos += 4;
-        readImportString();
+        readImportString(commentWhitespace());
       }
   }
 }
 
-void readImportString () {
+void readImportString (uchar_t ch) {
   uint32_t startIndex;
-  uchar_t ch;
-  while (ch = readChar()) {
-    if (ch == '\'') {
-      startIndex = pos - jsIndexOffset + 1;
-      nextChar(ch);
-      singleQuoteString();
-      addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
-      return;
-    }
-    if (ch == '"') {
-      startIndex = pos - jsIndexOffset + 1;
-      nextChar(ch);
-      doubleQuoteString();
-      addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
-      return;
-    }
+  if (ch == '\'') {
+    startIndex = pos - jsIndexOffset + 1;
     nextChar(ch);
+    singleQuoteString();
+    addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
   }
-  syntaxError();
+  else if (ch == '"') {
+    startIndex = pos - jsIndexOffset + 1;
+    nextChar(ch);
+    doubleQuoteString();
+    addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
+  }
+  else {
+    syntaxError();
+  }
 }
 
 uchar_t commentWhitespace () {
