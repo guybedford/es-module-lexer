@@ -6,7 +6,7 @@
   "module": "dist/lexer.js",
   "scripts": {
     "test": "mocha -r esm -b -u tdd test/*.js",
-    "build": "node --experimental-modules build.js && mkdir -p dist && babel dist/lexer.js | terser -o dist/lexer.cjs",
+    "build": "node --experimental-modules build.js && babel dist/lexer.js | terser -o dist/lexer.cjs",
     "build-wasm": "make lib/lexer.wasm && node --experimental-modules build.js",
     "bench": "node --experimental-modules --expose-gc bench/index.js",
     "prepublishOnly": "npm run build"

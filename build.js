@@ -3,6 +3,9 @@ import terser from 'terser';
 
 const MINIFY = true;
 
+try { fs.mkdirSync('./dist'); }
+catch (e) {}
+
 const wasmBuffer = fs.readFileSync('./lib/lexer.wasm');
 const jsSource = fs.readFileSync('./src/lexer.js').toString();
 const pjson = JSON.parse(fs.readFileSync('./package.json').toString());
