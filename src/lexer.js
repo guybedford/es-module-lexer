@@ -1,8 +1,8 @@
 export function parse (source) {
   if (!wasm)
-    return initPromise.then(() => parse(source));
+    return init.then(() => parse(source));
 
-  const buffer = new TextEncoder().encode(source);
+  const buffer = encode(source);
 
   const extraMem = buffer.byteLength - (wasm.memory.buffer.byteLength - wasm.__heap_base.value);
   if (extraMem > 0)
@@ -24,11 +24,14 @@ export function parse (source) {
 }
 
 const wasmBinary = 'WASM_BINARY';
-let wasmBuffer;
+
+let wasmBuffer, encode;
 if (typeof Buffer !== 'undefined') {
   wasmBuffer = Buffer.from(wasmBinary, 'base64');
+  encode = Buffer.from;
 }
 else {
+  encode = str => new TextEncoder().encode(str);
   const str = atob(wasmBinary);
   const len = str.length;
   wasmBuffer = new Uint8Array(len);
@@ -44,7 +47,7 @@ export const init = WebAssembly.compile(wasmBuffer)
 function copyToWasm (inBuf8, wasmBuffer, pointer) {
   const len32 = inBuf8.byteLength >> 2;
   const outBuf32 = new Uint32Array(wasmBuffer, pointer, len32);
-  const inBuf32 = new Uint32Array(inBuf8.buffer, 0, len32);
+  const inBuf32 = new Uint32Array(inBuf8.buffer, inBuf8.byteOffset, len32);
   for (let i = 0; i < len32; i++)
     outBuf32[i] = inBuf32[i];
   // handle remainder
