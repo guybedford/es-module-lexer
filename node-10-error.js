@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { parse } = require('./dist/lexer.cjs.js');
+const { parse } = require('./dist/lexer.cjs');
 
 const content = fs.readFileSync(path.resolve(__dirname, 'sinon.js'), 'utf-8');
 
