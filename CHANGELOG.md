@@ -1,3 +1,6 @@
+0.3.4
+* Use UTF16 encoding for better performance, and removing reliance on TextEncoder (https://github.com/guybedford/es-module-lexer/pull/15)
+
 0.3.3
 * Minification improvements
 * Fix for TextEncoder global being missing in Node.js 10

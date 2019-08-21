@@ -2,7 +2,7 @@
 
 A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly to [very fast](#benchmarks) source analysis for ES modules only.
+A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for [very fast source analysis](#benchmarks) of ECMAScript syntax only.
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
