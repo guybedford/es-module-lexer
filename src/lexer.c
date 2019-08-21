@@ -208,6 +208,7 @@ void tryParseExportStatement () {
       uint32_t startIndex = pos - jsIndexOffset;
       ch = readToWsOrPunctuator(ch);
       addExport(startIndex, pos - jsIndexOffset);
+      pos--;
       return;
 
     case 'c':
@@ -217,6 +218,7 @@ void tryParseExportStatement () {
         uint32_t startIndex = pos - jsIndexOffset;
         ch = readToWsOrPunctuator(ch);
         addExport(startIndex, pos - jsIndexOffset);
+        pos--;
         return;
       }
       pos += 2;
