@@ -6,7 +6,7 @@ A very small single JS file (4KiB gzipped) that includes inlined Web Assembly fo
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
-_Comprehensively handles the JS language grammar while remaining small and fast - can parse 2MB of JavaScript in under 30ms from a completely cold start, and in just 20ms after a few runs, [see benchmarks](#benchmarks) for more info._
+_Comprehensively handles the JS language grammar while remaining small and fast - can parse 2MB of JavaScript in ~22ms from a completely cold start, and in ~14ms after a few runs, [see benchmarks](#benchmarks) for more info._
 
 ### Environment Support
 
