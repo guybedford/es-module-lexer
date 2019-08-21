@@ -2,11 +2,13 @@
 
 A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for [very fast source analysis](#benchmarks) of ECMAScript syntax only.
-
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
-_Comprehensively handles the JS language grammar while remaining small and fast - can parse 2MB of JavaScript in ~22ms from a completely cold start, and in ~14ms after a few runs, [see benchmarks](#benchmarks) for more info._
+A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript syntax only.
+
+For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
+
+_Comprehensively handles the JS language grammar while remaining small and fast - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
 ### Environment Support
 
@@ -86,29 +88,31 @@ Benchmarks can be run with `npm run bench`.
 Current results:
 
 ```
-Module load time
-> 6ms
 Cold Run, All Samples
-test/samples/*.js (2150 KiB)
-> 22ms
+test/samples/*.js (3057 KiB)
+> 26ms
 
 Warm Runs (average of 25 runs)
+test/samples/angular.js (719 KiB)
+> 5.32ms
+test/samples/angular.min.js (188 KiB)
+> 3.4ms
 test/samples/d3.js (491 KiB)
-> 4.2ms
+> 4.48ms
 test/samples/d3.min.js (274 KiB)
 > 2.16ms
 test/samples/magic-string.js (34 KiB)
 > 0.04ms
 test/samples/magic-string.min.js (20 KiB)
-> 0ms
+> 0.04ms
 test/samples/rollup.js (902 KiB)
-> 6.2ms
+> 6.04ms
 test/samples/rollup.min.js (429 KiB)
 > 3.2ms
 
 Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (2150 KiB)
-> 14.08ms
+test/samples/*.js (3057 KiB)
+> 18.92ms
 ```
 
 ### Building
@@ -122,6 +126,11 @@ The build through the Makefile is then run via `make lib/lexer.wasm`, which can 
 On Windows it may be preferable to use the Linux subsystem.
 
 After the Web Assembly build, the CJS build can be triggered via `npm run build`.
+
+### Grammar Support
+
+* Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
+* Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
 
 ### Limitations
 
