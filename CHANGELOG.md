@@ -1,3 +1,8 @@
+0.3.3
+* Minification improvements
+* Fix for TextEncoder global being missing in Node.js 10
+* Fix CJS build to end in .cjs extension for modules compatibility
+
 0.3.2
 * Fix export declaration parse bugs (https://github.com/guybedford/es-module-lexer/pull/11)
 
