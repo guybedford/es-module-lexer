@@ -18,57 +18,65 @@ Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#s
 npm install es-module-lexer
 ```
 
+For use in CommonJS:
+
 ```js
-import { init, parse } from 'es-module-lexer';
+const { init, parse } = require('es-module-lexer');
 
-// Wait for WebAssembly to load. Alternatively use parse asynchronously.
-await init();
+(async () => {
+  // either await init, or call parse asynchronously
+  // this is necessary for the Web Assembly boot
+  await init;
 
-// Note: Parsing error messages thrown are not user friendly
-//       and only provide stack information in the lexer itself.
-//       It is recommended to always catch and fall back to an alternative
-//       parser for proper error output.
+  const [imports, exports] = parse('export var p = 5');
+  exports[0] === 'p';
+})();
+```
 
-const source = `
-  import { a } from 'asdf';
-  export var p = 5;
-  export function q () {
+An ES module version is also available from `dist/es-module-lexer.js`:
 
-  };
+```js
+import { init, parse } from 'es-module-lexer/dist/es-module-lexer.js';
 
-  // Comments provided to demonstrate edge cases
-  import /*comment!*/ ('asdf');
-  import /*comment!*/.meta.asdf;
-`;
+(async () => {
+  await init;
 
-try {
-  var [imports, exports] = parse(source);  
-}
-catch (e) {
-  console.log('Parsing failure');
-}
+  const source = `
+    import { a } from 'asdf';
+    export var p = 5;
+    export function q () {
 
-// Returns "asdf"
-source.substring(imports[0].s, imports[0].e);
+    };
 
-// Returns "p,q"
-exports.toString();
+    // Comments provided to demonstrate edge cases
+    import /*comment!*/ ('asdf');
+    import /*comment!*/.meta.asdf;
+  `;
 
-// Dynamic imports are indicated by imports[1].d > -1
-// In this case the "d" index is the start of the dynamic import
-// Returns true
-imports[1].d > -1;
+  const [imports, exports] = parse(source);
 
-// Returns "'asdf'"
-source.substring(imports[1].s, imports[1].e);
-// Returns "import /*comment!*/ ("
-source.substring(imports[1].d, imports[1].s);
+  // Returns "asdf"
+  source.substring(imports[0].s, imports[0].e);
 
-// import.meta is indicated by imports[2].d === -2
-// Returns true
-imports[2].d === -2;
-// Returns "import /*comment!*/.meta"
-source.substring(imports[2].s, imports[2].e);
+  // Returns "p,q"
+  exports.toString();
+
+  // Dynamic imports are indicated by imports[1].d > -1
+  // In this case the "d" index is the start of the dynamic import
+  // Returns true
+  imports[1].d > -1;
+
+  // Returns "'asdf'"
+  source.substring(imports[1].s, imports[1].e);
+  // Returns "import /*comment!*/ ("
+  source.substring(imports[1].d, imports[1].s);
+
+  // import.meta is indicated by imports[2].d === -2
+  // Returns true
+  imports[2].d === -2;
+  // Returns "import /*comment!*/.meta"
+  source.substring(imports[2].s, imports[2].e);
+})();
 ```
 
 ### Benchmarks
