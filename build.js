@@ -15,4 +15,7 @@ const minified = MINIFY && terser.minify(jsSourceProcessed, {
   }
 });
 
+const nodeHeader = `import { TextEncoder } from 'util';`;
+
 fs.writeFileSync('./dist/lexer.js', minified ? minified.code : jsSourceProcessed);
+fs.writeFileSync('./dist/lexer.cjs.js', `${nodeHeader}${minified ? minified.code : jsSourceProcessed}`);
