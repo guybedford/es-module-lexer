@@ -45,6 +45,30 @@ suite('Lexer', () => {
     assert.equal(exports.toString(), 'a,d');
   });
 
+  test('Exported function', () => {
+    const source = `
+      export function a𓀀 () {
+
+      }
+      export class Q{
+
+      }
+    `;
+    const [, exports] = parse(source);
+    assert.equal(exports[0], 'a𓀀');
+    assert.equal(exports[1], 'Q');
+  });
+
+  test('Export destructuring', () => {
+    const source = `
+      export const { a, b } = foo;
+
+      export { ok };
+    `;
+    const [, exports] = parse(source);
+    assert.equal(exports[0], 'ok');
+  });
+
   test('Minified import syntax', () => {
     const source = `import{TemplateResult as t}from"lit-html";import{a as e}from"./chunk-4be41b30.js";export{j as SVGTemplateResult,i as TemplateResult,g as html,h as svg}from"./chunk-4be41b30.js";window.JSCompiler_renameProperty='asdf';`;
     const [imports, exports] = parse(source);

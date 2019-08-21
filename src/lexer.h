@@ -157,7 +157,7 @@ bool parse (uint32_t point);
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
-void readImportString ();
+void readImportString (uchar_t ch);
 
 uchar_t commentWhitespace ();
 void singleQuoteString ();
