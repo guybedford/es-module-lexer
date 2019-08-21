@@ -3,7 +3,7 @@ export function parse (source) {
     return init.then(() => parse(source));
 
   const byteLen = source.length * 2;
-  const extraMem = byteLen - (wasm.memory.buffer.byteLength - wasm.__heap_base.value);
+  const extraMem = byteLen - (wasm.memory.buffer.byteLength - (wasm.__heap_base.value || wasm.__heap_base));
   if (extraMem > 0)
     wasm.memory.grow(Math.ceil(extraMem / 1024 / 64));
 
