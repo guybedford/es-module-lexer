@@ -1,26 +1,24 @@
-export { initPromise as init, analyze as parse }
-
-export function analyze (source) {
-  if (!parse)
-    return initPromise.then(() => analyze(source));
+export function parse (source) {
+  if (!wasm)
+    return initPromise.then(() => parse(source));
 
   const buffer = new TextEncoder().encode(source);
 
-  const extraMem = buffer.byteLength - (memory.buffer.byteLength - __heap_base.value);
+  const extraMem = buffer.byteLength - (wasm.memory.buffer.byteLength - wasm.__heap_base.value);
   if (extraMem > 0)
-    memory.grow(Math.ceil(extraMem / 1024 / 64));
+    wasm.memory.grow(Math.ceil(extraMem / 1024 / 64));
 
-  copyToWasm(buffer, memory, salloc(buffer.byteLength));
-  if (!parse()) {
-    const idx = e(), err = new Error(`Parse error at ${idx}.`);
+  copyToWasm(buffer, wasm.memory.buffer, wasm.salloc(buffer.byteLength));
+  if (!wasm.parse()) {
+    const idx = wasm.e(), err = new Error(`Parse error at ${idx}.`);
     err.loc = idx;
     throw err;
   }
 
   const imports = [], exports = [];
 
-  while (ri()) imports.push({ s: is(), e: ie(), d: id() });
-  while (re()) exports.push(source.slice(es(), ee()));
+  while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(), d: wasm.id() });
+  while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
 
   return [imports, exports];
 }
@@ -38,28 +36,22 @@ else {
     wasmBuffer[i] = str.charCodeAt(i);
 }
 
-let memory, __heap_base, salloc, parse, e, ri, re, is, ie, id, es, ee;
-const initPromise = WebAssembly.compile(wasmBuffer)
+let wasm;
+export const init = WebAssembly.compile(wasmBuffer)
 .then(WebAssembly.instantiate)
-.then(({ exports }) => ({ memory, __heap_base, salloc, parse, e, ri, re, is, ie, id, es, ee } = exports));
+.then(({ exports }) => { wasm = exports; });
 
-function copyToWasm (buffer, memory, pointer) {
-  const byteLen = buffer.byteLength;
-  const len32 = byteLen >> 2;
-  const outBuf = new Uint32Array(memory.buffer, pointer, len32);
-  const inBuf = new Uint32Array(buffer.buffer, 0, len32);
+function copyToWasm (inBuf8, wasmBuffer, pointer) {
+  const len32 = inBuf8.byteLength >> 2;
+  const outBuf32 = new Uint32Array(wasmBuffer, pointer, len32);
+  const inBuf32 = new Uint32Array(inBuf8.buffer, 0, len32);
   for (let i = 0; i < len32; i++)
-    outBuf[i] = inBuf[i];
+    outBuf32[i] = inBuf32[i];
   // handle remainder
   let doneLen = len32 << 2;
-  const outBuf8 = new Uint8Array(memory.buffer);
-  if (doneLen !== byteLen) {
-    const inBuf8 = new Uint8Array(buffer.buffer);
-    while (doneLen !== byteLen) {
-      outBuf8[pointer + doneLen] = inBuf8[doneLen];
-      doneLen++;
-    }
-  }
+  const outBuf8 = new Uint8Array(wasmBuffer);
+  while (doneLen !== inBuf8.byteLength)
+    outBuf8[pointer + doneLen] = inBuf8[doneLen++];
   // add null terminator
-  outBuf8[pointer + byteLen] = 0;
+  outBuf8[pointer + inBuf8.byteLength] = 0;
 }
