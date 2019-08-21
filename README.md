@@ -8,6 +8,12 @@ Outputs the list of exports and locations of import specifiers, including dynami
 
 _Comprehensively handles the JS language grammar while remaining small and fast - can parse 2MB of JavaScript in under 30ms from a completely cold start, and in just 20ms after a few runs, [see benchmarks](#benchmarks) for more info._
 
+### Environment Support
+
+Node.js 10+, and all browsers [with Web Assembly support](https://caniuse.com/#search=web%20assembly).
+
+For support in Microsoft Edge, a [TextEncoder polyfill needs to be included](https://github.com/anonyco/FastestSmallestTextEncoderDecoder).
+
 ### Usage
 
 ```
