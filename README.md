@@ -10,9 +10,7 @@ _Comprehensively handles the JS language grammar while remaining small and fast 
 
 ### Environment Support
 
-Node.js 10+, and all browsers [with Web Assembly support](https://caniuse.com/#search=web%20assembly).
-
-For support in Microsoft Edge, a [TextEncoder polyfill needs to be included](https://github.com/anonyco/FastestSmallestTextEncoderDecoder).
+Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#search=web%20assembly).
 
 ### Usage
 
@@ -84,25 +82,25 @@ Module load time
 > 6ms
 Cold Run, All Samples
 test/samples/*.js (2150 KiB)
-> 29ms
+> 22ms
 
 Warm Runs (average of 25 runs)
 test/samples/d3.js (491 KiB)
-> 5.6ms
+> 4.2ms
 test/samples/d3.min.js (274 KiB)
-> 3.44ms
+> 2.16ms
 test/samples/magic-string.js (34 KiB)
-> 0.36ms
-test/samples/magic-string.min.js (20 KiB)
 > 0.04ms
+test/samples/magic-string.min.js (20 KiB)
+> 0ms
 test/samples/rollup.js (902 KiB)
-> 9.24ms
+> 6.2ms
 test/samples/rollup.min.js (429 KiB)
-> 5.24ms
+> 3.2ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (2150 KiB)
-> 24.8ms
+> 14.08ms
 ```
 
 ### Building
