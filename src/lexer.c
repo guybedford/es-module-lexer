@@ -10,26 +10,24 @@ bool parse () {
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
   char templateStack_[STACK_DEPTH];
-  uchar_t* openTokenPosStack_[STACK_DEPTH];
+  char16_t* openTokenPosStack_[STACK_DEPTH];
 
   templateStackDepth = 0;
   openTokenPosStackDepth = 0;
   templateDepth = -1;
   braceDepth = 0;
-  lastTokenPos = (uchar_t*)EMPTY_CHAR;
-  lastOpenTokenPos = (uchar_t*)EMPTY_CHAR;
+  lastTokenPos = (char16_t*)EMPTY_CHAR;
+  lastOpenTokenPos = (char16_t*)EMPTY_CHAR;
   parse_error = 0;
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
 
-  pos = (void*)source - 1;
-  jsIndexOffset = (void*)source;
-  uchar_t ch = '\0';
-  uchar_t* end = pos + SOURCE_LEN;
-  while (pos < end) {
-    nextChar(ch);
-    ch = readChar();
+  pos = (char16_t*)(source - 1);
+  char16_t ch = '\0';
+  char16_t* end = pos + sourceLen;
+  while (pos++ < end) {
+    ch = *pos;
     if (ch == ' ') continue;
     if (ch == 'e') {
       if (braceDepth == 0)
@@ -54,7 +52,7 @@ bool parse () {
           return syntaxError(), false;
         lastOpenTokenPos = openTokenPosStack[--openTokenPosStackDepth];
         if (import_write_head != NULL && import_write_head->dynamicPos == lastOpenTokenPos) {
-          import_write_head->end = pos - jsIndexOffset;
+          import_write_head->end = pos - source;
           import_write_head->endPos = pos;
         }
       break;
@@ -87,7 +85,7 @@ bool parse () {
         doubleQuoteString();
       break;
       case '/': {
-        uchar_t next_ch = *(pos + 1);
+        char16_t next_ch = *(pos + 1);
         if (next_ch == '/') {
           lineComment();
           // dont update lastTokenIndex
@@ -103,7 +101,7 @@ bool parse () {
           // - what token came previously (lastToken)
           // - if a closing brace or paren, what token came before the corresponding
           //   opening brace or paren (lastOpenTokenIndex)
-          uchar_t lastToken = *lastTokenPos;
+          char16_t lastToken = *lastTokenPos;
           if (!lastToken || isExpressionKeyword(lastTokenPos) ||
               isExpressionPunctuator(lastToken) ||
               lastToken == ')' && isParenKeyword(lastOpenTokenPos) ||
@@ -131,12 +129,12 @@ void tryParseImportStatement () {
   if (!readPrecedingKeyword6(pos + 5, 'i', 'm', 'p', 'o', 'r', 't'))
     return;
 
-  uint32_t startIndex = pos - jsIndexOffset;
-  uchar_t* startPos = pos;
+  uint32_t startIndex = pos - source;
+  char16_t* startPos = pos;
 
   pos += 6;
 
-  uchar_t ch = commentWhitespace();
+  char16_t ch = commentWhitespace();
   
   switch (ch) {
     // dynamic import
@@ -145,15 +143,15 @@ void tryParseImportStatement () {
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
-      addImport(pos - jsIndexOffset + 1, 0, 0, startIndex, startPos);
+      addImport(pos - source + 1, 0, 0, startIndex, startPos);
       return;
     // import.meta
     case '.':
-      nextChar(ch);
+      pos++;
       ch = commentWhitespace();
       // import.meta indicated by d == -2
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
-        addImport(startIndex, pos - jsIndexOffset + 4, pos + 4, -2, NULL);
+        addImport(startIndex, pos - source + 4, pos + 4, -2, NULL);
       return;
     
     default:
@@ -169,12 +167,12 @@ void tryParseImportStatement () {
         pos--;
         return;
       }
-      while (ch = readChar()) {
+      while (ch = *pos) {
         if (ch == '\'' || ch == '"') {
           readImportString(ch);
           return;
         }
-        nextChar(ch);
+        pos++;
       }
       syntaxError();
   }
@@ -186,9 +184,9 @@ void tryParseExportStatement () {
 
   pos += 6;
 
-  uchar_t* curPos = pos;
+  char16_t* curPos = pos;
 
-  uchar_t ch = commentWhitespace();
+  char16_t ch = commentWhitespace();
 
   if (pos == curPos && !isPunctuator(ch))
     return;
@@ -196,7 +194,7 @@ void tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 'd':
-      addExport(pos - jsIndexOffset, pos - jsIndexOffset + 7);
+      addExport(pos - source, pos - source + 7);
       return;
 
     // export async? function*? name () {
@@ -211,9 +209,9 @@ void tryParseExportStatement () {
         pos++;
         ch = commentWhitespace();
       }
-      uint32_t startIndex = pos - jsIndexOffset;
+      uint32_t startIndex = pos - source;
       ch = readToWsOrPunctuator(ch);
-      addExport(startIndex, pos - jsIndexOffset);
+      addExport(startIndex, pos - source);
       pos--;
       return;
 
@@ -221,9 +219,9 @@ void tryParseExportStatement () {
       if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuator(*(pos + 5))) {
         pos += 5;
         ch = commentWhitespace();
-        uint32_t startIndex = pos - jsIndexOffset;
+        uint32_t startIndex = pos - source;
         ch = readToWsOrPunctuator(ch);
-        addExport(startIndex, pos - jsIndexOffset);
+        addExport(startIndex, pos - source);
         pos--;
         return;
       }
@@ -238,7 +236,7 @@ void tryParseExportStatement () {
       pos += 3;
       do {
         ch = commentWhitespace();
-        uint32_t startIndex = pos - jsIndexOffset;
+        uint32_t startIndex = pos - source;
         ch = readToWsOrPunctuator(ch);
         if (ch == '{' || ch == '[') {
           // we don't yet handle destructuring
@@ -246,29 +244,29 @@ void tryParseExportStatement () {
           return;
         }
         // stops on [ { destructurings
-        if (pos - jsIndexOffset == startIndex)
+        if (pos - source == startIndex)
           return;
-        addExport(startIndex, pos - jsIndexOffset);
+        addExport(startIndex, pos - source);
         pos++;
       } while (ch == ',');
       return;
 
     // export {...}
     case '{':
-      nextChar(ch);
+      pos++;
       ch = commentWhitespace();
       do {
-        uint32_t startIndex = pos - jsIndexOffset;
+        uint32_t startIndex = pos - source;
         readToWsOrPunctuator(ch);
-        uint32_t endIndex = pos - jsIndexOffset;
+        uint32_t endIndex = pos - source;
         ch = commentWhitespace();
         // as
         if (ch == 'a') {
           pos += 2;
           ch = commentWhitespace();
-          startIndex = pos - jsIndexOffset;
+          startIndex = pos - source;
           readToWsOrPunctuator(ch);
-          endIndex = pos - jsIndexOffset;
+          endIndex = pos - source;
           ch = commentWhitespace();
         }
         // ,
@@ -293,30 +291,30 @@ void tryParseExportStatement () {
   }
 }
 
-void readImportString (uchar_t ch) {
+void readImportString (char16_t ch) {
   uint32_t startIndex;
   if (ch == '\'') {
-    startIndex = pos - jsIndexOffset + 1;
-    nextChar(ch);
+    startIndex = pos - source + 1;
+    pos++;
     singleQuoteString();
-    addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
+    addImport(startIndex, pos - source, pos, -1, NULL);
   }
   else if (ch == '"') {
-    startIndex = pos - jsIndexOffset + 1;
-    nextChar(ch);
+    startIndex = pos - source + 1;
+    pos++;
     doubleQuoteString();
-    addImport(startIndex, pos - jsIndexOffset, pos, -1, NULL);
+    addImport(startIndex, pos - source, pos, -1, NULL);
   }
   else {
     syntaxError();
   }
 }
 
-uchar_t commentWhitespace () {
-  uchar_t ch;
-  while (ch = readChar()) {
+char16_t commentWhitespace () {
+  char16_t ch;
+  while (ch = *pos) {
     if (ch == '/') {
-      uchar_t next_ch = *(pos + 1);
+      char16_t next_ch = *(pos + 1);
       if (next_ch == '/')
         lineComment();
       else if (next_ch == '*')
@@ -327,18 +325,18 @@ uchar_t commentWhitespace () {
     else if (!isBrOrWs(ch)) {
       return ch;
     }
-    nextChar(ch);
+    pos++;
   }
   return ch;
 }
 
 void templateString () {
   pos++;
-  uchar_t ch;
-  while (ch = readChar()) {
+  char16_t ch;
+  while (ch = *pos) {
     if (ch == '$') {
       pos++;
-      ch = readChar();
+      ch = *pos;
       if (ch == '{') {
         templateStack[templateStackDepth++] = templateDepth;
         templateDepth = ++braceDepth;
@@ -350,182 +348,182 @@ void templateString () {
     }
     else if (ch == '\\') {
       pos++;
-      ch = readChar();
+      ch = *pos;
     }
-    nextChar(ch);
+    pos++;
   }
   syntaxError();
 }
 
 void blockComment () {
   pos += 2;
-  uchar_t ch;
-  while (ch = readChar()) {
+  char16_t ch;
+  while (ch = *pos) {
     if (ch == '*') {
       pos++;
-      ch = readChar();
+      ch = *pos;
       if (ch == '/')
         return;
       continue;
     }
-    nextChar(ch);
+    pos++;
   }
 }
 
 void lineComment () {
   pos++;
-  uchar_t ch;
-  while (ch = readChar()) {
+  char16_t ch;
+  while (ch = *pos) {
     if (ch == '\n' || ch == '\r')
       return;
-    nextChar(ch);
+    pos++;
   }
 }
 
 void singleQuoteString () {
-  uchar_t ch;
+  char16_t ch;
   pos++;
-  while (ch = readChar()) {
+  while (ch = *pos) {
     if (ch == '\'')
       return;
     if (ch == '\\')
-      pos++, ch = readChar();
+      pos++, ch = *pos;
     else if (isBr(ch))
       break;
-    nextChar(ch);
+    pos++;
   }
   syntaxError();
 }
 
 void doubleQuoteString () {
-  uchar_t ch;
+  char16_t ch;
   pos++;
-  while (ch = readChar()) {
+  while (ch = *pos) {
     if (ch == '"')
       return;
     if (ch == '\\')
-      pos++, ch = readChar();
+      pos++, ch = *pos;
     else if (isBr(ch))
       break;
-    nextChar(ch);
+    pos++;
   }
   syntaxError();
 }
 
-uchar_t regexCharacterClass () {
-  uchar_t ch;
+char16_t regexCharacterClass () {
+  char16_t ch;
   pos++;
-  while (ch = readChar()) {
+  while (ch = *pos) {
     if (ch == ']')
       return ch;
     if (ch == '\\')
-      pos++, ch = readChar();
+      pos++, ch = *pos;
     else if (ch == '\n' || ch == '\r')
       break;
-    nextChar(ch);
+    pos++;
   }
   syntaxError();
   return ch;
 }
 
 void regularExpression () {
-  uchar_t ch;
+  char16_t ch;
   pos++;
-  while (ch = readChar()) {
+  while (ch = *pos) {
     if (ch == '/')
       return;
     if (ch == '[')
       ch = regexCharacterClass();
     else if (ch == '\\')
-      pos++, ch = readChar();
+      pos++, ch = *pos;
     else if (ch == '\n' || ch == '\r')
       break;
-    nextChar(ch);
+    pos++;
   }
   syntaxError();
 }
 
-uchar_t readToWsOrPunctuator (uchar_t ch) {
+char16_t readToWsOrPunctuator (char16_t ch) {
   do {
     if (isBrOrWs(ch) || isPunctuator(ch))
       return ch;
-    nextChar(ch);
-  } while (ch = readChar());
+    pos++;
+  } while (ch = *pos);
   return ch;
 }
 
-bool isBr (uchar_t c) {
+bool isBr (char16_t c) {
   return c == '\r' || c == '\n';
 }
 
-bool isBrOrWs (uchar_t c) {
+bool isBrOrWs (char16_t c) {
   return c > 8 && c < 14 || c == 32;
 }
 
-bool isBrOrWsOrPunctuator (uchar_t c) {
+bool isBrOrWsOrPunctuator (char16_t c) {
   return isBrOrWs(c) || isPunctuator(c);
 }
 
-bool isBrOrWsOrPunctuatorNotDot (uchar_t c) {
+bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
   return isBrOrWs(c) || isPunctuator(c) && c != '.';
 }
 
-bool str_eq2 (uchar_t* pos, uchar_t c1, uchar_t c2) {
+bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
   return *pos == c1 && *(pos + 1) == c2;
 }
 
-bool str_eq3 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3) {
+bool str_eq3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3;
 }
 
-bool str_eq4 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4) {
+bool str_eq4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4;
 }
 
-bool str_eq5 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5) {
+bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5;
 }
 
-bool str_eq6 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5, uchar_t c6) {
+bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6;
 }
 
-bool str_eq7 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5, uchar_t c6, uchar_t c7) {
+bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7;
 }
 
-bool readPrecedingKeyword1 (uchar_t* pos, uchar_t c1) {
+bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
   if (pos < source) return false;
   return *pos == c1 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
 }
-bool readPrecedingKeyword2 (uchar_t* pos, uchar_t c1, uchar_t c2) {
+bool readPrecedingKeyword2 (char16_t* pos, char16_t c1, char16_t c2) {
   if (pos - 1 < source) return false;
   return str_eq2(pos - 1, c1, c2) && (pos - 1 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 2)));
 }
-bool readPrecedingKeyword3 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3) {
+bool readPrecedingKeyword3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3) {
   if (pos - 2 < source) return false;
   return str_eq3(pos - 2, c1, c2, c3) && (pos - 2 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 3)));
 }
-bool readPrecedingKeyword4 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4) {
+bool readPrecedingKeyword4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4) {
   if (pos - 3 < source) return false;
   return str_eq4(pos - 3, c1, c2, c3, c4) && (pos - 3 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 4)));
 }
-bool readPrecedingKeyword5 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5) {
+bool readPrecedingKeyword5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5) {
   if (pos - 4 < source) return false;
   return str_eq5(pos - 4, c1, c2, c3, c4, c5) && (pos - 4 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 5)));
 }
-bool readPrecedingKeyword6 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5, uchar_t c6) {
+bool readPrecedingKeyword6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6) {
   if (pos - 5 < source) return false;
   return str_eq6(pos - 5, c1, c2, c3, c4, c5, c6) && (pos - 5 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 6)));
 }
-bool readPrecedingKeyword7 (uchar_t* pos, uchar_t c1, uchar_t c2, uchar_t c3, uchar_t c4, uchar_t c5, uchar_t c6, uchar_t c7) {
+bool readPrecedingKeyword7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
   if (pos - 6 < source) return false;
   return str_eq7(pos - 6, c1, c2, c3, c4, c5, c6, c7) && (pos - 6 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 7)));
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,
 //   return, throw, typeof, void, yield ,await
-bool isExpressionKeyword (uchar_t* pos) {
+bool isExpressionKeyword (char16_t* pos) {
   switch (*pos) {
     case 'd':
       switch (*(pos - 1)) {
@@ -597,13 +595,13 @@ bool isExpressionKeyword (uchar_t* pos) {
   return false;
 }
 
-bool isParenKeyword (uchar_t* curPos) {
+bool isParenKeyword (char16_t* curPos) {
   return readPrecedingKeyword5(curPos, 'w', 'h', 'i', 'l', 'e') ||
       readPrecedingKeyword3(curPos, 'f', 'o', 'r') ||
       readPrecedingKeyword2(curPos, 'i', 'f');
 }
 
-bool isPunctuator (uchar_t ch) {
+bool isPunctuator (char16_t ch) {
   // 23 possible punctuator endings: !%&()*+,-./:;<=>?[]^{}|~
   return ch == '!' || ch == '%' || ch == '&' ||
     ch > 39 && ch < 48 || ch > 57 && ch < 64 ||
@@ -611,14 +609,14 @@ bool isPunctuator (uchar_t ch) {
     ch > 122 && ch < 127;
 }
 
-bool isExpressionPunctuator (uchar_t ch) {
+bool isExpressionPunctuator (char16_t ch) {
   // 20 possible expression endings: !%&(*+,-.:;<=>?[^{|~
   return ch == '!' || ch == '%' || ch == '&' ||
     ch > 39 && ch < 47 && ch != 41 || ch > 57 && ch < 64 ||
     ch == '[' || ch == '^' || ch > 122 && ch < 127 && ch != '}';
 }
 
-bool isExpressionTerminator (uchar_t* curPos) {
+bool isExpressionTerminator (char16_t* curPos) {
   // detects:
   // ; ) -1 finally
   // as all of these followed by a { will indicate a statement brace
@@ -634,59 +632,14 @@ bool isExpressionTerminator (uchar_t* curPos) {
   return false;
 }
 
-void nextChar (uchar_t ch) {
-  // we should always skip over surrogates
-  if (ch >= 0x80)
-    return nextCharSurrogate(ch);
-  pos++;
-}
-
-// Proper UTF-16 length counting against UTF-8 representation
-// If uchar_t were updaed to char32_t in future, this would become
-// a simple greater then 0xFFFF check here.
-void nextCharSurrogate (uchar_t ch) {
-  if (ch >= 0xC0) {
-    if (ch >= 0xE0) {
-      if (ch >= 0xF0) {
-        jsIndexOffset += 2;
-        pos += 4;
-      }
-      else {
-        uchar_t ch2 = *(pos + 2);
-        if (ch2 > 0xBF || ch2 == 0xBF && *(pos + 3) >= 0xBF)
-          jsIndexOffset++;
-        else
-          jsIndexOffset += 2;
-        pos += 3;
-      }
-    }
-    else {
-      jsIndexOffset++;
-      pos += 2;
-    }
-  }
-  else {
-    syntaxError();
-  }
-}
-
-uchar_t readChar () {
-  uchar_t ch = *pos;
-  if (ch < 0x80)
-    return ch;
-  // For now, exact UTF-8 surrogate handling is disabled
-  // since no tokenizing operations depend on it currently
-  return ch;
-}
-
 void bail (uint32_t error) {
   has_error = true;
   parse_error = error;
-  pos = (void*)source + SOURCE_LEN;
+  pos = (void*)source + sourceLen;
 }
 
 void syntaxError () {
   has_error = true;
-  parse_error = pos - jsIndexOffset;
-  pos = (void*)source + SOURCE_LEN;
+  parse_error = pos - source;
+  pos = (void*)source + sourceLen;
 }
