@@ -4,7 +4,7 @@ A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript syntax only.
+A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 

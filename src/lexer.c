@@ -62,7 +62,10 @@ bool parse () {
         // block / object ambiguity without a parser (assuming source is valid)
         if (import_write_head != NULL && import_write_head->endPos == lastTokenPos) {
           import_write_head = import_write_head_last;
-          import_write_head->next = NULL;
+          if (import_write_head)
+            import_write_head->next = NULL;
+          else
+            first_import = NULL;
         }
         braceDepth++;
         openTokenPosStack[openTokenPosStackDepth++] = lastTokenPos;
