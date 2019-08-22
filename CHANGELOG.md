@@ -1,3 +1,6 @@
+0.3.6
+* Fix case where methods named import would be incorrectly reported as dynamic imports (https://github.com/guybedford/es-module-lexer/pull/19)
+
 0.3.5
 * Fix Node.js 10 memory grow support for globals without a value getter (https://github.com/guybedford/es-module-lexer/issues/14)
 
