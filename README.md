@@ -79,7 +79,7 @@ import { init, parse } from 'es-module-lexer/dist/es-module-lexer.js';
 
 ### Environment Support
 
-Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#search=web%20assembly).
+Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
 
 ### Grammar Support
 
