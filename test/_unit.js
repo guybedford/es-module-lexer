@@ -137,6 +137,18 @@ suite('Lexer', () => {
     assert.equal(source.slice(s, e), 'import.\n       meta');
   });
 
+  test('dynamic import method', async () => {
+    await init;
+    const source = `
+      class A {
+        import() {
+        }
+      }
+    `;
+    const [imports] = parse(source);
+    assert.equal(imports.length, 0);
+  });
+
   test('dynamic import edge cases', () => {
     const source = `
       ({
