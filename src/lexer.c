@@ -51,16 +51,14 @@ bool parse () {
         if (openTokenPosStackDepth == 0)
           return syntaxError(), false;
         lastOpenTokenPos = openTokenPosStack[--openTokenPosStackDepth];
-        if (import_write_head != NULL && import_write_head->dynamicPos == lastOpenTokenPos) {
-          import_write_head->end = pos - source;
-          import_write_head->endPos = pos;
-        }
+        if (import_write_head && import_write_head->dynamic == lastOpenTokenPos)
+          import_write_head->end = pos;
       break;
       case '{':
         // dynamic import followed by { is not a dynamic import (so remove)
         // this is a sneaky way to get around { import () {} } v { import () }
         // block / object ambiguity without a parser (assuming source is valid)
-        if (import_write_head != NULL && import_write_head->endPos == lastTokenPos) {
+        if (import_write_head && import_write_head->end == lastTokenPos) {
           import_write_head = import_write_head_last;
           if (import_write_head)
             import_write_head->next = NULL;
@@ -132,7 +130,6 @@ void tryParseImportStatement () {
   if (!readPrecedingKeyword6(pos + 5, 'i', 'm', 'p', 'o', 'r', 't'))
     return;
 
-  uint32_t startIndex = pos - source;
   char16_t* startPos = pos;
 
   pos += 6;
@@ -146,7 +143,7 @@ void tryParseImportStatement () {
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
-      addImport(pos - source + 1, 0, 0, startIndex, startPos);
+      addImport(pos + 1, 0, startPos);
       return;
     // import.meta
     case '.':
@@ -154,7 +151,7 @@ void tryParseImportStatement () {
       ch = commentWhitespace();
       // import.meta indicated by d == -2
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
-        addImport(startIndex, pos - source + 4, pos + 4, -2, NULL);
+        addImport(startPos, pos + 4, IMPORT_META);
       return;
     
     default:
@@ -197,7 +194,7 @@ void tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 'd':
-      addExport(pos - source, pos - source + 7);
+      addExport(pos, pos + 7);
       return;
 
     // export async? function*? name () {
@@ -212,9 +209,9 @@ void tryParseExportStatement () {
         pos++;
         ch = commentWhitespace();
       }
-      uint32_t startIndex = pos - source;
+      const char16_t* startPos = pos;
       ch = readToWsOrPunctuator(ch);
-      addExport(startIndex, pos - source);
+      addExport(startPos, pos);
       pos--;
       return;
 
@@ -222,9 +219,9 @@ void tryParseExportStatement () {
       if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuator(*(pos + 5))) {
         pos += 5;
         ch = commentWhitespace();
-        uint32_t startIndex = pos - source;
+        const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        addExport(startIndex, pos - source);
+        addExport(startPos, pos);
         pos--;
         return;
       }
@@ -239,17 +236,16 @@ void tryParseExportStatement () {
       pos += 3;
       do {
         ch = commentWhitespace();
-        uint32_t startIndex = pos - source;
+        const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
+        // stops on [ { destructurings
         if (ch == '{' || ch == '[') {
-          // we don't yet handle destructuring
           pos--;
           return;
         }
-        // stops on [ { destructurings
-        if (pos - source == startIndex)
+        if (pos == startPos)
           return;
-        addExport(startIndex, pos - source);
+        addExport(startPos, pos);
         pos++;
       } while (ch == ',');
       return;
@@ -259,17 +255,17 @@ void tryParseExportStatement () {
       pos++;
       ch = commentWhitespace();
       do {
-        uint32_t startIndex = pos - source;
+        char16_t* startPos = pos;
         readToWsOrPunctuator(ch);
-        uint32_t endIndex = pos - source;
+        char16_t* endPos = pos;
         ch = commentWhitespace();
         // as
         if (ch == 'a') {
           pos += 2;
           ch = commentWhitespace();
-          startIndex = pos - source;
+          startPos = pos;
           readToWsOrPunctuator(ch);
-          endIndex = pos - source;
+          endPos = pos;
           ch = commentWhitespace();
         }
         // ,
@@ -277,7 +273,7 @@ void tryParseExportStatement () {
           pos++;
           ch = commentWhitespace();
         }
-        addExport(startIndex, endIndex);
+        addExport(startPos, endPos);
         if (!ch)
           return syntaxError();
       } while (ch != '}');
@@ -295,18 +291,17 @@ void tryParseExportStatement () {
 }
 
 void readImportString (char16_t ch) {
-  uint32_t startIndex;
   if (ch == '\'') {
-    startIndex = pos - source + 1;
+    const char16_t* startPos = pos + 1;
     pos++;
     singleQuoteString();
-    addImport(startIndex, pos - source, pos, -1, NULL);
+    addImport(startPos, pos, STANDARD_IMPORT);
   }
   else if (ch == '"') {
-    startIndex = pos - source + 1;
+    const char16_t* startPos = pos + 1;
     pos++;
     doubleQuoteString();
-    addImport(startIndex, pos - source, pos, -1, NULL);
+    addImport(startPos, pos, STANDARD_IMPORT);
   }
   else {
     syntaxError();
