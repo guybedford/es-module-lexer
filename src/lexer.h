@@ -5,28 +5,29 @@
 typedef unsigned short char16_t;
 extern unsigned char __heap_base;
 
+const char16_t* STANDARD_IMPORT = (char16_t*)0x1;
+const char16_t* IMPORT_META = (char16_t*)0x2;
+const char16_t __empty_char = '\0';
+const char16_t* EMPTY_CHAR = &__empty_char;
+// tracked depth of template and brackets
+const uint32_t STACK_DEPTH = 1024;
+const char16_t* source = (void*)&__heap_base;
+
 struct Import {
-  uint32_t start;
-  uint32_t end;
-  char16_t* endPos;
-  uint32_t dynamic;
-  char16_t* dynamicPos;
+  const char16_t* start;
+  const char16_t* end;
+  const char16_t* dynamic;
   struct Import* next;
 };
 typedef struct Import Import;
 
 struct Export {
-  uint32_t start;
-  uint32_t end;
+  const char16_t* start;
+  const char16_t* end;
   struct Export* next;
 };
 typedef struct Export Export;
 
-// depth of template and brackets
-const uint32_t STACK_DEPTH = 1024;
-
-const char16_t __empty_char = '\0';
-const char16_t* EMPTY_CHAR = &__empty_char;
 Import* first_import = NULL;
 Export* first_export = NULL;
 Import* import_read_head = NULL;
@@ -53,7 +54,6 @@ char16_t** openTokenPosStack;
 uint32_t parse_error;
 bool has_error = false;
 uint32_t sourceLen = 0;
-const char16_t* source = (void*)&__heap_base;
 
 void bail (uint32_t err);
 
@@ -72,7 +72,7 @@ const char16_t* salloc (uint32_t utf16Len) {
   return source;
 }
 
-void addImport (uint32_t start, uint32_t end, char16_t* endPos, uint32_t dynamic, char16_t* dynamicPos) {
+void addImport (const char16_t* start, const char16_t* end, const char16_t* dynamic) {
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
   if (import_write_head == NULL)
@@ -83,13 +83,11 @@ void addImport (uint32_t start, uint32_t end, char16_t* endPos, uint32_t dynamic
   import_write_head = import;
   import->start = start;
   import->end = end;
-  import->endPos = endPos;
   import->dynamic = dynamic;
-  import->dynamicPos = dynamicPos;
   import->next = NULL;
 }
 
-void addExport (uint32_t start, uint32_t end) {
+void addExport (const char16_t* start, const char16_t* end) {
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)
@@ -109,23 +107,28 @@ uint32_t e () {
 
 // getImportStart
 uint32_t is () {
-  return import_read_head->start;
+  return import_read_head->start - source;
 }
 // getImportEnd
 uint32_t ie () {
-  return import_read_head->end;
+  return import_read_head->end - source;
 }
 // getImportDynamic
 uint32_t id () {
-  return import_read_head->dynamic;
+  const char16_t* dynamic = import_read_head->dynamic;
+  if (dynamic == STANDARD_IMPORT)
+    return -1;
+  else if (dynamic == IMPORT_META)
+    return -2;
+  return import_read_head->dynamic - source;
 }
 // getExportStart
 uint32_t es () {
-  return export_read_head->start;
+  return export_read_head->start - source;
 }
 // getExportEnd
 uint32_t ee () {
-  return export_read_head->end;
+  return export_read_head->end - source;
 }
 // readImport
 bool ri () {
