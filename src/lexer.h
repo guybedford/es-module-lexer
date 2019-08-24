@@ -34,17 +34,18 @@ Import* import_read_head = NULL;
 Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
+Import* in_progress_dynamic_import = NULL;
 Export* export_write_head = NULL;
 void* analysis_base;
 void* analysis_head;
 
 char templateStackDepth;
-char openTokenPosStackDepth;
+char openTokenDepth;
 char templateDepth;
 char braceDepth;
 char16_t* lastTokenPos;
-char16_t* lastOpenTokenPos;
 char16_t* pos;
+char16_t* end;
 char* templateStack;
 char16_t** openTokenPosStack;
 
@@ -187,6 +188,7 @@ bool readPrecedingKeyword5(char16_t* pos, char16_t c1, char16_t c2, char16_t c3,
 bool readPrecedingKeyword6(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6);
 bool readPrecedingKeyword7(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7);
 
+bool keywordStart (char16_t* pos);
 bool isExpressionKeyword (char16_t* pos);
 bool isParenKeyword (char16_t* pos);
 bool isPunctuator (char16_t charCode);
