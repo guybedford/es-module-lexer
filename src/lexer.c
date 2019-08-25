@@ -13,88 +13,84 @@ bool parse () {
   char16_t* openTokenPosStack_[STACK_DEPTH];
 
   templateStackDepth = 0;
-  openTokenPosStackDepth = 0;
+  openTokenDepth = 0;
   templateDepth = -1;
-  braceDepth = 0;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
-  lastOpenTokenPos = (char16_t*)EMPTY_CHAR;
   parse_error = 0;
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
+  in_progress_dynamic_import = NULL;
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
-  char16_t* end = pos + sourceLen;
+  end = pos + sourceLen;
   while (pos++ < end) {
     ch = *pos;
-    if (ch == ' ') continue;
-    if (ch == 'e') {
-      if (braceDepth == 0)
-        tryParseExportStatement();
-      lastTokenPos = pos;
-      continue;
-    }
-    if (ch == 'i') {
-      tryParseImportStatement();
-      lastTokenPos = pos;
-      continue;
-    }
 
-    if (ch > 8 && ch < 14) continue;
+    if (ch == 32 || ch < 14 && ch > 8)
+      continue;
 
     switch (ch) {
+      case 'e':
+        if (openTokenDepth == 0 && keywordStart(pos) && str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't'))
+          tryParseExportStatement();
+        break;
+      case 'i':
+        if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
+          tryParseImportStatement();
+        break;
       case '(':
-        openTokenPosStack[openTokenPosStackDepth++] = lastTokenPos;
-      break;
+        openTokenPosStack[openTokenDepth++] = lastTokenPos;
+        break;
       case ')':
-        if (openTokenPosStackDepth == 0)
+        if (openTokenDepth == 0)
           return syntaxError(), false;
-        lastOpenTokenPos = openTokenPosStack[--openTokenPosStackDepth];
-        if (import_write_head && import_write_head->dynamic == lastOpenTokenPos)
+        openTokenDepth--;
+        if (in_progress_dynamic_import && in_progress_dynamic_import->dynamic == openTokenPosStack[openTokenDepth]) {
+          in_progress_dynamic_import = NULL;
           import_write_head->end = pos;
-      break;
+        }
+        break;
       case '{':
         // dynamic import followed by { is not a dynamic import (so remove)
         // this is a sneaky way to get around { import () {} } v { import () }
         // block / object ambiguity without a parser (assuming source is valid)
-        if (import_write_head && import_write_head->end == lastTokenPos) {
+        if (*lastTokenPos == ')' && import_write_head && import_write_head->end == lastTokenPos) {
           import_write_head = import_write_head_last;
           if (import_write_head)
             import_write_head->next = NULL;
           else
             first_import = NULL;
         }
-        braceDepth++;
-        openTokenPosStack[openTokenPosStackDepth++] = lastTokenPos;
-      break;
+        openTokenPosStack[openTokenDepth++] = lastTokenPos;
+        break;
       case '}':
-        if (braceDepth-- == templateDepth) {
+        if (openTokenDepth-- == templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
           templateString();
         }
         else {
-          if (braceDepth < templateDepth || openTokenPosStackDepth == 0)
+          if (openTokenDepth < templateDepth)
             return syntaxError(), false;
-          lastOpenTokenPos = openTokenPosStack[--openTokenPosStackDepth];
         }
-      break;
+        break;
       case '\'':
         singleQuoteString();
-      break;
+        break;
       case '"':
         doubleQuoteString();
-      break;
+        break;
       case '/': {
         char16_t next_ch = *(pos + 1);
         if (next_ch == '/') {
           lineComment();
-          // dont update lastTokenIndex
+          // dont update lastToken
           continue;
         }
         else if (next_ch == '*') {
           blockComment();
-          // dont update lastTokenIndex
+          // dont update lastToken
           continue;
         }
         else {
@@ -103,23 +99,24 @@ bool parse () {
           // - if a closing brace or paren, what token came before the corresponding
           //   opening brace or paren (lastOpenTokenIndex)
           char16_t lastToken = *lastTokenPos;
-          if (!lastToken || isExpressionKeyword(lastTokenPos) ||
-              isExpressionPunctuator(lastToken) ||
-              lastToken == ')' && isParenKeyword(lastOpenTokenPos) ||
-              lastToken == '}' && isExpressionTerminator(lastOpenTokenPos)) {
+          if (isExpressionPunctuator(lastToken) ||
+              lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
+              lastToken == '}' && isExpressionTerminator(openTokenPosStack[openTokenDepth]) ||
+              isExpressionKeyword(lastTokenPos) ||
+              !lastToken) {
             regularExpression();
           }
         }
+        break;
       }
-      break;
       case '`':
         templateString();
-      break;
+        break;
     }
     lastTokenPos = pos;
   }
 
-  if (templateDepth != -1 || openTokenPosStackDepth || has_error)
+  if (templateDepth != -1 || openTokenDepth || has_error)
     return false;
 
   // succeess
@@ -127,9 +124,6 @@ bool parse () {
 }
 
 void tryParseImportStatement () {
-  if (!readPrecedingKeyword6(pos + 5, 'i', 'm', 'p', 'o', 'r', 't'))
-    return;
-
   char16_t* startPos = pos;
 
   pos += 6;
@@ -139,11 +133,12 @@ void tryParseImportStatement () {
   switch (ch) {
     // dynamic import
     case '(':
-      openTokenPosStack[openTokenPosStackDepth++] = startPos;
+      openTokenPosStack[openTokenDepth++] = startPos;
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
       addImport(pos + 1, 0, startPos);
+      in_progress_dynamic_import = import_write_head;
       return;
     // import.meta
     case '.':
@@ -163,7 +158,7 @@ void tryParseImportStatement () {
     case '{':
     case '*':
       // import statement only permitted at base-level
-      if (openTokenPosStackDepth != 0) {
+      if (openTokenDepth != 0) {
         pos--;
         return;
       }
@@ -179,9 +174,6 @@ void tryParseImportStatement () {
 }
 
 void tryParseExportStatement () {
-  if (!readPrecedingKeyword6(pos + 5, 'e', 'x', 'p', 'o', 'r', 't'))
-    return;
-
   pos += 6;
 
   char16_t* curPos = pos;
@@ -216,7 +208,7 @@ void tryParseExportStatement () {
       return;
 
     case 'c':
-      if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuator(*(pos + 5))) {
+      if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
         pos += 5;
         ch = commentWhitespace();
         const char16_t* startPos = pos;
@@ -458,36 +450,36 @@ bool isBrOrWs (char16_t c) {
   return c > 8 && c < 14 || c == 32;
 }
 
-bool isBrOrWsOrPunctuator (char16_t c) {
-  return isBrOrWs(c) || isPunctuator(c);
-}
-
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
-  return isBrOrWs(c) || isPunctuator(c) && c != '.';
+  return c > 8 && c < 14 || c == 32 || isPunctuator(c) && c != '.';
 }
 
 bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
-  return *pos == c1 && *(pos + 1) == c2;
+  return *(pos + 1) == c2 && *pos == c1;
 }
 
 bool str_eq3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3) {
-  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3;
+  return *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool str_eq4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4) {
-  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4;
+  return *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5) {
-  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5;
+  return *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6) {
-  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6;
+  return *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
-  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7;
+  return *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+}
+
+bool keywordStart (char16_t* pos) {
+  return pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1));
 }
 
 bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
