@@ -1,3 +1,6 @@
+0.3.7
+* Refactoring (https://github.com/guybedford/es-module-lexer/pull/20, https://github.com/guybedford/es-module-lexer/pull/21)
+
 0.3.6
 * Fix case where methods named import would be incorrectly reported as dynamic imports (https://github.com/guybedford/es-module-lexer/pull/19)
 
