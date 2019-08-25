@@ -111,29 +111,29 @@ Current results:
 ```
 Cold Run, All Samples
 test/samples/*.js (3057 KiB)
-> 26ms
+> 25ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (719 KiB)
-> 5.32ms
+> 5ms
 test/samples/angular.min.js (188 KiB)
-> 3.4ms
-test/samples/d3.js (491 KiB)
-> 4.48ms
-test/samples/d3.min.js (274 KiB)
-> 2.16ms
-test/samples/magic-string.js (34 KiB)
-> 0.04ms
-test/samples/magic-string.min.js (20 KiB)
-> 0.04ms
-test/samples/rollup.js (902 KiB)
-> 6.04ms
-test/samples/rollup.min.js (429 KiB)
 > 3.2ms
+test/samples/d3.js (491 KiB)
+> 4.32ms
+test/samples/d3.min.js (274 KiB)
+> 2.08ms
+test/samples/magic-string.js (34 KiB)
+> 0ms
+test/samples/magic-string.min.js (20 KiB)
+> 0ms
+test/samples/rollup.js (902 KiB)
+> 5.8ms
+test/samples/rollup.min.js (429 KiB)
+> 3.16ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3057 KiB)
-> 18.92ms
+> 18.04ms
 ```
 
 ### Building
