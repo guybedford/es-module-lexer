@@ -1,3 +1,6 @@
+0.3.8
+* Fix template parsing bug (https://github.com/guybedford/es-module-lexer/pull/22)
+
 0.3.7
 * Refactoring (https://github.com/guybedford/es-module-lexer/pull/20, https://github.com/guybedford/es-module-lexer/pull/21)
 
