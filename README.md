@@ -155,3 +155,4 @@ After the Web Assembly build, the CJS build can be triggered via `npm run build`
 MIT
 
 [travis-url]: https://travis-ci.org/guybedford/es-module-lexer
+[travis-image]: https://travis-ci.org/guybedford/es-module-lexer.svg?branch=master
