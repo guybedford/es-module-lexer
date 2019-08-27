@@ -1,5 +1,7 @@
 # ES Module Lexer
 
+[![Build Status][travis-image]][travis-url]
+
 A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
@@ -151,3 +153,5 @@ After the Web Assembly build, the CJS build can be triggered via `npm run build`
 ### License
 
 MIT
+
+[travis-url]: https://travis-ci.org/guybedford/es-module-lexer
