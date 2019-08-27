@@ -45,6 +45,7 @@ else {
 }
 
 let wasm;
-export const init = WebAssembly.compile(wasmBuffer)
+const compile = WebAssembly.compile;
+export const init = compile(wasmBuffer)
 .then(WebAssembly.instantiate)
 .then(({ exports }) => { wasm = exports; });

@@ -20,7 +20,6 @@ bool parse () {
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
-  in_progress_dynamic_import = NULL;
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
@@ -47,10 +46,8 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (in_progress_dynamic_import && in_progress_dynamic_import->dynamic == openTokenPosStack[openTokenDepth]) {
-          in_progress_dynamic_import = NULL;
+        if (import_write_head && import_write_head->dynamic == openTokenPosStack[openTokenDepth])
           import_write_head->end = pos;
-        }
         break;
       case '{':
         // dynamic import followed by { is not a dynamic import (so remove)
@@ -138,7 +135,6 @@ void tryParseImportStatement () {
         return;
       // dynamic import indicated by positive d
       addImport(pos + 1, 0, startPos);
-      in_progress_dynamic_import = import_write_head;
       return;
     // import.meta
     case '.':
@@ -329,7 +325,7 @@ void templateString () {
       ch = *pos;
       if (ch == '{') {
         templateStack[templateStackDepth++] = templateDepth;
-        templateDepth = ++braceDepth;
+        templateDepth = ++openTokenDepth;
         return;
       }
     }
@@ -430,7 +426,7 @@ void regularExpression () {
       break;
     pos++;
   }
-  syntaxError();
+  syntaxError(1);
 }
 
 char16_t readToWsOrPunctuator (char16_t ch) {
