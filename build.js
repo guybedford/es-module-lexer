@@ -1,5 +1,5 @@
-import fs from 'fs';
-import terser from 'terser';
+const fs = require('fs');
+const terser = require('terser');
 
 const MINIFY = true;
 
