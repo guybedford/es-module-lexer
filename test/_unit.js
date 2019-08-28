@@ -18,7 +18,12 @@ import { z, q as r } from './reexport2.js';
 import * as q from './reexport1.js';
 
 export { d as a, p as b, z as c, r as d, q }`;
-    parse(source);
+    try {
+      parse(source);
+    }
+    catch (err) {
+      assert.equal(err.message, 'Parse error @:9:5');
+    }
   });
 
   test('Invalid export', () => {
