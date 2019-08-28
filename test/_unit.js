@@ -28,7 +28,6 @@ export { d as a, p as b, z as c, r as d, q }`;
       assert(false, 'Should error');
     }
     catch (err) {
-      console.log(err);
       assert.equal(err.idx, 11);
     }
   });

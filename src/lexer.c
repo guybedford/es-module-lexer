@@ -23,7 +23,7 @@ bool parse () {
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
-  end = pos + sourceLen + 1;
+  end = pos + sourceLen;
   while (pos++ < end) {
     ch = *pos;
 
@@ -265,7 +265,7 @@ void tryParseExportStatement () {
         addExport(startPos, endPos);
         if (pos == startPos)
           return syntaxError();
-        if (pos >= end)
+        if (pos > end)
           return syntaxError();
       } while (ch != '}');
     // fallthrough
@@ -313,12 +313,12 @@ char16_t commentWhitespace () {
     else if (!isBrOrWs(ch)) {
       return ch;
     }
-  } while (++pos < end);
+  } while (pos++ < end);
   return ch;
 }
 
 void templateString () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '$' && *(pos + 1) == '{') {
       pos++;
@@ -336,7 +336,7 @@ void templateString () {
 
 void blockComment () {
   pos++;
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '*' && *(pos + 1) == '/') {
       pos++;
@@ -346,7 +346,7 @@ void blockComment () {
 }
 
 void lineComment () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '\n' || ch == '\r')
       return;
@@ -354,7 +354,7 @@ void lineComment () {
 }
 
 void singleQuoteString () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '\'')
       return;
@@ -367,7 +367,7 @@ void singleQuoteString () {
 }
 
 void doubleQuoteString () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '"')
       return;
@@ -380,7 +380,7 @@ void doubleQuoteString () {
 }
 
 char16_t regexCharacterClass () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == ']')
       return ch;
@@ -394,7 +394,7 @@ char16_t regexCharacterClass () {
 }
 
 void regularExpression () {
-  while (++pos < end) {
+  while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '/')
       return;
@@ -599,11 +599,11 @@ bool isExpressionTerminator (char16_t* curPos) {
 void bail (uint32_t error) {
   has_error = true;
   parse_error = error;
-  pos = (void*)source + sourceLen;
+  pos = end + 1;
 }
 
 void syntaxError () {
   has_error = true;
   parse_error = pos - source;
-  pos = (void*)source + sourceLen;
+  pos = end + 1;
 }
