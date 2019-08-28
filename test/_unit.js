@@ -104,7 +104,7 @@ suite('Lexer', () => {
     assert.equal(d, -1);
     assert.equal(source.slice(s, e), 'test-dep');
 
-    assert.equal(exports.length, 1); 
+    assert.equal(exports.length, 1);
     assert.equal(exports[0], 'default');
   });
 
@@ -155,7 +155,7 @@ suite('Lexer', () => {
         // not a dynamic import!
         import(not1) {}
       });
-      { 
+      {
         // is a dynamic import!
         import(is1);
       }
@@ -189,7 +189,7 @@ suite('Lexer', () => {
       export function f () {
         g();
       }
-      
+
       import { g } from './test-circular2.js';
     `;
     const [imports, exports] = parse(source);
@@ -206,7 +206,7 @@ suite('Lexer', () => {
     const source = `/*
     VERSION
   */import util from 'util';
-  
+
 //
 function x() {
 }
@@ -313,5 +313,16 @@ function x() {
     assert.equal(imports.length, 2);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'b');
+  });
+
+  test('string with a newline', async () => {
+    await init;
+    const source = `
+      const foo = '\n';
+      import './a.js';
+    `;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 1);
+    assert.equal(exports.length, 0);
   });
 });
