@@ -1,4 +1,4 @@
-export function parse (source) {
+export function parse (source, name) {
   if (!wasm)
     return init.then(() => parse(source));
 
@@ -10,7 +10,7 @@ export function parse (source) {
   copy(source, new Uint16Array(wasm.memory.buffer, wasm.sa(source.length), source.length + 1));
 
   if (!wasm.parse())
-    throw Object.assign(new Error(`Parse error at ${wasm.e()}.`), { idx: wasm.e() });
+    throw Object.assign(new Error(`Error parsing ${name || '?'} at ${wasm.e()}.`), { idx: wasm.e() });
 
   const imports = [], exports = [];
   while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(), d: wasm.id() });

@@ -61,6 +61,8 @@ void bail (uint32_t err);
 const char16_t* sa (uint32_t utf16Len) {
   sourceLen = utf16Len;
   const char16_t* sourceEnd = source + utf16Len + 1;
+  // ensure source is null terminated
+  *(char16_t*)(source + utf16Len) = '\0';
   analysis_base = (void*)sourceEnd;
   analysis_head = analysis_base;
   first_import = NULL;
