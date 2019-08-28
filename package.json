@@ -10,7 +10,7 @@
     "build-wasm": "make lib/lexer.wasm && node build.js",
     "bench": "node --experimental-modules --expose-gc bench/index.js",
     "prepublishOnly": "npm run build",
-    "footprint": "cat dist/lexer.js | gzip -9f | wc -c"
+    "footprint": "npm run build && cat dist/lexer.js | gzip -9f | wc -c"
   },
   "author": "Guy Bedford",
   "license": "MIT",
