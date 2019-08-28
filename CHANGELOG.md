@@ -1,3 +1,7 @@
+0.3.9
+* Better invalid state handling (https://github.com/guybedford/es-module-lexer/pull/28)
+* Handle allocations for large numbers of exports (https://github.com/guybedford/es-module-lexer/pull/27)
+
 0.3.8
 * Fix template parsing bug (https://github.com/guybedford/es-module-lexer/pull/22)
 
