@@ -1,9 +1,25 @@
 import assert from 'assert';
 import { parse, init } from '../dist/lexer.js';
 
+suite('Invalid syntax', () => {
+  beforeEach(async () => await init);
+
+  test('Invalid export', () => {
+    try {
+      const source = `export { a = };`;
+      parse(source);
+      assert(false, 'Should error');
+    }
+    catch (err) {
+      assert.equal(err.idx, 11);
+    }
+  });
+});
+
 suite('Lexer', () => {
-  test('Simple export with unicode conversions', async () => {
-    await init;
+  beforeEach(async () => await init);
+
+  test('Simple export with unicode conversions', () => {
     const source = `export var p𓀀s,q`;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 0);

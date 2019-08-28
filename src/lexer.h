@@ -58,7 +58,7 @@ uint32_t sourceLen = 0;
 void bail (uint32_t err);
 
 // allocateSource
-const char16_t* salloc (uint32_t utf16Len) {
+const char16_t* sa (uint32_t utf16Len) {
   sourceLen = utf16Len;
   const char16_t* sourceEnd = source + utf16Len + 1;
   analysis_base = (void*)sourceEnd;
