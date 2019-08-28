@@ -1,3 +1,7 @@
+0.3.10
+* Better parse errors (https://github.com/guybedford/es-module-lexer/pull/30)
+* Handle end offset correctly (https://github.com/guybedford/es-module-lexer/pull/29)
+
 0.3.9
 * Better invalid state handling (https://github.com/guybedford/es-module-lexer/pull/28)
 * Handle allocations for large numbers of exports (https://github.com/guybedford/es-module-lexer/pull/27)
