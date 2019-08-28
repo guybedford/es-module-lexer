@@ -11,6 +11,7 @@ suite('Invalid syntax', () => {
       assert(false, 'Should error');
     }
     catch (err) {
+      console.log(err);
       assert.equal(err.idx, 11);
     }
   });

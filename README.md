@@ -53,7 +53,7 @@ import { init, parse } from 'es-module-lexer/dist/es-module-lexer.js';
     import /*comment!*/.meta.asdf;
   `;
 
-  const [imports, exports] = parse(source);
+  const [imports, exports] = parse(source, 'optional-sourcename');
 
   // Returns "asdf"
   source.substring(imports[0].s, imports[0].e);
