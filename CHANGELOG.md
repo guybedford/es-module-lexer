@@ -1,3 +1,7 @@
+0.3.11
+* Fixup parse error column handling (https://github.com/guybedford/es-module-lexer/commit/3979105162c50827af00dc4549944d708896da53)
+* Fix non-terminating loop case (https://github.com/guybedford/es-module-lexer/pull/31)
+
 0.3.10
 * Better parse errors (https://github.com/guybedford/es-module-lexer/pull/30)
 * Handle end offset correctly (https://github.com/guybedford/es-module-lexer/pull/29)
