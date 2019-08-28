@@ -23,7 +23,7 @@ bool parse () {
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
-  end = pos + sourceLen;
+  end = pos + sourceLen + 1;
   while (pos++ < end) {
     ch = *pos;
 
@@ -263,13 +263,11 @@ void tryParseExportStatement () {
           ch = commentWhitespace();
         }
         addExport(startPos, endPos);
-        if (ch == '}')
-          break;
         if (pos == startPos)
           return syntaxError();
         if (pos >= end)
           return syntaxError();
-      } while (pos < end);
+      } while (ch != '}');
     // fallthrough
     
     // export *

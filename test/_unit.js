@@ -19,6 +19,15 @@ suite('Invalid syntax', () => {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('Single parse cases', () => {
+    parse(`export { x }`);
+    parse(`'asdf'`);
+    parse(`/asdf/`);
+    parse(`\`asdf\``);
+    parse(`/**/`);
+    parse(`//`);
+  });
+
   test('Simple export with unicode conversions', () => {
     const source = `export var p𓀀s,q`;
     const [imports, exports] = parse(source);
