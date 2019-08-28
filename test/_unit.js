@@ -4,6 +4,28 @@ import { parse, init } from '../dist/lexer.js';
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Invalid string', () => {
+    const source = `import './export.js';
+
+import d from './export.js';
+
+import { s as p } from './reexport1.js';
+
+import { z, q as r } from './reexport2.js';
+
+   '
+
+import * as q from './reexport1.js';
+
+export { d as a, p as b, z as c, r as d, q }`;
+    try {
+      parse(source);
+    }
+    catch (err) {
+      assert.equal(err.message, 'Parse error @:9:5');
+    }
+  });
+
   test('Invalid export', () => {
     try {
       const source = `export { a = };`;
@@ -11,7 +33,6 @@ suite('Invalid syntax', () => {
       assert(false, 'Should error');
     }
     catch (err) {
-      console.log(err);
       assert.equal(err.idx, 11);
     }
   });
