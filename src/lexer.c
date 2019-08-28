@@ -158,7 +158,8 @@ void tryParseImportStatement () {
         pos--;
         return;
       }
-      while (ch = *pos) {
+      while (pos < end) {
+        ch = *pos;
         if (ch == '\'' || ch == '"') {
           readImportString(ch);
           return;
@@ -262,9 +263,11 @@ void tryParseExportStatement () {
           ch = commentWhitespace();
         }
         addExport(startPos, endPos);
-        if (!ch)
+        if (ch == '}')
+          break;
+        if (pos == startPos)
           return syntaxError();
-      } while (ch != '}');
+      } while (pos < end);
     // fallthrough
     
     // export *
@@ -280,14 +283,12 @@ void tryParseExportStatement () {
 
 void readImportString (char16_t ch) {
   if (ch == '\'') {
-    const char16_t* startPos = pos + 1;
-    pos++;
+    const char16_t* startPos = ++pos;
     singleQuoteString();
     addImport(startPos, pos, STANDARD_IMPORT);
   }
   else if (ch == '"') {
-    const char16_t* startPos = pos + 1;
-    pos++;
+    const char16_t* startPos = ++pos;
     doubleQuoteString();
     addImport(startPos, pos, STANDARD_IMPORT);
   }
@@ -298,7 +299,8 @@ void readImportString (char16_t ch) {
 
 char16_t commentWhitespace () {
   char16_t ch;
-  while (ch = *pos) {
+  do {
+    ch = *pos;
     if (ch == '/') {
       char16_t next_ch = *(pos + 1);
       if (next_ch == '/')
@@ -311,130 +313,106 @@ char16_t commentWhitespace () {
     else if (!isBrOrWs(ch)) {
       return ch;
     }
-    pos++;
-  }
+  } while (++pos < end);
   return ch;
 }
 
 void templateString () {
-  pos++;
-  char16_t ch;
-  while (ch = *pos) {
-    if (ch == '$') {
+  while (++pos < end) {
+    char16_t ch = *pos;
+    if (ch == '$' && *(pos + 1) == '{') {
       pos++;
-      ch = *pos;
-      if (ch == '{') {
-        templateStack[templateStackDepth++] = templateDepth;
-        templateDepth = ++openTokenDepth;
-        return;
-      }
-    }
-    if (ch == '`') {
+      templateStack[templateStackDepth++] = templateDepth;
+      templateDepth = ++openTokenDepth;
       return;
     }
-    else if (ch == '\\') {
+    if (ch == '`')
+      return;
+    if (ch == '\\')
       pos++;
-      ch = *pos;
-    }
-    pos++;
   }
   syntaxError();
 }
 
 void blockComment () {
-  pos += 2;
-  char16_t ch;
-  while (ch = *pos) {
-    if (ch == '*') {
+  pos++;
+  while (++pos < end) {
+    char16_t ch = *pos;
+    if (ch == '*' && *(pos + 1) == '/') {
       pos++;
-      ch = *pos;
-      if (ch == '/')
-        return;
-      continue;
+      return;
     }
-    pos++;
   }
 }
 
 void lineComment () {
-  pos++;
-  char16_t ch;
-  while (ch = *pos) {
+  while (++pos < end) {
+    char16_t ch = *pos;
     if (ch == '\n' || ch == '\r')
       return;
-    pos++;
   }
 }
 
 void singleQuoteString () {
-  char16_t ch;
-  pos++;
-  while (ch = *pos) {
+  while (++pos < end) {
+    char16_t ch = *pos;
     if (ch == '\'')
       return;
     if (ch == '\\')
-      pos++, ch = *pos;
+      pos++;
     else if (isBr(ch))
       break;
-    pos++;
   }
   syntaxError();
 }
 
 void doubleQuoteString () {
-  char16_t ch;
-  pos++;
-  while (ch = *pos) {
+  while (++pos < end) {
+    char16_t ch = *pos;
     if (ch == '"')
       return;
     if (ch == '\\')
-      pos++, ch = *pos;
+      pos++;
     else if (isBr(ch))
       break;
-    pos++;
   }
   syntaxError();
 }
 
 char16_t regexCharacterClass () {
-  char16_t ch;
-  pos++;
-  while (ch = *pos) {
+  while (++pos < end) {
+    char16_t ch = *pos;
     if (ch == ']')
       return ch;
     if (ch == '\\')
-      pos++, ch = *pos;
+      pos++;
     else if (ch == '\n' || ch == '\r')
       break;
-    pos++;
   }
   syntaxError();
-  return ch;
+  return '\0';
 }
 
 void regularExpression () {
-  char16_t ch;
-  pos++;
-  while (ch = *pos) {
+  while (++pos < end) {
+    char16_t ch = *pos;
     if (ch == '/')
       return;
     if (ch == '[')
       ch = regexCharacterClass();
     else if (ch == '\\')
-      pos++, ch = *pos;
+      pos++;
     else if (ch == '\n' || ch == '\r')
       break;
-    pos++;
   }
-  syntaxError(1);
+  syntaxError();
 }
 
 char16_t readToWsOrPunctuator (char16_t ch) {
   do {
     if (isBrOrWs(ch) || isPunctuator(ch))
       return ch;
-    pos++;
-  } while (ch = *pos);
+  } while (ch = *(++pos));
   return ch;
 }
 
