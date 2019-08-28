@@ -267,6 +267,8 @@ void tryParseExportStatement () {
           break;
         if (pos == startPos)
           return syntaxError();
+        if (pos >= end)
+          return syntaxError();
       } while (pos < end);
     // fallthrough
     
