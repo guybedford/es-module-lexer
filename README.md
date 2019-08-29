@@ -150,6 +150,8 @@ On Windows it may be preferable to use the Linux subsystem.
 
 After the Web Assembly build, the CJS build can be triggered via `npm run build`.
 
+Optimization passes are run with [Binaryen](https://github.com/WebAssembly/binaryen) prior to publish to reduce the Web Assembly footprint.
+
 ### License
 
 MIT
