@@ -243,7 +243,7 @@ void tryParseExportStatement () {
     case '{':
       pos++;
       ch = commentWhitespace();
-      do {
+      while (true) {
         char16_t* startPos = pos;
         readToWsOrPunctuator(ch);
         char16_t* endPos = pos;
@@ -263,11 +263,13 @@ void tryParseExportStatement () {
           ch = commentWhitespace();
         }
         addExport(startPos, endPos);
+        if (ch == '}')
+          break;
         if (pos == startPos)
           return syntaxError();
         if (pos > end)
           return syntaxError();
-      } while (ch != '}');
+      }
     // fallthrough
     
     // export *
