@@ -10,7 +10,7 @@ A very small single JS file (4KiB gzipped) that includes inlined Web Assembly fo
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
-_Comprehensively handles the JS language grammar while remaining small and fast - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
+_Comprehensively handles the JS language grammar while remaining small and fast. - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
 ### Usage
 
@@ -87,6 +87,7 @@ Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#f
 
 * Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
 * Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
+* Always correctly parses valid JS source, but may parse invalid JS source without errors.
 
 ### Limitations
 
