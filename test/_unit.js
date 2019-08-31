@@ -75,10 +75,12 @@ suite('Lexer', () => {
 
   test('Import/Export with comments', () => {
     const source = `
+
       import/* 'x' */ 'a';
 
       import /* 'x' */ 'b';
 
+      export var z  /*  */  
       export {
         a,
         // b,
@@ -89,7 +91,7 @@ suite('Lexer', () => {
     assert.equal(imports.length, 2);
     assert.equal(source.slice(imports[0].s, imports[0].e), 'a');
     assert.equal(source.slice(imports[1].s, imports[1].e), 'b');
-    assert.equal(exports.toString(), 'a,d');
+    assert.equal(exports.toString(), 'z,a,d');
   });
 
   test('Exported function', () => {
