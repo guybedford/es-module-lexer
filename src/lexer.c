@@ -222,8 +222,9 @@ void tryParseExportStatement () {
     case 'l':
       // destructured initializations not currently supported (skipped for { or [)
       // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-      pos += 3;
+      pos += 2;
       do {
+        pos++;
         ch = commentWhitespace();
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
@@ -235,8 +236,9 @@ void tryParseExportStatement () {
         if (pos == startPos)
           return;
         addExport(startPos, pos);
-        pos++;
+        ch = commentWhitespace();
       } while (ch == ',');
+      pos--;
       return;
 
     // export {...}
