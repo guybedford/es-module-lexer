@@ -1,3 +1,6 @@
+0.3.13
+* Fix comment support in export var statements (https://github.com/guybedford/es-module-lexer/pull/35)
+
 0.3.12
 * Fix empty export statement handling (https://github.com/guybedford/es-module-lexer/pull/32)
 * Add Binaryen optimization passes to reduce file size (https://github.com/guybedford/es-module-lexer/pull/33)
