@@ -228,8 +228,8 @@ void tryParseExportStatement () {
         ch = commentWhitespace();
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        // stops on [ { destructurings
-        if (ch == '{' || ch == '[') {
+        // stops on [ { destructurings or =
+        if (ch == '{' || ch == '[' || ch == '=') {
           pos--;
           return;
         }
