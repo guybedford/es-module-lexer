@@ -1,5 +1,11 @@
-import assert from 'assert';
-import { parse, init } from '../dist/lexer.js';
+const assert = require('assert');
+
+let parse;
+const init = (async () => {
+  let init;
+  ({ parse, init } = await import('../dist/lexer.js'));
+  await init;
+})();
 
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);

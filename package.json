@@ -5,7 +5,7 @@
   "main": "dist/lexer.cjs",
   "module": "dist/lexer.js",
   "scripts": {
-    "test": "mocha -r esm -b -u tdd test/*.js",
+    "test": "mocha -b -u tdd test/*.cjs",
     "build": "node build.js && babel dist/lexer.js | terser -o dist/lexer.cjs",
     "build-wasm": "make lib/lexer.wasm && node build.js",
     "bench": "node --experimental-modules --expose-gc bench/index.js",
@@ -18,7 +18,6 @@
     "@babel/cli": "^7.5.5",
     "@babel/core": "^7.5.5",
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
-    "esm": "^3.0.84",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
     "terser": "^4.1.4"

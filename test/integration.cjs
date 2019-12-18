@@ -1,6 +1,12 @@
-import assert from 'assert';
-import fs from 'fs';
-import { parse, init } from '../dist/lexer.js';
+const fs = require('fs');
+const assert = require('assert');
+
+let parse;
+const init = (async () => {
+  let init;
+  ({ parse, init } = await import('../dist/lexer.js'));
+  await init;
+})();
 
 const files = fs.readdirSync('test/samples')
 	.map(f => `test/samples/${f}`)
