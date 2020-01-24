@@ -134,7 +134,7 @@ void tryParseImportStatement () {
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
-      addImport(pos + 1, 0, startPos);
+      addImport(startPos, pos + 1, 0, startPos);
       return;
     // import.meta
     case '.':
@@ -142,7 +142,7 @@ void tryParseImportStatement () {
       ch = commentWhitespace();
       // import.meta indicated by d == -2
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
-        addImport(startPos, pos + 4, IMPORT_META);
+        addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
     
     default:
@@ -161,7 +161,7 @@ void tryParseImportStatement () {
       while (pos < end) {
         ch = *pos;
         if (ch == '\'' || ch == '"') {
-          readImportString(ch);
+          readImportString(startPos, ch);
           return;
         }
         pos++;
@@ -171,6 +171,8 @@ void tryParseImportStatement () {
 }
 
 void tryParseExportStatement () {
+  char16_t* startPos = pos;
+
   pos += 6;
 
   char16_t* curPos = pos;
@@ -280,21 +282,21 @@ void tryParseExportStatement () {
       ch = commentWhitespace();
       if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
         pos += 4;
-        readImportString(commentWhitespace());
+        readImportString((char16_t*)startPos, commentWhitespace());
       }
   }
 }
 
-void readImportString (char16_t ch) {
+void readImportString (char16_t* ss, char16_t ch) {
   if (ch == '\'') {
     const char16_t* startPos = ++pos;
     singleQuoteString();
-    addImport(startPos, pos, STANDARD_IMPORT);
+    addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
   else if (ch == '"') {
     const char16_t* startPos = ++pos;
     doubleQuoteString();
-    addImport(startPos, pos, STANDARD_IMPORT);
+    addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
   else {
     syntaxError();

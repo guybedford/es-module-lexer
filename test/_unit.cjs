@@ -72,10 +72,10 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
-    const { s, e, d } = imports[0];
+    const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -1);
     assert.equal(source.slice(s, e), 'test');
-
+    assert.equal(source.slice(ss, se), 'import test from "test"');
     assert.equal(exports.length, 0);
   });
 
@@ -96,7 +96,9 @@ suite('Lexer', () => {
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 2);
     assert.equal(source.slice(imports[0].s, imports[0].e), 'a');
+    assert.equal(source.slice(imports[0].ss, imports[0].se), `import/* 'x' */ 'a'`);
     assert.equal(source.slice(imports[1].s, imports[1].e), 'b');
+    assert.equal(source.slice(imports[1].ss, imports[1].se), `import /* 'x' */ 'b'`);
     assert.equal(exports.toString(), 'z,a,d');
   });
 
@@ -130,10 +132,16 @@ suite('Lexer', () => {
     assert.equal(imports.length, 3);
     assert.equal(imports[0].s, 32);
     assert.equal(imports[0].e, 40);
+    assert.equal(imports[0].ss, 0);
+    assert.equal(imports[0].se, 41);
     assert.equal(imports[1].s, 61);
     assert.equal(imports[1].e, 80);
+    assert.equal(imports[1].ss, 43);
+    assert.equal(imports[1].se, 81);
     assert.equal(imports[2].s, 156);
     assert.equal(imports[2].e, 175);
+    assert.equal(imports[2].ss, 83);
+    assert.equal(imports[2].se, 176);
   });
 
   test('More minified imports', () => {
@@ -142,6 +150,8 @@ suite('Lexer', () => {
     assert.equal(imports.length, 1);
     assert.equal(imports[0].s, 7);
     assert.equal(imports[0].e, 21);
+    assert.equal(imports[0].ss, 0);
+    assert.equal(imports[0].se, 22);
   });
 
   test('return bracket division', () => {
@@ -155,9 +165,10 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
-    const { s, e, d } = imports[0];
+    const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -1);
     assert.equal(source.slice(s, e), 'test-dep');
+    assert.equal(source.slice(ss, se), 'export { hello as default } from "test-dep"');
 
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'default');
@@ -170,8 +181,10 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
-    const { s, e, d } = imports[0];
+    const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -2);
+    assert.equal(ss, -1);
+    assert.equal(se, -1);
     assert.equal(source.slice(s, e), 'import.meta');
   });
 
@@ -187,8 +200,10 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
-    const { s, e, d } = imports[0];
+    const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -2);
+    assert.equal(ss, -1);
+    assert.equal(se, -1);
     assert.equal(source.slice(s, e), 'import.\n       meta');
   });
 
@@ -228,14 +243,20 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 3);
-    var { s, e, d } = imports[0];
+    var { s, e, ss, se, d } = imports[0];
+    assert.equal(ss, -1);
+    assert.equal(se, -1);
     assert.equal(source.substr(d, 6), 'import');
     assert.equal(source.slice(s, e), 'is1');
 
-    var { s, e, d } = imports[1];
+    var { s, e, ss, se, d } = imports[1];
+    assert.equal(ss, -1);
+    assert.equal(se, -1);
     assert.equal(source.slice(s, e), 'is2');
 
-    var { s, e, d } = imports[2];
+    var { s, e, ss, se, d } = imports[2];
+    assert.equal(ss, -1);
+    assert.equal(se, -1);
     assert.equal(source.slice(s, e), 'some_url');
   });
 
@@ -249,10 +270,10 @@ suite('Lexer', () => {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
-    const { s, e, d } = imports[0];
+    const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -1);
     assert.equal(source.slice(s, e), './test-circular2.js');
-
+    assert.equal(source.slice(ss, se), `import { g } from './test-circular2.js'`);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'f');
   });
@@ -281,6 +302,7 @@ function x() {
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 1);
     assert.equal(source.slice(imports[0].s, imports[0].e), 'util');
+    assert.equal(source.slice(imports[0].ss, imports[0].se), `import util from 'util'`);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'a');
   });
@@ -300,8 +322,12 @@ function x() {
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 2);
     assert.notEqual(imports[0].d, -1);
+    assert.equal(imports[0].ss, -1);
+    assert.equal(imports[0].se, -1);
     assert.equal(source.slice(imports[0].d, imports[0].s), 'import(');
     assert.notEqual(imports[1].d, -1);
+    assert.equal(imports[1].ss, -1);
+    assert.equal(imports[1].se, -1);
     assert.equal(source.slice(imports[1].d, imports[1].s), 'import(');
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'a');

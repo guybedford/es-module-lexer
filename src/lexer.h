@@ -16,6 +16,8 @@ const char16_t* source = (void*)&__heap_base;
 struct Import {
   const char16_t* start;
   const char16_t* end;
+  const char16_t* statement_start;
+  const char16_t* statement_end;
   const char16_t* dynamic;
   struct Import* next;
 };
@@ -74,7 +76,7 @@ const char16_t* sa (uint32_t utf16Len) {
   return source;
 }
 
-void addImport (const char16_t* start, const char16_t* end, const char16_t* dynamic) {
+void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
   if (import_write_head == NULL)
@@ -83,6 +85,13 @@ void addImport (const char16_t* start, const char16_t* end, const char16_t* dyna
     import_write_head->next = import;
   import_write_head_last = import_write_head;
   import_write_head = import;
+  import->statement_start = statement_start;
+  if (dynamic == IMPORT_META)
+    import->statement_end = end;
+  else if (dynamic == STANDARD_IMPORT)
+    import->statement_end = end + 1;
+  else 
+    import->statement_end = end + 2;
   import->start = start;
   import->end = end;
   import->dynamic = dynamic;
@@ -114,6 +123,20 @@ uint32_t is () {
 // getImportEnd
 uint32_t ie () {
   return import_read_head->end - source;
+}
+// getImportStatementStart
+uint32_t iss () {
+  if (import_read_head->dynamic == STANDARD_IMPORT)
+    return import_read_head->statement_start - source;
+  else
+    return -1;
+}
+// getImportStatementEnd
+uint32_t ise () {
+  if (import_read_head->dynamic == STANDARD_IMPORT)
+    return import_read_head->statement_end - source;
+  else
+    return -1;
 }
 // getImportDynamic
 uint32_t id () {
@@ -158,7 +181,7 @@ bool parse (uint32_t point);
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
-void readImportString (char16_t ch);
+void readImportString (char16_t* ss, char16_t ch);
 
 char16_t commentWhitespace ();
 void singleQuoteString ();

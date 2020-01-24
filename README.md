@@ -58,6 +58,9 @@ import { init, parse } from 'es-module-lexer/dist/es-module-lexer.js';
   // Returns "asdf"
   source.substring(imports[0].s, imports[0].e);
 
+  // Returns "import { a } from 'asdf';"
+  source.substring(imports[0].ss, imports[0].se);
+
   // Returns "p,q"
   exports.toString();
 
