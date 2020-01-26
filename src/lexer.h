@@ -126,17 +126,11 @@ uint32_t ie () {
 }
 // getImportStatementStart
 uint32_t ss () {
-  if (import_read_head->dynamic == STANDARD_IMPORT)
-    return import_read_head->statement_start - source;
-  else
-    return -1;
+  return import_read_head->statement_start - source;
 }
 // getImportStatementEnd
 uint32_t se () {
-  if (import_read_head->dynamic == STANDARD_IMPORT)
-    return import_read_head->statement_end - source;
-  else
-    return -1;
+  return import_read_head->statement_end - source;
 }
 // getImportDynamic
 uint32_t id () {
