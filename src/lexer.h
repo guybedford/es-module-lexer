@@ -125,14 +125,14 @@ uint32_t ie () {
   return import_read_head->end - source;
 }
 // getImportStatementStart
-uint32_t iss () {
+uint32_t ss () {
   if (import_read_head->dynamic == STANDARD_IMPORT)
     return import_read_head->statement_start - source;
   else
     return -1;
 }
 // getImportStatementEnd
-uint32_t ise () {
+uint32_t se () {
   if (import_read_head->dynamic == STANDARD_IMPORT)
     return import_read_head->statement_end - source;
   else
@@ -181,7 +181,7 @@ bool parse (uint32_t point);
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
-void readImportString (char16_t* ss, char16_t ch);
+void readImportString (const char16_t* ss, char16_t ch);
 
 char16_t commentWhitespace ();
 void singleQuoteString ();

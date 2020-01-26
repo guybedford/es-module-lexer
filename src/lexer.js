@@ -13,7 +13,7 @@ export function parse (source, name = '@') {
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   const imports = [], exports = [];
-  while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(),  ss: wasm.iss(), se: wasm.ise(), d: wasm.id() });
+  while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(),  ss: wasm.ss(), se: wasm.se(), d: wasm.id() });
   while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
 
   return [imports, exports];
