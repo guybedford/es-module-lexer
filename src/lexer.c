@@ -282,12 +282,12 @@ void tryParseExportStatement () {
       ch = commentWhitespace();
       if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
         pos += 4;
-        readImportString((char16_t*)startPos, commentWhitespace());
+        readImportString(startPos, commentWhitespace());
       }
   }
 }
 
-void readImportString (char16_t* ss, char16_t ch) {
+void readImportString (const char16_t* ss, char16_t ch) {
   if (ch == '\'') {
     const char16_t* startPos = ++pos;
     singleQuoteString();
