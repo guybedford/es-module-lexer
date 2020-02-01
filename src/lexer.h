@@ -90,8 +90,9 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
     import->statement_end = end;
   else if (dynamic == STANDARD_IMPORT)
     import->statement_end = end + 1;
+  // TODO: end tracking for dynamic import
   else 
-    import->statement_end = end + 2;
+    import->statement_end = source;
   import->start = start;
   import->end = end;
   import->dynamic = dynamic;

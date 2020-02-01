@@ -136,11 +136,11 @@ suite('Lexer', () => {
     assert.equal(imports[0].se, 41);
     assert.equal(imports[1].s, 61);
     assert.equal(imports[1].e, 80);
-    assert.equal(imports[1].ss, 43);
+    assert.equal(imports[1].ss, 42);
     assert.equal(imports[1].se, 81);
     assert.equal(imports[2].s, 156);
     assert.equal(imports[2].e, 175);
-    assert.equal(imports[2].ss, 83);
+    assert.equal(imports[2].ss, 82);
     assert.equal(imports[2].se, 176);
   });
 
@@ -183,8 +183,8 @@ suite('Lexer', () => {
     assert.equal(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -2);
-    assert.equal(ss, -1);
-    assert.equal(se, -1);
+    assert.equal(ss, 53);
+    assert.equal(se, 64);
     assert.equal(source.slice(s, e), 'import.meta');
   });
 
@@ -202,8 +202,8 @@ suite('Lexer', () => {
     assert.equal(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
     assert.equal(d, -2);
-    assert.equal(ss, -1);
-    assert.equal(se, -1);
+    assert.equal(ss, 28);
+    assert.equal(se, 47);
     assert.equal(source.slice(s, e), 'import.\n       meta');
   });
 
@@ -244,19 +244,19 @@ suite('Lexer', () => {
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 3);
     var { s, e, ss, se, d } = imports[0];
-    assert.equal(ss, -1);
-    assert.equal(se, -1);
+    assert.equal(ss, d);
+    assert.equal(se, 0);
     assert.equal(source.substr(d, 6), 'import');
     assert.equal(source.slice(s, e), 'is1');
 
     var { s, e, ss, se, d } = imports[1];
-    assert.equal(ss, -1);
-    assert.equal(se, -1);
+    assert.equal(ss, d);
+    assert.equal(se, 0);
     assert.equal(source.slice(s, e), 'is2');
 
     var { s, e, ss, se, d } = imports[2];
-    assert.equal(ss, -1);
-    assert.equal(se, -1);
+    assert.equal(ss, d);
+    assert.equal(se, 0);
     assert.equal(source.slice(s, e), 'some_url');
   });
 
@@ -322,12 +322,12 @@ function x() {
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 2);
     assert.notEqual(imports[0].d, -1);
-    assert.equal(imports[0].ss, -1);
-    assert.equal(imports[0].se, -1);
+    assert.equal(imports[0].ss, imports[0].d);
+    assert.equal(imports[0].se, 0);
     assert.equal(source.slice(imports[0].d, imports[0].s), 'import(');
     assert.notEqual(imports[1].d, -1);
-    assert.equal(imports[1].ss, -1);
-    assert.equal(imports[1].se, -1);
+    assert.equal(imports[1].ss, imports[1].d);
+    assert.equal(imports[1].se, 0);
     assert.equal(source.slice(imports[1].d, imports[1].s), 'import(');
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'a');

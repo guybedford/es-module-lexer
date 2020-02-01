@@ -171,7 +171,7 @@ void tryParseImportStatement () {
 }
 
 void tryParseExportStatement () {
-  char16_t* startPos = pos;
+  char16_t* sStartPos = pos;
 
   pos += 6;
 
@@ -282,7 +282,7 @@ void tryParseExportStatement () {
       ch = commentWhitespace();
       if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
         pos += 4;
-        readImportString(startPos, commentWhitespace());
+        readImportString(sStartPos, commentWhitespace());
       }
   }
 }
