@@ -422,16 +422,18 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
+// Note: non-asii BR and whitespace checks omitted for perf / footprint
+// if there is a significant user need this can be reconsidered
 bool isBr (char16_t c) {
   return c == '\r' || c == '\n';
 }
 
 bool isBrOrWs (char16_t c) {
-  return c > 8 && c < 14 || c == 32;
+  return c > 8 && c < 14 || c == 32 || c == 160;
 }
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
-  return c > 8 && c < 14 || c == 32 || isPunctuator(c) && c != '.';
+  return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
 }
 
 bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
