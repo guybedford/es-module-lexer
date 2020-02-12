@@ -34,7 +34,7 @@ const { init, parse } = require('es-module-lexer');
 ```
 
 An ES module version is also available from `dist/lexer.js`:  
-Note: This version will be automatically used in rollup/es-dev-server/...  
+Note: This version will be automatically used in rollup/es-dev-server/node (if an es-module project)
 
 ```js
 import { init, parse } from 'es-module-lexer';
