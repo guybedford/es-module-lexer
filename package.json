@@ -5,8 +5,8 @@
   "main": "dist/lexer.cjs",
   "module": "dist/lexer.js",
   "exports": {
-    "require": "dist/lexer.cjs",
-    "import": "dist/lexer.js"
+    "require": "./dist/lexer.cjs",
+    "import": "./dist/lexer.js"
   },
   "scripts": {
     "test": "NODE_OPTIONS=\"--experimental-modules\" mocha -b -u tdd test/*.cjs",
