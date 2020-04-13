@@ -177,6 +177,7 @@ void tryParseImportStatement ();
 void tryParseExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch);
+char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t commentWhitespace ();
 void singleQuoteString ();

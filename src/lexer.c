@@ -1,5 +1,4 @@
 #include "lexer.h"
-
 #include <stdio.h>
 
 const bool DEBUG = true;
@@ -243,6 +242,7 @@ void tryParseExportStatement () {
       pos--;
       return;
 
+
     // export {...}
     case '{':
       pos++;
@@ -251,40 +251,54 @@ void tryParseExportStatement () {
         char16_t* startPos = pos;
         readToWsOrPunctuator(ch);
         char16_t* endPos = pos;
-        ch = commentWhitespace();
-        // as
-        if (ch == 'a') {
-          pos += 2;
-          ch = commentWhitespace();
-          startPos = pos;
-          readToWsOrPunctuator(ch);
-          endPos = pos;
-          ch = commentWhitespace();
-        }
+        commentWhitespace();
+        ch = readExportAs(startPos, endPos);
         // ,
         if (ch == ',') {
           pos++;
           ch = commentWhitespace();
         }
-        addExport(startPos, endPos);
         if (ch == '}')
           break;
         if (pos == startPos)
-          return syntaxError();
+          return syntaxError(); 
         if (pos > end)
           return syntaxError();
       }
-    // fallthrough
-    
-    // export *
-    case '*':
       pos++;
       ch = commentWhitespace();
-      if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
-        pos += 4;
-        readImportString(sStartPos, commentWhitespace());
-      }
+    break;
+    
+    // export *
+    // export * as X
+    case '*':
+      pos++;
+      commentWhitespace();
+      ch = readExportAs(pos, pos);
+      ch = commentWhitespace();
+    break;
   }
+
+  // from ...
+  if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
+    pos += 4;
+    readImportString(sStartPos, commentWhitespace());
+  }
+}
+
+char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
+  char16_t ch = *pos;
+  if (ch == 'a') {
+    pos += 2;
+    ch = commentWhitespace();
+    startPos = pos;
+    readToWsOrPunctuator(ch);
+    endPos = pos;
+    ch = commentWhitespace();
+  }
+  if (pos != startPos)
+    addExport(startPos, endPos);
+  return ch;
 }
 
 void readImportString (const char16_t* ss, char16_t ch) {

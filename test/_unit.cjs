@@ -408,6 +408,20 @@ function x() {
     `;
     const [imports, exports] = parse(source);
     assert.equal(imports.length, 0);
-    assert.equal(exports.length, 1);
+    assert.equal(exports.length, 0);
+  });
+
+  test('Export * as', () => {
+    const source = `
+      export * as X from './asdf';
+      export *  as  yy from './g';
+      export * as T, M from './z';
+    `;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 2);
+    assert.equal(exports.length, 3);
+    assert.equal(exports[0], 'X');
+    assert.equal(exports[1], 'yy');
+    assert.equal(exports[2], 'T');
   });
 });
