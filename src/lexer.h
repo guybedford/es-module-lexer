@@ -81,16 +81,16 @@ void addExport (const char16_t* start, const char16_t* end) {
   export->next = NULL;
 }
 void addReexport (const char16_t* start, const char16_t* end) {
-  Slice* export = (Slice*)(analysis_head);
+  Slice* reexport = (Slice*)(analysis_head);
   analysis_head = analysis_head + sizeof(Slice);
-  if (export_write_head == NULL)
-    first_export = export;
+  if (reexport_write_head == NULL)
+    first_reexport = reexport;
   else
-    export_write_head->next = export;
-  export_write_head = export;
-  export->start = start;
-  export->end = end;
-  export->next = NULL;
+    reexport_write_head->next = reexport;
+  reexport_write_head = reexport;
+  reexport->start = start;
+  reexport->end = end;
+  reexport->next = NULL;
 }
 
 // getErr
@@ -141,8 +141,9 @@ bool rre () {
 
 bool parse (uint32_t point);
 
-void tryParseModuleExportsDotOrAssign ();
-void tryParseExportsDot ();
+void tryParseModuleExportsDotAssign ();
+void tryParseExportsDotAssign (bool assign);
+void tryParseObjectDefine ();
 bool identifier (char16_t ch);
 
 void throwIfImportStatement ();
@@ -172,6 +173,7 @@ bool str_eq4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4)
 bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5);
 bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6);
 bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7);
+bool str_eq13 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13);
 
 bool readPrecedingKeyword2(char16_t* pos, char16_t c1, char16_t c2);
 bool readPrecedingKeyword3(char16_t* pos, char16_t c1, char16_t c2, char16_t c3);

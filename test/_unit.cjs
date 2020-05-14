@@ -10,6 +10,43 @@ const init = (async () => {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('module.exports', () => {
+    const { exports } = parse(`
+      module.exports.asdf = 'asdf';
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'asdf');
+  });
+
+  test('defineProperty', () => {
+    const { exports } = parse(`
+      Object.defineProperty(exports, 'namedExport', { value: true });
+      Object.defineProperty(module.exports, 'thing', { value: true });
+      Object.defineProperty(exports, "__esModule", { value: true });
+    `);
+    assert.equal(exports.length, 3);
+    assert.equal(exports[0], 'namedExport');
+    assert.equal(exports[1], 'thing');
+    assert.equal(exports[2], '__esModule');
+  });
+
+  test('module assign', () => {
+    const { exports, reexports } = parse(`
+      module.exports.asdf = 'asdf';
+      exports = 'asdf';
+      module.exports = require('./asdf');
+      if (maybe)
+        module.exports = require("./another");
+    `);
+    console.log(exports);
+    console.log(reexports);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'asdf');
+    assert.equal(reexports.length, 2);
+    assert.equal(reexports[0], './asdf');
+    assert.equal(reexports[1], './another');
+  });
+
   test('Single parse cases', () => {
     parse(`'asdf'`);
     parse(`/asdf/`);

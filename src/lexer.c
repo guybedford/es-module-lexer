@@ -30,18 +30,28 @@ bool parse () {
     if (ch == 32 || ch < 14 && ch > 8)
       continue;
 
+    
+
     switch (ch) {
       case 'e':
-        if (keywordStart(pos) && str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't')) {
+        if (str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't') && keywordStart(pos)) {
           if (*(pos + 6) == 's')
-            tryParseExportsDot();
+            tryParseExportsDotAssign(false);
           else if (openTokenDepth == 0)
             throwIfExportStatement();
         }
         break;
       case 'i':
-        if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
+        if (str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't') && keywordStart(pos))
           throwIfImportStatement();
+        break;
+      case 'm':
+        if (str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e') && keywordStart(pos))
+          tryParseModuleExportsDotAssign();
+        break;
+      case 'O':
+        if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
+          tryParseObjectDefine();
         break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -114,11 +124,71 @@ bool parse () {
   return true;
 }
 
-void tryParseModuleExportsDotOrAssign () {
-
+void tryParseObjectDefine () {
+  pos += 6;
+  char16_t ch = commentWhitespace();
+  if (ch != '.') {
+    pos--;
+    return;
+  }
+  pos++;
+  ch = commentWhitespace();
+  if (ch != 'd' || !str_eq13(pos + 1, 'e', 'f', 'i', 'n', 'e', 'P', 'r', 'o', 'p', 'e', 'r', 't', 'y')) {
+    pos--;
+    return;
+  }
+  pos += 14;
+  ch = commentWhitespace();
+  char16_t* revertPos = pos - 1;
+  if (ch == '(') {
+    pos++;
+    ch = commentWhitespace();
+    if (ch == 'm' && str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e')) {
+      pos += 6;
+      ch = commentWhitespace();
+      if (ch != '.') {
+        pos = revertPos;
+        return;
+      }
+      pos++;
+      ch = commentWhitespace();
+    }
+    if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
+      pos += 7;
+      ch = commentWhitespace();
+      if (ch == ',') {
+        pos++;
+        ch = commentWhitespace();
+        char16_t* exportPos = pos;
+        if (ch == '\'') {
+          singleQuoteString();
+          addExport(exportPos, pos + 1);
+        }
+        else if (ch == '"') {
+          doubleQuoteString();
+          addExport(exportPos, pos + 1);
+        }
+      }
+    }
+  }
+  pos = revertPos;
 }
 
-void tryParseExportsDot () {
+void tryParseModuleExportsDotAssign () {
+  pos += 6;
+  char16_t ch = commentWhitespace();
+  if (ch == '.') {
+    pos++;
+    ch = commentWhitespace();
+    if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
+      tryParseExportsDotAssign(true);
+      return;
+    }
+  }
+  pos--;
+}
+
+void tryParseExportsDotAssign (bool assign) {
   pos += 7;
   char16_t ch = commentWhitespace();
   switch (ch) {
@@ -145,6 +215,46 @@ void tryParseExportsDot () {
         doubleQuoteString();
         addExport(startPos, pos + 1);
         return;
+      }
+    }
+    // exports =
+    case '=': {
+      if (assign) {
+        pos++;
+        ch = commentWhitespace();
+        if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
+          pos += 7;
+          char16_t* revertPos = pos;
+          ch = commentWhitespace();
+          if (ch == '(') {
+            pos++;
+            ch = commentWhitespace();
+            if (ch == '\'') {
+              char16_t* reexportStart = pos;
+              singleQuoteString();
+              pos++;
+              char16_t* reexportEnd = pos;
+              ch = commentWhitespace();
+              if (ch == ')') {
+                addReexport(reexportStart, reexportEnd);
+                return;
+              }
+            }
+            else if (ch == '"') {
+              char16_t* reexportStart = pos;
+              doubleQuoteString();
+              pos++;
+              char16_t* reexportEnd = pos;
+              ch = commentWhitespace();
+              if (ch == ')') {
+                addReexport(reexportStart, reexportEnd);
+                return;
+              }
+            }
+          }
+          pos = revertPos; 
+          return;
+        }
       }
     }
   }
@@ -462,6 +572,10 @@ bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4,
 
 bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
   return *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+}
+
+bool str_eq13 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13) {
+  return *(pos + 12) == c13 && *(pos + 11) == c12 && *(pos + 10) == c11 && *(pos + 9) == c10 && *(pos + 8) == c9 && *(pos + 7) == c8 && *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool keywordStart (char16_t* pos) {

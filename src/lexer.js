@@ -16,10 +16,15 @@ export function parse (source, name = '@') {
   while (wasm.re()) {
     let expt = source.slice(wasm.es(), wasm.ee());
     if (expt[0] === '\'' || expt[0] === '"')
-      expt = expt.slice(1, -1);
-    exports.add(JSON.parse('"' + expt + '"'));
+      exports.add(eval(expt));
+    else
+      exports.add(JSON.parse('"' + expt + '"'));
   }
-  while (wasm.rre()) reexports.add(JSON.parse(source.slice(wasm.res(), wasm.ree())));
+  while (wasm.rre()) {
+    const reexport = source.slice(wasm.res(), wasm.ree());
+    console.log(reexport);
+    reexports.add(eval(reexport));
+  }
 
   return { exports: [...exports], reexports: [...reexports], esModule: Boolean(wasm.emf()) };
 }
