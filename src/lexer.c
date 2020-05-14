@@ -74,6 +74,9 @@ bool parse () {
             return syntaxError(), false;
         }
         break;
+      case '<':
+        // TODO: <!-- XML comment support
+        break;
       case '\'':
         singleQuoteString();
         break;
@@ -355,7 +358,7 @@ char32_t fullCharCode(char16_t ch) {
 
 bool identifier (char16_t startCh) {
   char32_t ch = fullCharCode(startCh);
-  if (!isIdentifierStart(ch) && ch != 92 /* '\' */)
+  if (!isIdentifierStart(ch) && ch != '\\')
     return false;
   pos += charCodeByteLen(ch);
   while (ch = fullCharCode(*pos)) {
