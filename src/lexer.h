@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 typedef unsigned short char16_t;
+typedef unsigned long char32_t;
 extern unsigned char __heap_base;
 
 const char16_t* STANDARD_IMPORT = (char16_t*)0x1;
@@ -45,6 +46,7 @@ char16_t** openTokenPosStack;
 // -> analysis starts after source
 uint32_t parse_error;
 bool has_error = false;
+bool top_level_exec = true;
 uint32_t sourceLen = 0;
 
 void bail (uint32_t err);
@@ -139,8 +141,12 @@ bool rre () {
 
 bool parse (uint32_t point);
 
-void tryParseImportStatement ();
-void tryParseExportStatement ();
+void tryParseModuleExportsDotOrAssign ();
+void tryParseExportsDot ();
+bool identifier (char16_t ch);
+
+void throwIfImportStatement ();
+void throwIfExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);

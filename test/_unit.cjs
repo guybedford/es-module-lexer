@@ -186,6 +186,9 @@ function x() {
       exports['b'] = 'b';
       \`{$}\`
     `;
-    assert.ok(parse(source));
+    const { exports } = parse(source);
+    console.log(exports);
+    assert.ok(exports[0] === 'a');
+    assert.ok(exports[1] === 'b');
   });
 });

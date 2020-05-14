@@ -27,7 +27,6 @@ suite('Samples', () => {
         console.log(parse(code));
       }
       catch (err) {
-        throw err;
         const lines = code.split('\n');
         const linesToErr = code.slice(0, err.loc).split('\n');
         

@@ -5,7 +5,7 @@ lib/lexer.wasm: src/lexer.h src/lexer.c
 	@mkdir -p lib
 	clang src/lexer.c --sysroot=../wasi-sdk-6/opt/wasi-sdk/share/wasi-sysroot -o lib/lexer.wasm -nostartfiles \
 	-Wl,-z,stack-size=8192,--no-entry,--compress-relocations,--strip-all,\
-	--export=parse,--export=sa,--export=e,--export=re,--export=res,--export=rre,--export=ree,--export=res,--export=rre,--export=emf \
+	--export=parse,--export=sa,--export=e,--export=re,--export=es,--export=ee,--export=rre,--export=ree,--export=res,--export=ree,--export=emf \
 	-Wno-logical-op-parentheses -Wno-parentheses \
 	-Oz
 
