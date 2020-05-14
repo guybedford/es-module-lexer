@@ -20,6 +20,7 @@ struct Slice {
 };
 typedef struct Slice Slice;
 
+uint32_t es_module_flag = 0;
 Slice* first_export = NULL;
 Slice* export_read_head = NULL;
 Slice* export_write_head = NULL;
@@ -104,15 +105,15 @@ uint32_t ee () {
   return export_read_head->end - source;
 }
 // getReexportStart
-uint32_t rs () {
+uint32_t res () {
   return reexport_read_head->start - source;
 }
 // getReexportEnd
-uint32_t re () {
+uint32_t ree () {
   return reexport_read_head->end - source;
 }
 // esModuleFlag
-uint32_t ef () {
+uint32_t emf () {
   return es_module_flag;
 }
 // readExport
@@ -126,9 +127,9 @@ bool re () {
   return true;
 }
 // readReexport
-bool rr () {
+bool rre () {
   if (reexport_read_head == NULL)
-    reexport_read_head = first_erexport;
+    reexport_read_head = first_reexport;
   else
     reexport_read_head = reexport_read_head->next;
   if (reexport_read_head == NULL)

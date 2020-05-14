@@ -14,9 +14,9 @@ export function parse (source, name = '@') {
 
   const exports = [], reexports = [];
   while (wasm.re()) exports.push((0, eval)('"' + source.slice(wasm.es(), wasm.ee()) + '"'));
-  while (wasm.rr()) reexports.push(JSON.parse(source.slice(wasm.rs(), wasm.re())));
+  while (wasm.rre()) reexports.push(JSON.parse(source.slice(wasm.res(), wasm.ree())));
 
-  return { exports, reexports, esModule: Boolean(wasm.ef()) };
+  return { exports, reexports, esModule: Boolean(wasm.emf()) };
 }
 
 function copy (src, outBuf16) {
