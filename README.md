@@ -72,6 +72,25 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 })(exports);
 ```
 
+2. `module.exports` require assignment only handled at base-level
+
+```js
+// OK
+module.exports = require('./a.js');
+
+// OK
+if (condition)
+  module.exports = require('./b.js');
+
+// NOT OK -> nested top-level detections not implemented
+if (condition) {
+  module.exports = require('./c.js');
+}
+(function () {
+  module.exports = require('./d.js');
+})();
+```
+
 2. No object parsing:
 
 ```js

@@ -16,7 +16,6 @@ bool parse () {
   templateDepth = -1;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
   parse_error = 0;
-  top_level_exec = true;
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
@@ -220,7 +219,7 @@ void tryParseExportsDotAssign (bool assign) {
     }
     // module.exports = require('...')
     case '=': {
-      if (assign) {
+      if (assign && openTokenDepth == 0) {
         pos++;
         ch = commentWhitespace();
         if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
