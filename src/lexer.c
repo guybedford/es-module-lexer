@@ -708,14 +708,14 @@ bool isExpressionPunctuator (char16_t ch) {
 
 bool isExpressionTerminator (char16_t* curPos) {
   // detects:
-  // ; ) -1 finally
+  // ; ) -1 finally catch
   // as all of these followed by a { will indicate a statement brace
-  // in future we will need: "catch" (optional catch parameters)
-  //                         "do" (do expressions)
   switch (*curPos) {
     case ';':
     case ')':
       return true;
+    case 'h':
+      return readPrecedingKeyword4(curPos - 1, 'c', 'a', 't', 'c');
     case 'y':
       return readPrecedingKeyword6(curPos - 1, 'f', 'i', 'n', 'a', 'l', 'l');
   }
