@@ -1,6 +1,6 @@
 {
   "name": "cjs-module-lexer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lexes CommonJS modules, returning their named exports metadata",
   "main": "dist/lexer.cjs",
   "module": "dist/lexer.js",
