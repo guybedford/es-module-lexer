@@ -197,8 +197,15 @@ void tryParseExportsDotAssign (bool assign) {
       pos++;
       ch = commentWhitespace();
       char16_t* startPos = pos;
-      if (identifier(ch))
-        addExport(startPos, pos);
+      if (identifier(ch)) {
+        char16_t* endPos = pos;
+        pos++;
+        ch = commentWhitespace();
+        if (ch == '=')
+          addExport(startPos, endPos);
+        else
+          pos = endPos;
+      }
       break;
     }
     // exports['asdf']
@@ -206,16 +213,26 @@ void tryParseExportsDotAssign (bool assign) {
       pos++;
       ch = commentWhitespace();
       char16_t* startPos = pos;
-      if (ch == '\'') {
+      if (ch != '\'' && ch != '"')
+        break;
+      if (ch == '\'')
         singleQuoteString();
-        addExport(startPos, pos + 1);
-        return;
-      }
-      else if (ch == '"') {
+      if (ch == '"')
         doubleQuoteString();
-        addExport(startPos, pos + 1);
+
+      char16_t* endPos = ++pos;
+      ch = commentWhitespace();
+      if (ch != ']') {
+        pos = endPos;
         return;
       }
+      pos++;
+      ch = commentWhitespace();
+      if (ch != '=') {
+        pos = endPos;
+        return;
+      }
+      addExport(startPos, endPos);
     }
     // module.exports = require('...')
     case '=': {

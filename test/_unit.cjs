@@ -220,6 +220,7 @@ function x() {
       \`a$b\`
       exports['b'] = 'b';
       \`{$}\`
+      exports['b'].b;
     `;
     const { exports } = parse(source);
     assert.ok(exports[0] === 'a');

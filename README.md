@@ -52,7 +52,7 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 
 ### Supported
 
-1. All `exports.a` or `module.exports.a` usages
+1. All `exports.a =`, `exports['a'] =` and `module.exports.a =` style assignments.
 2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
 3. All `module.exports = require('string')` assignments
 
