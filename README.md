@@ -2,7 +2,7 @@
 
 [![Build Status][travis-image]][travis-url]
 
-A [very fast](#performance) JS CommonJS module syntax lexer used to detect the most likely list of named exports of a CommonJS module.
+A [very fast](#benchmarks) JS CommonJS module syntax lexer used to detect the most likely list of named exports of a CommonJS module.
 
 Outputs the list of named exports (`exports.name = ...`), whether the `__esModule` interop flag is used, and possible module reexports (`module.exports = require('...')`).
 
@@ -43,9 +43,8 @@ const { init, parse } = require('cjs-module-lexer');
     Object.defineProperty(module.exports, '__esModule', { value: true })
   `);
 
-  // exports === ['a', 'b', 'c']
+  // exports === ['a', 'b', 'c', '__esModule']
   // reexports === ['./dep1.js', './dep2.js']
-  // esModule === true
 })();
 ```
 

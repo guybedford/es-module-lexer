@@ -21,7 +21,6 @@ struct Slice {
 };
 typedef struct Slice Slice;
 
-uint32_t es_module_flag = 0;
 Slice* first_export = NULL;
 Slice* export_read_head = NULL;
 Slice* export_write_head = NULL;
@@ -113,10 +112,6 @@ uint32_t res () {
 // getReexportEnd
 uint32_t ree () {
   return reexport_read_head->end - source;
-}
-// esModuleFlag
-uint32_t emf () {
-  return es_module_flag;
 }
 // readExport
 bool re () {

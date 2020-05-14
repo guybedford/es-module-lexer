@@ -26,7 +26,7 @@ export function parse (source, name = '@') {
     reexports.add(eval(reexport));
   }
 
-  return { exports: [...exports], reexports: [...reexports], esModule: Boolean(wasm.emf()) };
+  return { exports: [...exports], reexports: [...reexports] };
 }
 
 function copy (src, outBuf16) {
