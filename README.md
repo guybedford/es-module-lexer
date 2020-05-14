@@ -1,12 +1,10 @@
-# ES Module Lexer
+# CJS Module Lexer
 
 [![Build Status][travis-image]][travis-url]
 
-A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
+A [very fast](#performance) JS CommonJS module syntax lexer used to detect the most likely list of named exports of a CommonJS module.
 
-Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
-
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
+Outputs the list of named exports (`exports.name = ...`), whether the `__esModule` interop flag is used, and possible module reexports (`module.exports = require('...')`).
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
@@ -15,73 +13,43 @@ _Comprehensively handles the JS language grammar while remaining small and fast.
 ### Usage
 
 ```
-npm install es-module-lexer
+npm install cjs-module-lexer
 ```
 
 For use in CommonJS:
 
 ```js
-const { init, parse } = require('es-module-lexer');
+const { init, parse } = require('cjs-module-lexer');
 
 (async () => {
   // either await init, or call parse asynchronously
   // this is necessary for the Web Assembly boot
   await init;
 
-  const [imports, exports] = parse('export var p = 5');
-  exports[0] === 'p';
+  const { exports, reexports, esModule } = parse(`
+    // named exports detection
+    module.exports.a = 'a';
+    (function () {
+      exports.b = 'b';
+    })();
+    Object.defineProperty(exports, 'c', { value: 'c' });
+    /* exports.d = 'not detected'; */
+
+    // reexports detection
+    if (maybe) module.exports = require('./dep1.js');
+    if (another) module.exports = require('./dep2.js');
+
+    // __esModule detection
+    Object.defineProperty(module.exports, '__esModule', { value: true })
+  `);
+
+  // exports === ['a', 'b', 'c']
+  // reexports === ['./dep1.js', './dep2.js']
+  // esModule === true
 })();
 ```
 
-An ES module version is also available from `dist/lexer.js`:  
-Note: This version will be automatically used in rollup/es-dev-server/node (if an es-module project)
-
-```js
-import { init, parse } from 'es-module-lexer/dist/lexer.js';
-
-(async () => {
-  await init;
-
-  const source = `
-    import { a } from 'asdf';
-    export var p = 5;
-    export function q () {
-
-    };
-
-    // Comments provided to demonstrate edge cases
-    import /*comment!*/ ('asdf');
-    import /*comment!*/.meta.asdf;
-  `;
-
-  const [imports, exports] = parse(source, 'optional-sourcename');
-
-  // Returns "asdf"
-  source.substring(imports[0].s, imports[0].e);
-
-  // Returns "import { a } from 'asdf';"
-  source.substring(imports[0].ss, imports[0].se);
-
-  // Returns "p,q"
-  exports.toString();
-
-  // Dynamic imports are indicated by imports[1].d > -1
-  // In this case the "d" index is the start of the dynamic import
-  // Returns true
-  imports[1].d > -1;
-
-  // Returns "'asdf'"
-  source.substring(imports[1].s, imports[1].e);
-  // Returns "import /*comment!*/ ("
-  source.substring(imports[1].d, imports[1].s);
-
-  // import.meta is indicated by imports[2].d === -2
-  // Returns true
-  imports[2].d === -2;
-  // Returns "import /*comment!*/.meta"
-  source.substring(imports[2].s, imports[2].e);
-})();
-```
+An ES module version is also available from `dist/lexer.js`, automatically enabled via `"exports`":
 
 ### Environment Support
 

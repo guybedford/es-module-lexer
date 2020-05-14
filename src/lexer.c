@@ -45,20 +45,10 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (import_write_head && import_write_head->dynamic == openTokenPosStack[openTokenDepth])
-          import_write_head->end = pos;
+        if (reexport_write_head && reexport_write_head->start == openTokenPosStack[openTokenDepth])
+          reexport_write_head->end = pos;
         break;
       case '{':
-        // dynamic import followed by { is not a dynamic import (so remove)
-        // this is a sneaky way to get around { import () {} } v { import () }
-        // block / object ambiguity without a parser (assuming source is valid)
-        if (*lastTokenPos == ')' && import_write_head && import_write_head->end == lastTokenPos) {
-          import_write_head = import_write_head_last;
-          if (import_write_head)
-            import_write_head->next = NULL;
-          else
-            first_import = NULL;
-        }
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
       case '}':
@@ -121,27 +111,16 @@ bool parse () {
 
 void tryParseImportStatement () {
   char16_t* startPos = pos;
-
   pos += 6;
-
   char16_t ch = commentWhitespace();
-  
   switch (ch) {
     // dynamic import
     case '(':
       openTokenPosStack[openTokenDepth++] = startPos;
-      if (*lastTokenPos == '.')
-        return;
-      // dynamic import indicated by positive d
-      addImport(startPos, pos + 1, 0, startPos);
       return;
     // import.meta
     case '.':
-      pos++;
-      ch = commentWhitespace();
-      // import.meta indicated by d == -2
-      if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
-        addImport(startPos, startPos, pos + 4, IMPORT_META);
+      syntaxError();
       return;
     
     default:
@@ -157,164 +136,19 @@ void tryParseImportStatement () {
         pos--;
         return;
       }
-      while (pos < end) {
-        ch = *pos;
-        if (ch == '\'' || ch == '"') {
-          readImportString(startPos, ch);
-          return;
-        }
-        pos++;
-      }
+      // import statements are a syntax error in CommonJS
       syntaxError();
   }
 }
 
 void tryParseExportStatement () {
   char16_t* sStartPos = pos;
-
   pos += 6;
-
   char16_t* curPos = pos;
-
   char16_t ch = commentWhitespace();
-
   if (pos == curPos && !isPunctuator(ch))
     return;
-
-  switch (ch) {
-    // export default ...
-    case 'd':
-      addExport(pos, pos + 7);
-      return;
-
-    // export async? function*? name () {
-    case 'a':
-      pos += 5;
-      commentWhitespace();
-    // fallthrough
-    case 'f':
-      pos += 8;
-      ch = commentWhitespace();
-      if (ch == '*') {
-        pos++;
-        ch = commentWhitespace();
-      }
-      const char16_t* startPos = pos;
-      ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos);
-      pos--;
-      return;
-
-    case 'c':
-      if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
-        pos += 5;
-        ch = commentWhitespace();
-        const char16_t* startPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        addExport(startPos, pos);
-        pos--;
-        return;
-      }
-      pos += 2;
-    // fallthrough
-
-    // export var/let/const name = ...(, name = ...)+
-    case 'v':
-    case 'l':
-      // destructured initializations not currently supported (skipped for { or [)
-      // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-      pos += 2;
-      do {
-        pos++;
-        ch = commentWhitespace();
-        const char16_t* startPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        // stops on [ { destructurings or =
-        if (ch == '{' || ch == '[' || ch == '=') {
-          pos--;
-          return;
-        }
-        if (pos == startPos)
-          return;
-        addExport(startPos, pos);
-        ch = commentWhitespace();
-      } while (ch == ',');
-      pos--;
-      return;
-
-
-    // export {...}
-    case '{':
-      pos++;
-      ch = commentWhitespace();
-      while (true) {
-        char16_t* startPos = pos;
-        readToWsOrPunctuator(ch);
-        char16_t* endPos = pos;
-        commentWhitespace();
-        ch = readExportAs(startPos, endPos);
-        // ,
-        if (ch == ',') {
-          pos++;
-          ch = commentWhitespace();
-        }
-        if (ch == '}')
-          break;
-        if (pos == startPos)
-          return syntaxError(); 
-        if (pos > end)
-          return syntaxError();
-      }
-      pos++;
-      ch = commentWhitespace();
-    break;
-    
-    // export *
-    // export * as X
-    case '*':
-      pos++;
-      commentWhitespace();
-      ch = readExportAs(pos, pos);
-      ch = commentWhitespace();
-    break;
-  }
-
-  // from ...
-  if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
-    pos += 4;
-    readImportString(sStartPos, commentWhitespace());
-  }
-}
-
-char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
-  char16_t ch = *pos;
-  if (ch == 'a') {
-    pos += 2;
-    ch = commentWhitespace();
-    startPos = pos;
-    readToWsOrPunctuator(ch);
-    endPos = pos;
-    ch = commentWhitespace();
-  }
-  if (pos != startPos)
-    addExport(startPos, endPos);
-  return ch;
-}
-
-void readImportString (const char16_t* ss, char16_t ch) {
-  if (ch == '\'') {
-    const char16_t* startPos = ++pos;
-    singleQuoteString();
-    addImport(ss, startPos, pos, STANDARD_IMPORT);
-  }
-  else if (ch == '"') {
-    const char16_t* startPos = ++pos;
-    doubleQuoteString();
-    addImport(ss, startPos, pos, STANDARD_IMPORT);
-  }
-  else {
-    syntaxError();
-  }
+  syntaxError();
 }
 
 char16_t commentWhitespace () {

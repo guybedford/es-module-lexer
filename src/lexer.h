@@ -13,30 +13,19 @@ const char16_t* EMPTY_CHAR = &__empty_char;
 const uint32_t STACK_DEPTH = 1024;
 const char16_t* source = (void*)&__heap_base;
 
-struct Import {
+struct Slice {
   const char16_t* start;
   const char16_t* end;
-  const char16_t* statement_start;
-  const char16_t* statement_end;
-  const char16_t* dynamic;
-  struct Import* next;
+  struct Slice* next;
 };
-typedef struct Import Import;
+typedef struct Slice Slice;
 
-struct Export {
-  const char16_t* start;
-  const char16_t* end;
-  struct Export* next;
-};
-typedef struct Export Export;
-
-Import* first_import = NULL;
-Export* first_export = NULL;
-Import* import_read_head = NULL;
-Export* export_read_head = NULL;
-Import* import_write_head = NULL;
-Import* import_write_head_last = NULL;
-Export* export_write_head = NULL;
+Slice* first_export = NULL;
+Slice* export_read_head = NULL;
+Slice* export_write_head = NULL;
+Slice* first_reexport = NULL;
+Slice* reexport_read_head = NULL;
+Slice* reexport_write_head = NULL;
 void* analysis_base;
 void* analysis_head;
 
@@ -67,41 +56,30 @@ const char16_t* sa (uint32_t utf16Len) {
   *(char16_t*)(source + utf16Len) = '\0';
   analysis_base = (void*)sourceEnd;
   analysis_head = analysis_base;
-  first_import = NULL;
-  import_write_head = NULL;
-  import_read_head = NULL;
   first_export = NULL;
   export_write_head = NULL;
   export_read_head = NULL;
+  first_reexport = NULL;
+  reexport_write_head = NULL;
+  reexport_read_head = NULL;
   return source;
 }
 
-void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
-  Import* import = (Import*)(analysis_head);
-  analysis_head = analysis_head + sizeof(Import);
-  if (import_write_head == NULL)
-    first_import = import;
-  else
-    import_write_head->next = import;
-  import_write_head_last = import_write_head;
-  import_write_head = import;
-  import->statement_start = statement_start;
-  if (dynamic == IMPORT_META)
-    import->statement_end = end;
-  else if (dynamic == STANDARD_IMPORT)
-    import->statement_end = end + 1;
-  // TODO: end tracking for dynamic import
-  else 
-    import->statement_end = source;
-  import->start = start;
-  import->end = end;
-  import->dynamic = dynamic;
-  import->next = NULL;
-}
-
 void addExport (const char16_t* start, const char16_t* end) {
-  Export* export = (Export*)(analysis_head);
-  analysis_head = analysis_head + sizeof(Export);
+  Slice* export = (Slice*)(analysis_head);
+  analysis_head = analysis_head + sizeof(Slice);
+  if (export_write_head == NULL)
+    first_export = export;
+  else
+    export_write_head->next = export;
+  export_write_head = export;
+  export->start = start;
+  export->end = end;
+  export->next = NULL;
+}
+void addReexport (const char16_t* start, const char16_t* end) {
+  Slice* export = (Slice*)(analysis_head);
+  analysis_head = analysis_head + sizeof(Slice);
   if (export_write_head == NULL)
     first_export = export;
   else
@@ -117,31 +95,6 @@ uint32_t e () {
   return parse_error;
 }
 
-// getImportStart
-uint32_t is () {
-  return import_read_head->start - source;
-}
-// getImportEnd
-uint32_t ie () {
-  return import_read_head->end - source;
-}
-// getImportStatementStart
-uint32_t ss () {
-  return import_read_head->statement_start - source;
-}
-// getImportStatementEnd
-uint32_t se () {
-  return import_read_head->statement_end - source;
-}
-// getImportDynamic
-uint32_t id () {
-  const char16_t* dynamic = import_read_head->dynamic;
-  if (dynamic == STANDARD_IMPORT)
-    return -1;
-  else if (dynamic == IMPORT_META)
-    return -2;
-  return import_read_head->dynamic - source;
-}
 // getExportStart
 uint32_t es () {
   return export_read_head->start - source;
@@ -150,15 +103,17 @@ uint32_t es () {
 uint32_t ee () {
   return export_read_head->end - source;
 }
-// readImport
-bool ri () {
-  if (import_read_head == NULL)
-    import_read_head = first_import;
-  else
-    import_read_head = import_read_head->next;
-  if (import_read_head == NULL)
-    return false;
-  return true;
+// getReexportStart
+uint32_t rs () {
+  return reexport_read_head->start - source;
+}
+// getReexportEnd
+uint32_t re () {
+  return reexport_read_head->end - source;
+}
+// esModuleFlag
+uint32_t ef () {
+  return es_module_flag;
 }
 // readExport
 bool re () {
@@ -167,6 +122,16 @@ bool re () {
   else
     export_read_head = export_read_head->next;
   if (export_read_head == NULL)
+    return false;
+  return true;
+}
+// readReexport
+bool rr () {
+  if (reexport_read_head == NULL)
+    reexport_read_head = first_erexport;
+  else
+    reexport_read_head = reexport_read_head->next;
+  if (reexport_read_head == NULL)
     return false;
   return true;
 }
