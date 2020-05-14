@@ -20,11 +20,8 @@ export function parse (source, name = '@') {
     else
       exports.add(JSON.parse('"' + expt + '"'));
   }
-  while (wasm.rre()) {
-    const reexport = source.slice(wasm.res(), wasm.ree());
-    console.log(reexport);
-    reexports.add(eval(reexport));
-  }
+  while (wasm.rre())
+    reexports.add(eval(source.slice(wasm.res(), wasm.ree())));
 
   return { exports: [...exports], reexports: [...reexports] };
 }

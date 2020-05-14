@@ -24,7 +24,11 @@ suite('Samples', () => {
     test(file, async () => {
       await init;
       try {
-        console.log(parse(code));
+        var actual = Reflect.ownKeys(require(process.cwd() + '/' + file));
+      }
+      catch {}
+      try {
+        var { exports, reexports } = parse(code);
       }
       catch (err) {
         const lines = code.split('\n');
@@ -38,6 +42,10 @@ suite('Samples', () => {
           msg += `\n${lines[line-1] || ''}\n${lines[line]}\n${' '.repeat(col)}^\n${lines[line + 1] || ''}`;
 
         throw new Error(msg);
+      }
+      if (actual && !file.endsWith('.min.js')) {
+        for (const expt of actual)
+          assert.ok(exports.includes(expt));
       }
     });
   });

@@ -30,8 +30,6 @@ bool parse () {
     if (ch == 32 || ch < 14 && ch > 8)
       continue;
 
-    
-
     switch (ch) {
       case 'e':
         if (str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't') && keywordStart(pos)) {
@@ -217,7 +215,7 @@ void tryParseExportsDotAssign (bool assign) {
         return;
       }
     }
-    // exports = require('...')
+    // module.exports = require('...')
     case '=': {
       if (assign) {
         pos++;

@@ -38,8 +38,6 @@ suite('Lexer', () => {
       if (maybe)
         module.exports = require("./another");
     `);
-    console.log(exports);
-    console.log(reexports);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'asdf');
     assert.equal(reexports.length, 2);
@@ -224,7 +222,6 @@ function x() {
       \`{$}\`
     `;
     const { exports } = parse(source);
-    console.log(exports);
     assert.ok(exports[0] === 'a');
     assert.ok(exports[1] === 'b');
   });
