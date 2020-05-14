@@ -50,6 +50,39 @@ const { init, parse } = require('cjs-module-lexer');
 
 An ES module version is also available from `dist/lexer.js`, automatically enabled via `"exports`":
 
+### Supported
+
+1. All `exports.a` or `module.exports.a` usages
+2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
+3. All `module.exports = require('string')` assignments
+
+### Not Supported
+
+1. No scope analysis:
+
+```js
+(function (exports) {
+  // "a" WILL be detected as an export
+  exports.a = 'a'; 
+})(notExports);
+```
+
+2. No object parsing:
+
+```js
+// These WONT be detected as exports
+Object.defineProperties(exports, {
+  a: { value: 'a' },
+  b: { value: 'b' }
+});
+
+// These WONT be detected as exports
+module.exports = {
+  c: 'c',
+  d: 'd'
+}
+```
+
 ### Environment Support
 
 Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
