@@ -222,7 +222,7 @@ void tryParseExportsDotAssign (bool assign) {
         ch = commentWhitespace();
         if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
           pos += 7;
-          char16_t* revertPos = pos;
+          char16_t* revertPos = pos - 1;
           ch = commentWhitespace();
           if (ch == '(') {
             pos++;
@@ -250,7 +250,7 @@ void tryParseExportsDotAssign (bool assign) {
               }
             }
           }
-          pos = revertPos; 
+          pos = revertPos;
           return;
         }
       }
