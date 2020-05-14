@@ -61,10 +61,15 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 1. No scope analysis:
 
 ```js
+// "a" WILL be detected as an export
 (function (exports) {
-  // "a" WILL be detected as an export
   exports.a = 'a'; 
 })(notExports);
+
+// "b" WONT be detected as an export
+(function (m) {
+  m.a = 'a';
+})(exports);
 ```
 
 2. No object parsing:
