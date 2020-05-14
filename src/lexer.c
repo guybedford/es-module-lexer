@@ -217,7 +217,7 @@ void tryParseExportsDotAssign (bool assign) {
         return;
       }
     }
-    // exports =
+    // exports = require('...')
     case '=': {
       if (assign) {
         pos++;
