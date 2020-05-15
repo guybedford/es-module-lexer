@@ -127,6 +127,12 @@ suite('Lexer', () => {
     });
   });
 
+  test('plus plus division', () => {
+    parse(`
+      tick++/fetti;f=(1)+")";
+    `);
+  });
+
   test('return bracket division', () => {
     const source = `function variance(){return s/(a-1)}`;
     assert.ok(parse(source));
