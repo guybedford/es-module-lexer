@@ -131,22 +131,6 @@ Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#f
 * Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
 * Always correctly parses valid JS source, but may parse invalid JS source without errors.
 
-### Limitations
-
-The lexing approach is designed to deal with the full language grammar including RegEx / division operator ambiguity through backtracking and paren / brace tracking.
-
-The only limitation to the reduced parser is that the "exports" list may not correctly gather all export identifiers in the following edge cases:
-
-```js
-// Only "a" is detected as an export, "q" isn't
-export var a = 'asdf', q = z;
-
-// "b" is not detected as an export
-export var { a: b } = asdf;
-```
-
-The above cases are handled gracefully in that the lexer will keep going fine, it will just not properly detect the export names above.
-
 ### Benchmarks
 
 Benchmarks can be run with `npm run bench`.
