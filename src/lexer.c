@@ -193,11 +193,13 @@ void tryParseObjectDefine () {
         char16_t* exportPos = pos;
         if (ch == '\'') {
           singleQuoteString();
-          addExport(exportPos, pos + 1);
+          if (!has_webpack_export)
+            addExport(exportPos, pos + 1);
         }
         else if (ch == '"') {
           doubleQuoteString();
-          addExport(exportPos, pos + 1);
+          if (!has_webpack_export)
+            addExport(exportPos, pos + 1);
         }
       }
     }
@@ -232,10 +234,13 @@ void tryParseExportsDotAssign (bool assign) {
         char16_t* endPos = pos;
         pos++;
         ch = commentWhitespace();
-        if (ch == '=')
-          addExport(startPos, endPos);
-        else
+        if (ch == '=') {
+          if (!has_webpack_export)
+            addExport(startPos, endPos);
+        }
+        else {
           pos = endPos;
+        }
       }
       break;
     }
@@ -263,11 +268,12 @@ void tryParseExportsDotAssign (bool assign) {
         pos = endPos;
         return;
       }
-      addExport(startPos, endPos);
+      if (!has_webpack_export)
+        addExport(startPos, endPos);
     }
     // module.exports = require('...')
     case '=': {
-      if (assign && openTokenDepth == 0) {
+      if (assign) {
         pos++;
         ch = commentWhitespace();
         if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {

@@ -235,9 +235,13 @@ function x() {
       // ONLY "WP_A", "WP_B" are exported
       /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
       /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
+
+      exports.c = 'c';
     `;
     const { exports } = parse(source);
-    assert.ok(exports[0] === 'WP_A');
-    assert.ok(exports[1] === 'WP_B');
+    assert.equal(exports.length, 3);
+    assert.ok(exports[0] === '__esModule');
+    assert.ok(exports[1] === 'WP_A');
+    assert.ok(exports[2] === 'WP_B');
   })
 });

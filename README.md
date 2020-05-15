@@ -55,7 +55,8 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 1. All `exports.a =`, `exports['a'] =` and `module.exports.a =` style assignments.
 2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
 3. All `module.exports = require('string')` assignments
-4. Any instance of `__webpack_exports__, "name"` results in these webpack exports being returned only
+4. Any instance of `__webpack_exports__, "name"` results in these webpack exports being returned only,
+   and `__esModule` is inferred as an export.
 
 ### Not Supported
 
@@ -96,7 +97,7 @@ module.exports = {
 exports.a = 'a';
 exports.b = 'b';
 
-// ONLY "WP_A", "WP_B" are exported
+// ONLY "__esModule", "WP_A", "WP_B" are exported
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
 ```
