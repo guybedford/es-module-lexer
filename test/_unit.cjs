@@ -85,7 +85,7 @@ suite('Lexer', () => {
       import/* 'x' */ 'a';
 
       import /* 'x' */ 'b';
-
+      
       export var z  /*  */  
       export {
         a,
@@ -152,6 +152,12 @@ suite('Lexer', () => {
     assert.equal(imports[0].e, 21);
     assert.equal(imports[0].ss, 0);
     assert.equal(imports[0].se, 22);
+  });
+
+  test('plus plus division', () => {
+    parse(`
+      tick++/fetti;f=(1)+")";
+    `);
   });
 
   test('return bracket division', () => {
