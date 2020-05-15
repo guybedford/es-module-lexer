@@ -226,4 +226,18 @@ function x() {
     assert.ok(exports[0] === 'a');
     assert.ok(exports[1] === 'b');
   });
+
+  test('Webpack exports', () => {
+    const source = `
+      exports.a = 'a';
+      exports.b = 'b';
+
+      // ONLY "WP_A", "WP_B" are exported
+      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
+      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
+    `;
+    const { exports } = parse(source);
+    assert.ok(exports[0] === 'WP_A');
+    assert.ok(exports[1] === 'WP_B');
+  })
 });

@@ -46,6 +46,7 @@ char16_t** openTokenPosStack;
 uint32_t parse_error;
 bool has_error = false;
 bool top_level_exec = true;
+bool has_webpack_export = false;
 uint32_t sourceLen = 0;
 
 void bail (uint32_t err);
@@ -136,6 +137,7 @@ bool rre () {
 
 bool parse (uint32_t point);
 
+void tryParseWebpackExports ();
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);
 void tryParseObjectDefine ();
@@ -169,6 +171,7 @@ bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4,
 bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6);
 bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7);
 bool str_eq13 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13);
+bool str_eq18 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13, char16_t c14, char16_t c15, char16_t c16, char16_t c17, char16_t c18);
 
 bool readPrecedingKeyword2(char16_t* pos, char16_t c1, char16_t c2);
 bool readPrecedingKeyword3(char16_t* pos, char16_t c1, char16_t c2, char16_t c3);

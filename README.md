@@ -55,6 +55,7 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 1. All `exports.a =`, `exports['a'] =` and `module.exports.a =` style assignments.
 2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
 3. All `module.exports = require('string')` assignments
+4. Any instance of `__webpack_exports__, "name"` results in these webpack exports being returned only
 
 ### Not Supported
 
@@ -72,25 +73,6 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 })(exports);
 ```
 
-2. `module.exports` require assignment only handled at base-level
-
-```js
-// OK
-module.exports = require('./a.js');
-
-// OK
-if (condition)
-  module.exports = require('./b.js');
-
-// NOT OK -> nested top-level detections not implemented
-if (condition) {
-  module.exports = require('./c.js');
-}
-(function () {
-  module.exports = require('./d.js');
-})();
-```
-
 2. No object parsing:
 
 ```js
@@ -105,6 +87,18 @@ module.exports = {
   c: 'c',
   d: 'd'
 }
+```
+
+3. Webpack exports heuristic
+
+```js
+// NOT exported due to webpack exports below
+exports.a = 'a';
+exports.b = 'b';
+
+// ONLY "WP_A", "WP_B" are exported
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
 ```
 
 ### Environment Support

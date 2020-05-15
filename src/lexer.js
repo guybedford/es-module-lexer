@@ -12,9 +12,18 @@ export function parse (source, name = '@') {
   if (!wasm.parse())
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
-  const exports = new Set(), reexports = new Set();
+  let exports = new Set(), reexports = new Set();
+  let hasWebpackExports = false;
   while (wasm.re()) {
     let expt = source.slice(wasm.es(), wasm.ee());
+    // zero length export used as an indicator for
+    // the switch to webpack exports
+    if (expt.length === 0) {
+      exports = new Set(['__esModule']);
+      reexports = new Set();
+      hasWebpackExports = true;
+      continue;
+    }
     if (expt[0] === '\'' || expt[0] === '"')
       exports.add(eval(expt));
     else

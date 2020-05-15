@@ -17,6 +17,7 @@ bool parse () {
   lastTokenPos = (char16_t*)EMPTY_CHAR;
   parse_error = 0;
   has_error = false;
+  has_webpack_export = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
 
@@ -49,6 +50,10 @@ bool parse () {
       case 'O':
         if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
           tryParseObjectDefine();
+        break;
+      case '_':
+        if (str_eq18(pos + 1, '_', 'w', 'e', 'b', 'p', 'a', 'c', 'k', '_', 'e', 'x', 'p', 'o', 'r', 't', 's', '_', '_'))
+          tryParseWebpackExports();
         break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -122,6 +127,32 @@ bool parse () {
 
   // succeess
   return true;
+}
+
+void tryParseWebpackExports () {
+  pos += 19;
+  char16_t ch = commentWhitespace();
+  if (ch != ',') {
+    pos--;
+    return;
+  }
+  pos++;
+  ch = commentWhitespace();
+  char16_t* exportPos = pos;
+  if (ch != '\'' && ch != '"') {
+    pos--;
+    return;
+  }
+  if (ch == '\'')
+    singleQuoteString();
+  else if (ch == '"')
+    doubleQuoteString();
+  if (!has_webpack_export) {
+    has_webpack_export = true;
+    // indicator
+    addExport(exportPos, exportPos);
+  }
+  addExport(exportPos, pos + 1);
 }
 
 void tryParseObjectDefine () {
@@ -593,6 +624,10 @@ bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4,
 
 bool str_eq13 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13) {
   return *(pos + 12) == c13 && *(pos + 11) == c12 && *(pos + 10) == c11 && *(pos + 9) == c10 && *(pos + 8) == c9 && *(pos + 7) == c8 && *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+}
+
+bool str_eq18 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7, char16_t c8, char16_t c9, char16_t c10, char16_t c11, char16_t c12, char16_t c13, char16_t c14, char16_t c15, char16_t c16, char16_t c17, char16_t c18) {
+  return *(pos + 17) == c18 && *(pos + 16) == c17 && *(pos + 15) == c16 && *(pos + 14) == c15 && *(pos + 13) == c14 && *(pos + 12) == c13 && *(pos + 11) == c12 && *(pos + 10) == c11 && *(pos + 9) == c10 && *(pos + 8) == c9 && *(pos + 7) == c8 && *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
 }
 
 bool keywordStart (char16_t* pos) {
