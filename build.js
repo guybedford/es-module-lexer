@@ -15,7 +15,7 @@ const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('b
 const minified = MINIFY && terser.minify(jsSourceProcessed, {
   module: true,
   output: {
-    preamble: `/* es-module-lexer ${pjson.version} */`
+    preamble: `/* cjs-module-lexer ${pjson.version} */`
   }
 });
 
