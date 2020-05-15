@@ -22,9 +22,8 @@ For use in CommonJS:
 const { init, parse } = require('cjs-module-lexer');
 
 (async () => {
-  // either await init, or call parse asynchronously
-  // this is necessary for the Web Assembly boot
-  await init;
+  // Init must be called first.
+  await init();
 
   const { exports, reexports, esModule } = parse(`
     // named exports detection

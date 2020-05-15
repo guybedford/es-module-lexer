@@ -5,7 +5,7 @@ let parse;
 const init = (async () => {
   let init;
   ({ parse, init } = await import('../dist/lexer.js'));
-  await init;
+  await init();
 })();
 
 const files = fs.readdirSync('test/samples')
