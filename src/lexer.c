@@ -24,6 +24,20 @@ bool parse () {
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
   end = pos + sourceLen;
+
+
+  // Handle #!
+  if (*source == '#' && *(source + 1) == '!') {
+    if (sourceLen == 2)
+      return true;
+    pos += 2;
+    while (pos++ < end) {
+      ch = *pos;
+      if (ch == '\n' || ch == '\r')
+        break;
+    }
+  }
+
   while (pos++ < end) {
     ch = *pos;
 
@@ -131,75 +145,69 @@ bool parse () {
 
 void tryParseWebpackExports () {
   pos += 19;
+  char16_t* revertPos = pos - 1;
   char16_t ch = commentWhitespace();
-  if (ch != ',') {
-    pos--;
-    return;
+  if (ch == ',') {
+    pos++;
+    ch = commentWhitespace();
+    if (ch == '\'' || ch == '"') {
+      char16_t* exportPos = pos;
+      pos++;
+      if (identifier(*pos) && *pos == ch) {
+        if (!has_webpack_export) {
+          has_webpack_export = true;
+          // indicator
+          addExport(exportPos, exportPos);
+        }
+        addExport(exportPos, pos + 1);
+        return;
+      }
+    }
   }
-  pos++;
-  ch = commentWhitespace();
-  char16_t* exportPos = pos;
-  if (ch != '\'' && ch != '"') {
-    pos--;
-    return;
-  }
-  if (ch == '\'')
-    singleQuoteString();
-  else if (ch == '"')
-    doubleQuoteString();
-  if (!has_webpack_export) {
-    has_webpack_export = true;
-    // indicator
-    addExport(exportPos, exportPos);
-  }
-  addExport(exportPos, pos + 1);
+  pos = revertPos;
 }
 
 void tryParseObjectDefine () {
   pos += 6;
-  char16_t ch = commentWhitespace();
-  if (ch != '.') {
-    pos--;
-    return;
-  }
-  pos++;
-  ch = commentWhitespace();
-  if (ch != 'd' || !str_eq13(pos + 1, 'e', 'f', 'i', 'n', 'e', 'P', 'r', 'o', 'p', 'e', 'r', 't', 'y')) {
-    pos--;
-    return;
-  }
-  pos += 14;
-  ch = commentWhitespace();
   char16_t* revertPos = pos - 1;
-  if (ch == '(') {
+  char16_t ch = commentWhitespace();
+  if (ch == '.') {
     pos++;
     ch = commentWhitespace();
-    if (ch == 'm' && str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e')) {
-      pos += 6;
+    if (ch == 'd' && str_eq13(pos + 1, 'e', 'f', 'i', 'n', 'e', 'P', 'r', 'o', 'p', 'e', 'r', 't', 'y')) {
+      pos += 14;
+      revertPos = pos - 1;
       ch = commentWhitespace();
-      if (ch != '.') {
-        pos = revertPos;
-        return;
-      }
-      pos++;
-      ch = commentWhitespace();
-    }
-    if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
-      pos += 7;
-      ch = commentWhitespace();
-      if (ch == ',') {
+      if (ch == '(') {
         pos++;
         ch = commentWhitespace();
-        char16_t* exportPos = pos;
-        if (ch == '\'') {
-          singleQuoteString();
-          if (!has_webpack_export)
-            addExport(exportPos, pos + 1);
+        if (ch == 'm' && str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e')) {
+          pos += 6;
+          ch = commentWhitespace();
+          if (ch != '.') {
+            pos = revertPos;
+            return;
+          }
+          pos++;
+          ch = commentWhitespace();
         }
-        else if (ch == '"') {
-          doubleQuoteString();
-          if (!has_webpack_export)
-            addExport(exportPos, pos + 1);
+        if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
+          pos += 7;
+          ch = commentWhitespace();
+          if (ch == ',') {
+            pos++;
+            ch = commentWhitespace();
+            if (ch == '\'' || ch == '"') {
+              char16_t* exportPos = pos;
+              pos++;
+              if (identifier(*pos) && *pos == ch) {
+                if (!has_webpack_export) {
+                  // revert for "("
+                  addExport(exportPos, pos + 1);
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -209,6 +217,7 @@ void tryParseObjectDefine () {
 
 void tryParseModuleExportsDotAssign () {
   pos += 6;
+  char16_t* revertPos = pos - 1;
   char16_t ch = commentWhitespace();
   if (ch == '.') {
     pos++;
@@ -218,14 +227,15 @@ void tryParseModuleExportsDotAssign () {
       return;
     }
   }
-  pos--;
+  pos = revertPos;
 }
 
 void tryParseExportsDotAssign (bool assign) {
   pos += 7;
+  char16_t* revertPos = pos - 1;
   char16_t ch = commentWhitespace();
   switch (ch) {
-    // exports.asdf 
+    // exports.asdf
     case '.': {
       pos++;
       ch = commentWhitespace();
@@ -237,9 +247,7 @@ void tryParseExportsDotAssign (bool assign) {
         if (ch == '=') {
           if (!has_webpack_export)
             addExport(startPos, endPos);
-        }
-        else {
-          pos = endPos;
+          return;
         }
       }
       break;
@@ -248,28 +256,22 @@ void tryParseExportsDotAssign (bool assign) {
     case '[': {
       pos++;
       ch = commentWhitespace();
-      char16_t* startPos = pos;
-      if (ch != '\'' && ch != '"')
-        break;
-      if (ch == '\'')
-        singleQuoteString();
-      if (ch == '"')
-        doubleQuoteString();
-
-      char16_t* endPos = ++pos;
-      ch = commentWhitespace();
-      if (ch != ']') {
-        pos = endPos;
-        return;
+      if (ch == '\'' || ch == '"') {
+        char16_t* startPos = pos;
+        pos++;
+        if (identifier(*pos) && *pos == ch) {
+          char16_t* endPos = ++pos;
+          ch = commentWhitespace();
+          if (ch != ']')
+            break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != '=')
+            break;
+          if (!has_webpack_export)
+            addExport(startPos, endPos);
+        }
       }
-      pos++;
-      ch = commentWhitespace();
-      if (ch != '=') {
-        pos = endPos;
-        return;
-      }
-      if (!has_webpack_export)
-        addExport(startPos, endPos);
     }
     // module.exports = require('...')
     case '=': {
@@ -283,8 +285,8 @@ void tryParseExportsDotAssign (bool assign) {
           if (ch == '(') {
             pos++;
             ch = commentWhitespace();
+            char16_t* reexportStart = pos;
             if (ch == '\'') {
-              char16_t* reexportStart = pos;
               singleQuoteString();
               pos++;
               char16_t* reexportEnd = pos;
@@ -295,7 +297,6 @@ void tryParseExportsDotAssign (bool assign) {
               }
             }
             else if (ch == '"') {
-              char16_t* reexportStart = pos;
               doubleQuoteString();
               pos++;
               char16_t* reexportEnd = pos;
@@ -306,13 +307,11 @@ void tryParseExportsDotAssign (bool assign) {
               }
             }
           }
-          pos = revertPos;
-          return;
         }
       }
     }
   }
-  pos--;
+  pos = revertPos;
 }
 
 // Identifier detection, ported from Acorn

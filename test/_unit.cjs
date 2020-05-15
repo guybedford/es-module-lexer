@@ -10,12 +10,36 @@ const init = (async () => {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('shebang', () => {
+    var { exports } = parse(`#!`);
+    assert.equal(exports.length, 0);
+    
+    var { exports } = parse(`#! (  {
+      exports.asdf = 'asdf';
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'asdf');
+  });
+
   test('module.exports', () => {
     const { exports } = parse(`
       module.exports.asdf = 'asdf';
     `);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'asdf');
+  });
+
+  test('identifiers', () => {
+    const { exports } = parse(`
+      exports['not identifier'] = 'asdf';
+      exports['@notidentifier'] = 'asdf';
+      Object.defineProperty(exports, "%notidentifier");
+      Object.defineProperty(exports, 'hm🤔');
+      exports['⨉'] = 45;
+      exports['α'] = 54;
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'α');
   });
 
   test('defineProperty', () => {
@@ -235,6 +259,7 @@ function x() {
       // ONLY "WP_A", "WP_B" are exported
       /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
       /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
+      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "not identifier", function() { return setBaseUrl; });
 
       exports.c = 'c';
     `;
