@@ -37,6 +37,7 @@ suite('Lexer', () => {
       Object.defineProperty(exports, 'hm🤔');
       exports['⨉'] = 45;
       exports['α'] = 54;
+      exports.package = 'RESERVED!';
     `);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'α');

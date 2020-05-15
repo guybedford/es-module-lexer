@@ -12,6 +12,10 @@ export function parse (source, name = '@') {
   if (!wasm.parse())
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
+  const strictReserved = new Set([
+    'implements', 'interface', 'let', 'package', 'private', 'protected', 'public', 'static', 'yield', 'enum'
+  ]);
+
   let exports = new Set(), reexports = new Set();
   let hasWebpackExports = false;
   while (wasm.re()) {
@@ -24,10 +28,13 @@ export function parse (source, name = '@') {
       hasWebpackExports = true;
       continue;
     }
+    let exportStr;
     if (expt[0] === '\'' || expt[0] === '"')
-      exports.add(eval(expt));
+      exportStr = eval(expt);
     else
-      exports.add(JSON.parse('"' + expt + '"'));
+      exportStr = JSON.parse('"' + expt + '"');
+    if (!strictReserved.has(exportStr))
+      exports.add(exportStr);
   }
   while (wasm.rre())
     reexports.add(eval(source.slice(wasm.res(), wasm.ree())));

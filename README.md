@@ -52,6 +52,10 @@ An ES module version is also available from `dist/lexer.js`, automatically enabl
 
 ### Supported
 
+Only exports that are valid identifiers (as defined by ECMA-262) are returned.
+
+This includes filtering out the strict reserved words only - `implements`, `interface`, `let`, `package`, `private`, `protected`, `public`, `static`, `yield`, `enum`.
+
 1. All `exports.a =`, `exports['a'] =` and `module.exports.a =` style assignments.
 2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
 3. All `module.exports = require('string')` assignments
