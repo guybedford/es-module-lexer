@@ -34,14 +34,14 @@ export function parse (source, name = '@') {
   if (!wasm.parse())
     throw ObjectAssign(new _Error(`Parse error ${name}:${StringSplit(StringSlice(source, 0, wasm.e()), '\n').length}:${wasm.e() - StringLastIndexOf(source, '\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
-  let exports = new Set(), reexports = new Set();
+  let exports = new _Set(), reexports = new _Set();
   while (wasm.re()) {
     let expt = StringSlice(source, wasm.es(), wasm.ee());
     // zero length export used as an indicator for
     // the switch to webpack exports
     if (expt.length === 0) {
-      exports = new Set(['__esModule']);
-      reexports = new Set();
+      exports = new _Set(['__esModule']);
+      reexports = new _Set();
       continue;
     }
     let exportStr;
