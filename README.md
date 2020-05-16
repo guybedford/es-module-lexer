@@ -49,17 +49,40 @@ const { init, parse } = require('cjs-module-lexer');
 
 An ES module version is also available from `dist/lexer.js`, automatically enabled via `"exports`":
 
-### Supported
+### Grammar
 
-Only exports that are valid identifiers (as defined by ECMA-262) are returned.
+CommonJS exports matches are run against the source token stream.
 
-This includes filtering out the strict reserved words only - `implements`, `interface`, `let`, `package`, `private`, `protected`, `public`, `static`, `yield`, `enum`.
+The token grammar is:
 
-1. All `exports.a =`, `exports['a'] =` and `module.exports.a =` style assignments.
-2. All `Object.defineProperty(module.exports, 'name'` or `Object.defineProperty(exports, 'name'` assignments
-3. All `module.exports = require('string')` assignments
-4. Any instance of `__webpack_exports__, "name"` results in these webpack exports being returned only,
-   and `__esModule` is inferred as an export.
+```
+IDENTIFIER: As defined by ECMA-262, without support for identifier `\` escapes, filtered to remove strict reserved words:
+            "implements", "interface", "let", "package", "private", "protected", "public", "static", "yield", "enum"
+
+STRING_LITERAL: A `"` or `'` bounded ECMA-262 string literal.
+
+IDENTIFIER_STRING: ( `"` IDENTIFIER `"` | `'` IDENTIFIER `'` )
+
+COMMENT_SPACE: Any ECMA-262 whitespace, ECMA-262 block comment or ECMA-262 line comment
+
+EXPORTS_IDENTIFIER: ( `module` COMMENT_SPACE `.` )? `exports`
+
+EXPORTS_DOT_ASSIGN: EXPORTS_IDENTIFIER COMMENT_SPACE `.` COMMENT_SPACE IDENTIFIER COMMENT_SPACE `=`
+
+EXPORTS_LITERAL_COMPUTED_ASSIGN: EXPORTS_IDENTIFIER COMMENT_SPACE `[` COMMENT_SPACE IDENTIFIER_STRING COMMENT_SPACE `]` COMMENT_SPACE `=`
+
+EXPORTS_MEMBER = EXPORTS_DOT_ASSIGN | EXPORTS_LITERAL_COMPUTED_ASSIGN
+
+EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT_SPACE `(` EXPORTS_IDENTIFIER COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
+
+WEBPACK_EXPORTS: `__webpack_exports__` COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
+
+EXPORTS_ASSIGN: `module` COMMENT_SPACE  `.` COMMENT_SPACE `exports` COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT_SPACE `(` STRING_LITERAL `)`
+```
+
+1. The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER` and `EXPORTS_DEFINE` matches.
+1. If `WEBPACK_EXPORTS` have matched slots, these `IDENTIFIER_STRING` slots are returned **instead** of the export names in (1) above.
+1. The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
 
 ### Not Supported
 
