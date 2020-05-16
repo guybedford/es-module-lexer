@@ -12,6 +12,11 @@ const JSONParse = JSON.parse;
 const MathCeil = Math.ceil;
 const _Uint16Array = Uint16Array;
 const _Error = Error;
+const _Set = Set;
+const SetHas = Function.prototype.call.bind(Set.prototype.has);
+const SetAdd = Function.prototype.call.bind(Set.prototype.add);
+
+const strictReserved = new Set(['implements', 'interface', 'let', 'package', 'private', 'protected', 'public', 'static', 'yield', 'enum']);
 
 let wasm;
 
@@ -29,10 +34,6 @@ export function parse (source, name = '@') {
   if (!wasm.parse())
     throw ObjectAssign(new _Error(`Parse error ${name}:${StringSplit(StringSlice(source, 0, wasm.e()), '\n').length}:${wasm.e() - StringLastIndexOf(source, '\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
-  const strictReserved = new Set([
-    'implements', 'interface', 'let', 'package', 'private', 'protected', 'public', 'static', 'yield', 'enum'
-  ]);
-
   let exports = new Set(), reexports = new Set();
   while (wasm.re()) {
     let expt = StringSlice(source, wasm.es(), wasm.ee());
@@ -49,11 +50,11 @@ export function parse (source, name = '@') {
       exportStr = StringSlice(expt, 1, -1);
     else
       exportStr = expt;
-    if (!strictReserved.has(exportStr))
-      exports.add(exportStr);
+    if (!SetHas(strictReserved, exportStr))
+      SetAdd(exports, exportStr);
   }
   while (wasm.rre())
-    reexports.add(JSONParse('"' + StringSlice(source, wasm.res() + 1, wasm.ree() - 1) + '"'));
+    SetAdd(reexports, JSONParse('"' + StringSlice(source, wasm.res() + 1, wasm.ree() - 1) + '"'));
 
   return { exports: [...exports], reexports: [...reexports] };
 }
