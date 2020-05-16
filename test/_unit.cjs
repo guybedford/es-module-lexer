@@ -3,7 +3,7 @@ const assert = require('assert');
 let parse;
 const init = (async () => {
   let init;
-  ({ parse, init } = await import('../dist/lexer.js'));
+  ({ parse, init } = await import('../dist/lexer.mjs'));
   await init();
 })();
 

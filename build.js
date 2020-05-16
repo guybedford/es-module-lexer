@@ -1,5 +1,5 @@
-import fs from 'fs';
-import terser from 'terser';
+const fs = require('fs');
+const terser = require('terser');
 
 const MINIFY = true;
 
@@ -19,4 +19,4 @@ const minified = MINIFY && terser.minify(jsSourceProcessed, {
   }
 });
 
-fs.writeFileSync('./dist/lexer.js', minified ? minified.code : jsSourceProcessed);
+fs.writeFileSync('./dist/lexer.mjs', minified ? minified.code : jsSourceProcessed);

@@ -47,8 +47,6 @@ const { init, parse } = require('cjs-module-lexer');
 })();
 ```
 
-An ES module version is also available from `dist/lexer.js`, automatically enabled via `"exports`":
-
 ### Grammar
 
 CommonJS exports matches are run against the source token stream.
