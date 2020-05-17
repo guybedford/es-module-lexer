@@ -79,8 +79,8 @@ EXPORTS_ASSIGN: `module` COMMENT_SPACE  `.` COMMENT_SPACE `exports` COMMENT_SPAC
 ```
 
 1. The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER` and `EXPORTS_DEFINE` matches.
-1. If `WEBPACK_EXPORTS` have matched slots, these `IDENTIFIER_STRING` slots are returned **instead** of the export names in (1) above.
 1. The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
+1. If `WEBPACK_EXPORTS` have matched slots, these `IDENTIFIER_STRING` slots are returned **instead** of any of the export names and reexport names in (1) and (2) above.
 
 ### Not Supported
 

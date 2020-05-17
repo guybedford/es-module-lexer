@@ -276,7 +276,7 @@ void tryParseExportsDotAssign (bool assign) {
     }
     // module.exports = require('...')
     case '=': {
-      if (assign && openTokenDepth == 0) {
+      if (assign) {
         pos++;
         ch = commentWhitespace();
         if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
