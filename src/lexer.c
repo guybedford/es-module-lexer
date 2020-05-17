@@ -66,7 +66,7 @@ bool parse () {
           tryParseObjectDefine();
         break;
       case '_':
-        if (str_eq18(pos + 1, '_', 'w', 'e', 'b', 'p', 'a', 'c', 'k', '_', 'e', 'x', 'p', 'o', 'r', 't', 's', '_', '_'))
+        if (str_eq18(pos + 1, '_', 'w', 'e', 'b', 'p', 'a', 'c', 'k', '_', 'e', 'x', 'p', 'o', 'r', 't', 's', '_', '_')  && keywordStart(pos))
           tryParseWebpackExports();
         break;
       case '(':
