@@ -243,7 +243,6 @@ void tryParseExportsDotAssign (bool assign) {
       char16_t* startPos = pos;
       if (identifier(ch)) {
         char16_t* endPos = pos;
-        pos++;
         ch = commentWhitespace();
         if (ch == '=') {
           if (!has_webpack_export)

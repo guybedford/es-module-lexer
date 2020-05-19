@@ -39,6 +39,7 @@ suite('Lexer', () => {
       exports['α'] = 54;
       exports.package = 'RESERVED!';
     `);
+    console.log(exports);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'α');
   });
