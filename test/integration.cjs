@@ -20,6 +20,13 @@ const files = fs.readdirSync('test/samples')
 	});
 
 suite('Samples', () => {
+  test('Self test', async () => {
+    await init;
+
+    const { exports } = parse(fs.readFileSync(process.cwd() + '/dist/lexer.js'));
+    assert.deepStrictEqual(exports, ['parse', 'init']);
+  });
+
   files.forEach(({ file, code }) => {
     test(file, async () => {
       await init;
