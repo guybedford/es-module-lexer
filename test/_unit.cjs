@@ -79,6 +79,28 @@ suite('Lexer', () => {
     assert.equal(exports.length, 0);
   });
 
+  test('Empty single quote string import', () => {
+    const source = `import ''`;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 1);
+    const { s, e, ss, se, d } = imports[0];
+    assert.equal(d, -1);
+    assert.equal(source.slice(s, e), '');
+    assert.equal(source.slice(ss, se), `import ''`);
+    assert.equal(exports.length, 0);
+  });
+
+  test('Empty double quote string import', () => {
+    const source = `import ""`;
+    const [imports, exports] = parse(source);
+    assert.equal(imports.length, 1);
+    const { s, e, ss, se, d } = imports[0];
+    assert.equal(d, -1);
+    assert.equal(source.slice(s, e), '');
+    assert.equal(source.slice(ss, se), 'import ""');
+    assert.equal(exports.length, 0);
+  });
+
   test('Import/Export with comments', () => {
     const source = `
 
