@@ -40,6 +40,7 @@ Export* export_write_head = NULL;
 void* analysis_base;
 void* analysis_head;
 
+bool facade;
 char templateStackDepth;
 char openTokenDepth;
 char templateDepth;
@@ -169,6 +170,9 @@ bool re () {
   if (export_read_head == NULL)
     return false;
   return true;
+}
+bool f () {
+  return facade;
 }
 
 bool parse (uint32_t point);

@@ -16,7 +16,7 @@ export function parse (source, name = '@') {
   while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(),  ss: wasm.ss(), se: wasm.se(), d: wasm.id() });
   while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
 
-  return [imports, exports];
+  return [imports, exports, !!wasm.f()];
 }
 
 function copy (src, outBuf16) {

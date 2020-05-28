@@ -11,6 +11,7 @@ bool parse () {
   char templateStack_[STACK_DEPTH];
   char16_t* openTokenPosStack_[STACK_DEPTH];
 
+  facade = true;
   templateStackDepth = 0;
   openTokenDepth = 0;
   templateDepth = -1;
@@ -23,7 +24,58 @@ bool parse () {
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
   end = pos + sourceLen;
+
+  // start with a pure "module-only" parser
   while (pos++ < end) {
+    ch = *pos;
+
+    if (ch == 32 || ch < 14 && ch > 8)
+      continue;
+
+    switch (ch) {
+      case 'e':
+        if (openTokenDepth == 0 && keywordStart(pos) && str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't')) {
+          tryParseExportStatement();
+          // export might have been a non-pure declaration
+          if (!facade) {
+            lastTokenPos = pos;
+            goto mainparse;
+          }
+        }
+        break;
+      case 'i':
+        if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
+          tryParseImportStatement();
+        break;
+      case ';':
+        break;
+      case '/': {
+        char16_t next_ch = *(pos + 1);
+        if (next_ch == '/') {
+          lineComment();
+          // dont update lastToken
+          continue;
+        }
+        else if (next_ch == '*') {
+          blockComment();
+          // dont update lastToken
+          continue;
+        }
+        // fallthrough
+      }
+      default:
+        // as soon as we hit a non-module token, we go to main parser
+        facade = false;
+        pos--;
+        goto mainparse; // oh yeahhh
+    }
+    lastTokenPos = pos;
+  }
+
+  if (has_error)
+    return false;
+
+  mainparse: while (pos++ < end) {
     ch = *pos;
 
     if (ch == 32 || ch < 14 && ch > 8)
@@ -225,6 +277,7 @@ void tryParseExportStatement () {
       // destructured initializations not currently supported (skipped for { or [)
       // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
       pos += 2;
+      facade = false;
       do {
         pos++;
         ch = commentWhitespace();
@@ -284,6 +337,9 @@ void tryParseExportStatement () {
   if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace());
+  }
+  else {
+    pos--;
   }
 }
 

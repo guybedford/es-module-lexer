@@ -83,6 +83,20 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
 })();
 ```
 
+### Facade Detection
+
+Facade modules that only use import / export syntax can be detected via the third return value:
+
+```js
+const [,, facade] = parse(`
+  export * from 'external';
+  import * as ns from 'external2';
+  export { a as b } from 'external3';
+  export { ns };
+`);
+facade === true;
+```
+
 ### Environment Support
 
 Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).

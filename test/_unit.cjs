@@ -450,4 +450,47 @@ function x() {
     assert.equal(exports[0], 'X');
     assert.equal(exports[1], 'yy');
   });
+
+  test('Facade', () => {
+    const [,, facade] = parse(`
+      export * from 'external';
+      import * as ns from 'external2';
+      export { a as b } from 'external3';
+      export { ns };
+    `);
+    assert.equal(facade, true);
+  });
+
+  test('Facade default', () => {
+    const [,, facade] = parse(`
+      import * as ns from 'external';
+      export default ns;
+    `);
+    assert.equal(facade, false);
+  });
+
+  test('Facade declaration1', () => {
+    const [,, facade] = parse(`export function p () {}`);
+    assert.equal(facade, false);
+  });
+
+  test('Facade declaration2', () => {
+    const [,, facade] = parse(`export var p`);
+    assert.equal(facade, false);
+  });
+
+  test('Facade declaration3', () => {
+    const [,, facade] = parse(`export {}l`);
+    assert.equal(facade, false);
+  });
+
+  test('Facade declaration4', () => {
+    const [,, facade] = parse(`export class Q{}`);
+    assert.equal(facade, false);
+  });
+
+  test('Facade side effect', () => {
+    const [,, facade] = parse(`console.log('any non esm syntax')`);
+    facade === false;
+  });
 });
