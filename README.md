@@ -147,7 +147,7 @@ test/samples/*.js (3057 KiB)
 
 To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
 
-The Makefile assumes that the `clang` in PATH corresponds to LLVM 8 (provided by WASI SDK as well, or a standard clang 8 install can be used as well), and that `../wasi-sdk-6` contains the SDK as extracted above, which is important to locate the WASI sysroot.
+The Makefile assumes the existence of "wasi-sdk-10.0", "binaryen" and "wabt" (both optional) as sibling folders to this project.
 
 The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
 
