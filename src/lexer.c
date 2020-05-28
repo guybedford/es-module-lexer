@@ -304,12 +304,12 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 
 void readImportString (const char16_t* ss, char16_t ch) {
   if (ch == '\'') {
-    const char16_t* startPos = ++pos;
+    const char16_t* startPos = pos + 1;
     singleQuoteString();
     addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
   else if (ch == '"') {
-    const char16_t* startPos = ++pos;
+    const char16_t* startPos = pos + 1;
     doubleQuoteString();
     addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
