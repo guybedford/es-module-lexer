@@ -323,8 +323,7 @@ void tryParseExportsDotAssign (bool assign) {
 
 void tryParseLiteralExports () {
   char16_t* revertPos = pos - 1;
-  pos++;
-  while (true) {
+  while (pos++ < end) {
     char16_t ch = commentWhitespace();
     char16_t* startPos = pos;
     if (identifier(ch)) {
@@ -357,6 +356,7 @@ void tryParseLiteralExports () {
             pos = revertPos;
             return;
           }
+          ch = *pos;
           addExport(startPos, endPos);
         }
       }
@@ -365,13 +365,11 @@ void tryParseLiteralExports () {
       pos = revertPos;
       return;
     }
-    if (ch == ',') {
-      pos++;
-    }
-    else if (ch == '}') {
+
+    if (ch == '}')
       return;
-    }
-    else {
+
+    if (ch != ',') {
       pos = revertPos;
       return;
     }
