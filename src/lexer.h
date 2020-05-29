@@ -137,6 +137,7 @@ bool rre () {
 
 bool parse (uint32_t point);
 
+void tryParseLiteralExports ();
 void tryParseWebpackExports ();
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);

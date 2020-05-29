@@ -273,11 +273,18 @@ void tryParseExportsDotAssign (bool assign) {
         }
       }
     }
-    // module.exports = require('...')
+    // module.exports =
     case '=': {
       if (assign) {
         pos++;
         ch = commentWhitespace();
+        // { ... }
+        if (ch == '{') {
+          tryParseLiteralExports();
+          return;
+        }
+
+        // require('...')
         if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
           pos += 7;
           char16_t* revertPos = pos - 1;
@@ -312,6 +319,63 @@ void tryParseExportsDotAssign (bool assign) {
     }
   }
   pos = revertPos;
+}
+
+void tryParseLiteralExports () {
+  char16_t* revertPos = pos - 1;
+  pos++;
+  while (true) {
+    char16_t ch = commentWhitespace();
+    char16_t* startPos = pos;
+    if (identifier(ch)) {
+      char16_t* endPos = pos;
+      ch = commentWhitespace();
+      if (ch == ':') {
+        pos++;
+        ch = commentWhitespace();
+        // nothing more complex than identifier expressions for now
+        if (!identifier(ch)) {
+          pos = revertPos;
+          return;
+        }
+        ch = *pos;
+      }
+      addExport(startPos, endPos);
+    }
+    else if (ch == '\'' || ch == '"') {
+      char16_t* startPos = pos;
+      pos++;
+      if (identifier(*pos) && *pos == ch) {
+        char16_t* endPos = ++pos;
+        ch = commentWhitespace();
+        // this could be written so much more nicely but I have a life to live
+        if (ch == ':') {
+          pos++;
+          ch = commentWhitespace();
+          // nothing more complex than identifier expressions for now
+          if (!identifier(ch)) {
+            pos = revertPos;
+            return;
+          }
+          addExport(startPos, endPos);
+        }
+      }
+    }
+    else {
+      pos = revertPos;
+      return;
+    }
+    if (ch == ',') {
+      pos++;
+    }
+    else if (ch == '}') {
+      return;
+    }
+    else {
+      pos = revertPos;
+      return;
+    }
+  }
 }
 
 // Identifier detection, ported from Acorn

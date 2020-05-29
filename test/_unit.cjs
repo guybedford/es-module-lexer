@@ -39,9 +39,27 @@ suite('Lexer', () => {
       exports['α'] = 54;
       exports.package = 'RESERVED!';
     `);
-    console.log(exports);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'α');
+  });
+
+  test('Literal exports', () => {
+    const { exports } = parse(`
+      module.exports = { a, b: c, d, 'e': f };
+    `);
+    assert.equal(exports.length, 4);
+    assert.equal(exports[0], 'a');
+    assert.equal(exports[1], 'b');
+    assert.equal(exports[2], 'd');
+    assert.equal(exports[3], 'e');
+  });
+
+  test('Literal exports unsupported', () => {
+    const { exports } = parse(`
+      module.exports = { a = 5, b };
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], 'a');
   });
 
   test('defineProperty', () => {

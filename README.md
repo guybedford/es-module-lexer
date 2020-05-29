@@ -38,6 +38,9 @@ const { init, parse } = require('cjs-module-lexer');
     if (maybe) module.exports = require('./dep1.js');
     if (another) module.exports = require('./dep2.js');
 
+    // literal exports assignments
+    module.exports = { a, b: c, d, 'e': f }
+
     // __esModule detection
     Object.defineProperty(module.exports, '__esModule', { value: true })
   `);
@@ -63,22 +66,28 @@ IDENTIFIER_STRING: ( `"` IDENTIFIER `"` | `'` IDENTIFIER `'` )
 
 COMMENT_SPACE: Any ECMA-262 whitespace, ECMA-262 block comment or ECMA-262 line comment
 
-EXPORTS_IDENTIFIER: ( `module` COMMENT_SPACE `.` )? `exports`
+MODULE_EXPORTS: `module` COMMENT_SPACE `.` COMMENT_SPACE `exports`
+
+EXPORTS_IDENTIFIER: MODULE_EXPORTS_IDENTIFIER | `exports`
 
 EXPORTS_DOT_ASSIGN: EXPORTS_IDENTIFIER COMMENT_SPACE `.` COMMENT_SPACE IDENTIFIER COMMENT_SPACE `=`
 
 EXPORTS_LITERAL_COMPUTED_ASSIGN: EXPORTS_IDENTIFIER COMMENT_SPACE `[` COMMENT_SPACE IDENTIFIER_STRING COMMENT_SPACE `]` COMMENT_SPACE `=`
 
-EXPORTS_MEMBER = EXPORTS_DOT_ASSIGN | EXPORTS_LITERAL_COMPUTED_ASSIGN
+EXPORTS_LITERAL_PROP: (IDENTIFIER (COMMENT_SPACE `:` COMMENT_SPACE IDENTIFIER)?) | (IDENTIFIER_STRING COMMENT_SPACE `:` COMMENT_SPACE IDENTIFIER)
+
+EXPORTS_MEMBER: EXPORTS_DOT_ASSIGN | EXPORTS_LITERAL_COMPUTED_ASSIGN
 
 EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT_SPACE `(` EXPORTS_IDENTIFIER COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
 
+EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
+
 WEBPACK_EXPORTS: `__webpack_exports__` COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
 
-EXPORTS_ASSIGN: `module` COMMENT_SPACE  `.` COMMENT_SPACE `exports` COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT_SPACE `(` STRING_LITERAL `)`
+EXPORTS_ASSIGN: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT_SPACE `(` STRING_LITERAL `)`
 ```
 
-1. The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER` and `EXPORTS_DEFINE` matches.
+1. The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
 1. The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
 1. If `WEBPACK_EXPORTS` have matched slots, these `IDENTIFIER_STRING` slots are returned **instead** of any of the export names and reexport names in (1) and (2) above.
 
