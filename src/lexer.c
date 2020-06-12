@@ -661,9 +661,10 @@ bool isExpressionPunctuator (char16_t ch) {
 
 bool isExpressionTerminator (char16_t* curPos) {
   // detects:
-  // ; ) -1 finally catch else
+  // => ; ) -1 finally catch else
   // as all of these followed by a { will indicate a statement brace
   switch (*curPos) {
+    case '>':
     case ';':
     case ')':
       return true;
