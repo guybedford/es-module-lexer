@@ -837,6 +837,8 @@ bool isExpressionTerminator (char16_t* curPos) {
       return readPrecedingKeyword4(curPos - 1, 'c', 'a', 't', 'c');
     case 'y':
       return readPrecedingKeyword6(curPos - 1, 'f', 'i', 'n', 'a', 'l', 'l');
+    case 'e':
+      return readPrecedingKeyword3(curPos - 1, 'e', 'l', 's');
   }
   return false;
 }
