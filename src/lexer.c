@@ -148,6 +148,7 @@ bool parse () {
           //   opening brace or paren (lastOpenTokenIndex)
           char16_t lastToken = *lastTokenPos;
           if (isExpressionPunctuator(lastToken) &&
+              !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
               lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
               lastToken == '}' && isExpressionTerminator(openTokenPosStack[openTokenDepth]) ||

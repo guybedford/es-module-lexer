@@ -51,6 +51,12 @@ suite('Lexer', () => {
     parse("const str = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAAABmJLR0QA/wAAAAAzJ3zzAAAGTElEQV\\\r\n\t\tRIx+VXe1BU1xn/zjn7ugvL4sIuQnll5U0ELAQxig7WiQYz6NRHa6O206qdSXXSxs60dTK200zNY9q0dcRpMs1jkrRNWmaijCVoaU';\r\n");
   });
 
+  test('Dotted number', () => {
+    parse(`
+       const x = 5. / 10;
+    `);
+  });
+
   test('Division operator case', () => {
     parse(`
       function log(r){
