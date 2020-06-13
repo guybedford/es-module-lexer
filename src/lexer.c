@@ -593,8 +593,11 @@ void singleQuoteString () {
     char16_t ch = *pos;
     if (ch == '\'')
       return;
-    if (ch == '\\')
-      pos++;
+    if (ch == '\\') {
+      ch = *++pos;
+      if (ch == '\r' && *(pos + 1) == '\n')
+        pos++;
+    }
     else if (isBr(ch))
       break;
   }
@@ -606,8 +609,11 @@ void doubleQuoteString () {
     char16_t ch = *pos;
     if (ch == '"')
       return;
-    if (ch == '\\')
-      pos++;
+    if (ch == '\\') {
+      ch = *++pos;
+      if (ch == '\r' && *(pos + 1) == '\n')
+        pos++;
+    }
     else if (isBr(ch))
       break;
   }
