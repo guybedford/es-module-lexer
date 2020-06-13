@@ -671,6 +671,7 @@ bool isExpressionTerminator (char16_t* curPos) {
   // as all of these followed by a { will indicate a statement brace
   switch (*curPos) {
     case '>':
+      return *(curPos - 1) == '=';
     case ';':
     case ')':
       return true;
