@@ -63,7 +63,7 @@ suite('Lexer', () => {
   });
 
   test('Literal exports complex', () => {
-    const exports = parse(`    
+    const { exports } = parse(`    
       function defineProp(name, value) {
         delete module.exports[name];
         module.exports[name] = value;

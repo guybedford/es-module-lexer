@@ -11,7 +11,7 @@ const char16_t* IMPORT_META = (char16_t*)0x2;
 const char16_t __empty_char = '\0';
 const char16_t* EMPTY_CHAR = &__empty_char;
 // tracked depth of template and brackets
-const uint32_t STACK_DEPTH = 1024;
+const uint32_t STACK_DEPTH = 2048;
 const char16_t* source = (void*)&__heap_base;
 
 struct Slice {
@@ -31,9 +31,9 @@ void* analysis_base;
 void* analysis_head;
 
 char templateStackDepth;
-char openTokenDepth;
+uint16_t openTokenDepth;
 char templateDepth;
-char braceDepth;
+uint16_t braceDepth;
 char16_t* lastTokenPos;
 char16_t* pos;
 char16_t* end;
