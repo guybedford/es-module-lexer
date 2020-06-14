@@ -8,7 +8,7 @@ bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  uint16_t templateStack_[STACK_DEPTH];
+  char templateStack_[STACK_DEPTH];
   char16_t* openTokenPosStack_[STACK_DEPTH];
 
   facade = true;

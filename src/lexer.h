@@ -41,14 +41,14 @@ void* analysis_base;
 void* analysis_head;
 
 bool facade;
-uint16_t templateStackDepth;
+char templateStackDepth;
 uint16_t openTokenDepth;
-int16_t templateDepth;
+char templateDepth;
 uint16_t braceDepth;
 char16_t* lastTokenPos;
 char16_t* pos;
 char16_t* end;
-uint16_t* templateStack;
+char* templateStack;
 char16_t** openTokenPosStack;
 
 // Memory Structure:
