@@ -10,6 +10,7 @@ bool parse () {
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
   uint16_t templateStack_[STACK_DEPTH];
   char16_t* openTokenPosStack_[STACK_DEPTH];
+  bool openClassPosStack[STACK_DEPTH];
 
   facade = true;
   templateStackDepth = 0;
@@ -21,6 +22,7 @@ bool parse () {
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
+  nextBraceIsClass = false;
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
@@ -91,6 +93,10 @@ bool parse () {
         if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
           tryParseImportStatement();
         break;
+      case 'c':
+        if (keywordStart(pos) && str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWs(*(pos + 5)))
+          nextBraceIsClass = true;
+        break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
@@ -112,6 +118,8 @@ bool parse () {
           else
             first_import = NULL;
         }
+        openClassPosStack[openTokenDepth] = nextBraceIsClass;
+        nextBraceIsClass = false;
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
       case '}':
@@ -152,7 +160,7 @@ bool parse () {
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
               lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
-              lastToken == '}' && isExpressionTerminator(openTokenPosStack[openTokenDepth]) ||
+              lastToken == '}' && (isExpressionTerminator(openTokenPosStack[openTokenDepth]) || openClassPosStack[openTokenDepth]) ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||
               !lastToken) {
@@ -674,7 +682,7 @@ bool isExpressionPunctuator (char16_t ch) {
 
 bool isExpressionTerminator (char16_t* curPos) {
   // detects:
-  // => ; ) -1 finally catch else
+  // => ; ) finally catch else class X
   // as all of these followed by a { will indicate a statement brace
   switch (*curPos) {
     case '>':

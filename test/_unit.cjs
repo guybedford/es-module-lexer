@@ -47,7 +47,19 @@ export { d as a, p as b, z as c, r as d, q }`;
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
-  test.skip('Regexp division', () => {
+  test('Regexp case', () => {
+    parse(`
+      class Number {
+
+      }
+      
+      /("|')(?<value>(\\\\(\\1)|[^\\1])*)?(\\1)/.exec(\`'\\\\"\\\\'aa'\`);
+      
+      const x = \`"\${label.replace(/"/g, "\\\\\\"")}"\`
+    `);
+  });
+
+  test('Regexp division', () => {
     parse(`\nconst x = num / /'/.exec(l)[0].slice(1, -1)//'"`);
   });
 

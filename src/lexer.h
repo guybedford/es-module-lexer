@@ -51,6 +51,7 @@ char16_t* pos;
 char16_t* end;
 uint16_t* templateStack;
 char16_t** openTokenPosStack;
+bool nextBraceIsClass;
 
 // Memory Structure:
 // -> source
