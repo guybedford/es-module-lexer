@@ -8,14 +8,15 @@ bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  char templateStack_[STACK_DEPTH];
+  uint16_t templateStack_[STACK_DEPTH];
   char16_t* openTokenPosStack_[STACK_DEPTH];
 
   facade = true;
   templateStackDepth = 0;
   openTokenDepth = 0;
-  templateDepth = -1;
+  templateDepth = 65535;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
+  lastSlashWasDivision = false;
   parse_error = 0;
   has_error = false;
   templateStack = &templateStack_[0];
@@ -119,7 +120,7 @@ bool parse () {
           templateString();
         }
         else {
-          if (openTokenDepth < templateDepth)
+          if (templateDepth != 65535 && openTokenDepth < templateDepth)
             return syntaxError(), false;
         }
         break;
@@ -153,8 +154,13 @@ bool parse () {
               lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
               lastToken == '}' && isExpressionTerminator(openTokenPosStack[openTokenDepth]) ||
               isExpressionKeyword(lastTokenPos) ||
+              lastToken == '/' && lastSlashWasDivision ||
               !lastToken) {
             regularExpression();
+            lastSlashWasDivision = false;
+          }
+          else {
+            lastSlashWasDivision = true;
           }
         }
         break;
@@ -166,7 +172,7 @@ bool parse () {
     lastTokenPos = pos;
   }
 
-  if (templateDepth != -1 || openTokenDepth || has_error)
+  if (templateDepth != 65535 || openTokenDepth || has_error)
     return false;
 
   // succeess

@@ -47,6 +47,10 @@ export { d as a, p as b, z as c, r as d, q }`;
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test.skip('Regexp division', () => {
+    parse(`\nconst x = num / /'/.exec(l)[0].slice(1, -1)//'"`);
+  });
+
   test('Multiline string escapes', () => {
     parse("const str = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAYAAAA7MK6iAAAABmJLR0QA/wAAAAAzJ3zzAAAGTElEQV\\\r\n\t\tRIx+VXe1BU1xn/zjn7ugvL4sIuQnll5U0ELAQxig7WiQYz6NRHa6O206qdSXXSxs60dTK200zNY9q0dcRpMs1jkrRNWmaijCVoaU';\r\n");
   });
@@ -405,8 +409,9 @@ function x() {
       while (true)
         /test'/
       x-/a'/g
+      try {}
       finally{}/a'/g
-      (){}/d'export { b }/g
+      (x);{f()}/d'export { b }/g
       ;{}/e'/g;
       {}/f'/g
       a / 'b' / c;
@@ -416,9 +421,9 @@ function x() {
       if //x
       ('a')/i'/g;
       /asdf/ / /as'df/; // '
-      \`\${/test/ + 5}\`
+      p = \`\${/test/ + 5}\`;
       /regex/ / x;
-      function () {
+      function m() {
         return /*asdf8*// 5/;
       }
       export { a };
