@@ -30,15 +30,17 @@ Slice* reexport_write_head = NULL;
 void* analysis_base;
 void* analysis_head;
 
-char templateStackDepth;
+bool lastSlashWasDivision;
+uint16_t templateStackDepth;
 uint16_t openTokenDepth;
-char templateDepth;
+uint16_t templateDepth;
 uint16_t braceDepth;
 char16_t* lastTokenPos;
 char16_t* pos;
 char16_t* end;
-char* templateStack;
+uint16_t* templateStack;
 char16_t** openTokenPosStack;
+bool nextBraceIsClass;
 
 // Memory Structure:
 // -> source
