@@ -19,7 +19,6 @@ bool parse () {
   lastSlashWasDivision = false;
   parse_error = 0;
   has_error = false;
-  has_webpack_export = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
   nextBraceIsClass = false;
@@ -71,10 +70,6 @@ bool parse () {
       case 'O':
         if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
           tryParseObjectDefine();
-        break;
-      case '_':
-        if (str_eq18(pos + 1, '_', 'w', 'e', 'b', 'p', 'a', 'c', 'k', '_', 'e', 'x', 'p', 'o', 'r', 't', 's', '_', '_')  && keywordStart(pos))
-          tryParseWebpackExports();
         break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -159,30 +154,6 @@ bool parse () {
   return true;
 }
 
-void tryParseWebpackExports () {
-  pos += 19;
-  char16_t* revertPos = pos - 1;
-  char16_t ch = commentWhitespace();
-  if (ch == ',') {
-    pos++;
-    ch = commentWhitespace();
-    if (ch == '\'' || ch == '"') {
-      char16_t* exportPos = pos;
-      pos++;
-      if (identifier(*pos) && *pos == ch) {
-        if (!has_webpack_export) {
-          has_webpack_export = true;
-          // indicator
-          addExport(exportPos, exportPos);
-        }
-        addExport(exportPos, pos + 1);
-        return;
-      }
-    }
-  }
-  pos = revertPos;
-}
-
 void tryParseObjectDefine () {
   pos += 6;
   char16_t* revertPos = pos - 1;
@@ -217,10 +188,8 @@ void tryParseObjectDefine () {
               char16_t* exportPos = pos;
               pos++;
               if (identifier(*pos) && *pos == ch) {
-                if (!has_webpack_export) {
-                  // revert for "("
-                  addExport(exportPos, pos + 1);
-                }
+                // revert for "("
+                addExport(exportPos, pos + 1);
               }
             }
           }
@@ -260,8 +229,7 @@ void tryParseExportsDotAssign (bool assign) {
         char16_t* endPos = pos;
         ch = commentWhitespace();
         if (ch == '=') {
-          if (!has_webpack_export)
-            addExport(startPos, endPos);
+          addExport(startPos, endPos);
           return;
         }
       }
@@ -283,8 +251,7 @@ void tryParseExportsDotAssign (bool assign) {
           ch = commentWhitespace();
           if (ch != '=')
             break;
-          if (!has_webpack_export)
-            addExport(startPos, endPos);
+          addExport(startPos, endPos);
         }
       }
     }

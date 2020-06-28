@@ -48,7 +48,6 @@ bool nextBraceIsClass;
 uint32_t parse_error;
 bool has_error = false;
 bool top_level_exec = true;
-bool has_webpack_export = false;
 uint32_t sourceLen = 0;
 
 void bail (uint32_t err);
@@ -140,7 +139,6 @@ bool rre () {
 bool parse (uint32_t point);
 
 void tryParseLiteralExports ();
-void tryParseWebpackExports ();
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);
 void tryParseObjectDefine ();

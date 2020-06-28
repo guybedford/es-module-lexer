@@ -107,6 +107,26 @@ suite('Lexer', () => {
     assert.equal(exports[0], 'a');
   });
 
+  test('Literal exports example', () => {
+    const { exports } = parse(`
+      module.exports = {
+        // These WILL be detected as exports
+        a: a,
+        b: b,
+        
+        // This WILL be detected as an export
+        e: require('d'),
+      
+        // These WONT be detected as exports
+        // because the object parser stops on the non-identifier
+        // expression "require('d')"
+        f: 'f'
+      }
+    `);
+    assert.equal(exports.length, 3);
+    assert.equal(exports[2], 'e');
+  });
+
   test('Literal exports complex', () => {
     const { exports } = parse(`    
       function defineProp(name, value) {
@@ -399,23 +419,4 @@ function x() {
     assert.ok(exports[0] === 'a');
     assert.ok(exports[1] === 'b');
   });
-
-  test('Webpack exports', () => {
-    const source = `
-      exports.a = 'a';
-      exports.b = 'b';
-
-      // ONLY "WP_A", "WP_B" are exported
-      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
-      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
-      /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "not identifier", function() { return setBaseUrl; });
-
-      exports.c = 'c';
-    `;
-    const { exports } = parse(source);
-    assert.equal(exports.length, 3);
-    assert.ok(exports[0] === '__esModule');
-    assert.ok(exports[1] === 'WP_A');
-    assert.ok(exports[2] === 'WP_B');
-  })
 });

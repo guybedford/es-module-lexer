@@ -82,18 +82,15 @@ EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT
 
 EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
 
-WEBPACK_EXPORTS: `__webpack_exports__` COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
-
 EXPORTS_ASSIGN: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT_SPACE `(` STRING_LITERAL `)`
 ```
 
-1. The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
-1. The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
-1. If `WEBPACK_EXPORTS` have matched slots, these `IDENTIFIER_STRING` slots are returned **instead** of any of the export names and reexport names in (1) and (2) above.
+* The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
+* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
 
 ### Not Supported
 
-1. No scope analysis:
+#### No scope analysis:
 
 ```js
 // "a" WILL be detected as an export
@@ -107,7 +104,7 @@ EXPORTS_ASSIGN: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT
 })(exports);
 ```
 
-2. `module.exports` require assignment only handled at the base-level
+#### `module.exports` require assignment only handled at the base-level
 
 ```js
 // OK
@@ -126,7 +123,7 @@ if (condition) {
 })();
 ```
 
-3. No object parsing:
+#### No object expression parsing
 
 ```js
 // These WONT be detected as exports
@@ -135,23 +132,19 @@ Object.defineProperties(exports, {
   b: { value: 'b' }
 });
 
-// These WONT be detected as exports
 module.exports = {
-  c: 'c',
-  d: 'd'
+  // These WILL be detected as exports
+  a: a,
+  b: b,
+  
+  // This WILL be detected as an export
+  e: require('d'),
+
+  // These WONT be detected as exports
+  // because the object parser stops on the non-identifier
+  // expression "require('d')"
+  f: 'f'
 }
-```
-
-3. Webpack exports heuristic
-
-```js
-// NOT exported due to webpack exports below
-exports.a = 'a';
-exports.b = 'b';
-
-// ONLY "__esModule", "WP_A", "WP_B" are exported
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_A", function() { return setBaseUrl; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "WP_B", function() { return setBaseUrl; });
 ```
 
 ### Environment Support
