@@ -87,6 +87,8 @@ bool parse () {
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
       case '}':
+        if (openTokenDepth == 0)
+          return syntaxError(), false;
         if (openTokenDepth-- == templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
           templateString();
