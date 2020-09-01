@@ -10,6 +10,19 @@ const init = (async () => {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Unterminated object', () => {
+    const source = `
+      const foo = };
+      const bar = {};
+    `;
+    try {
+      parse(source);
+    }
+    catch (err) {
+      assert.equal(err.message, 'Parse error @:2:19');
+    }
+  });
+
   test('Invalid string', () => {
     const source = `import './export.js';
 
