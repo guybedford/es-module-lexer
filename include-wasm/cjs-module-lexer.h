@@ -26,34 +26,6 @@ void* analysis_head;
 
 void bail (uint32_t err);
 
-void _addExport (const uint16_t* start, const uint16_t* end) {
-  Slice* export = (Slice*)(analysis_head);
-  analysis_head = analysis_head + sizeof(Slice);
-  if (export_write_head == NULL)
-    first_export = export;
-  else
-    export_write_head->next = export;
-  export_write_head = export;
-  export->start = start;
-  export->end = end;
-  export->next = NULL;
-}
-void _addReexport (const uint16_t* start, const uint16_t* end) {
-  Slice* reexport = (Slice*)(analysis_head);
-  analysis_head = analysis_head + sizeof(Slice);
-  if (reexport_write_head == NULL)
-    first_reexport = reexport;
-  else
-    reexport_write_head->next = reexport;
-  reexport_write_head = reexport;
-  reexport->start = start;
-  reexport->end = end;
-  reexport->next = NULL;
-}
-
-void (*addExport)(const uint16_t*, const uint16_t*) = &_addExport;
-void (*addReexport)(const uint16_t*, const uint16_t*) = &_addReexport;
-
 uint32_t sourceLen = 0;
 
 // allocateSource
@@ -117,7 +89,31 @@ bool rre () {
 
 bool parse (uint32_t point);
 
-bool parseCJS (uint16_t* source, uint32_t sourceLen);
+void _addExport (const uint16_t* start, const uint16_t* end) {
+  Slice* export = (Slice*)(analysis_head);
+  analysis_head = analysis_head + sizeof(Slice);
+  if (export_write_head == NULL)
+    first_export = export;
+  else
+    export_write_head->next = export;
+  export_write_head = export;
+  export->start = start;
+  export->end = end;
+  export->next = NULL;
+}
+void _addReexport (const uint16_t* start, const uint16_t* end) {
+  Slice* reexport = (Slice*)(analysis_head);
+  analysis_head = analysis_head + sizeof(Slice);
+  if (reexport_write_head == NULL)
+    first_reexport = reexport;
+  else
+    reexport_write_head->next = reexport;
+  reexport_write_head = reexport;
+  reexport->start = start;
+  reexport->end = end;
+  reexport->next = NULL;
+}
+bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t* start, const uint16_t* end), void (*addReexport)(const uint16_t* start, const uint16_t* end));
 
 void tryParseLiteralExports ();
 void tryParseModuleExportsDotAssign ();

@@ -38,8 +38,10 @@ void (*addReexport)(const uint16_t*, const uint16_t*);
 bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const uint16_t*, const uint16_t*), void (*_addReexport)(const uint16_t*, const uint16_t*)) {
   source = _source;
   sourceLen = _sourceLen;
-  addExport = _addExport;
-  addReexport = _addReexport;
+  if (_addExport)
+    addExport = _addExport;
+  if (_addReexport)
+    addReexport = _addReexport;
 
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
