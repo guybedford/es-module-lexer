@@ -26,11 +26,8 @@ void* analysis_head;
 
 void bail (uint32_t err);
 
-uint32_t sourceLen = 0;
-
 // allocateSource
 const uint16_t* sa (uint32_t utf16Len) {
-  sourceLen = utf16Len;
   const uint16_t* sourceEnd = source + utf16Len + 1;
   // ensure source is null terminated
   *(uint16_t*)(source + utf16Len) = '\0';
@@ -113,6 +110,8 @@ void _addReexport (const uint16_t* start, const uint16_t* end) {
   reexport->end = end;
   reexport->next = NULL;
 }
+void (*addExport)(const uint16_t*, const uint16_t*) = &_addExport;
+void (*addReexport)(const uint16_t*, const uint16_t*) = &_addReexport;
 bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t* start, const uint16_t* end), void (*addReexport)(const uint16_t* start, const uint16_t* end));
 
 void tryParseLiteralExports ();
