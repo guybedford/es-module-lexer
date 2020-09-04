@@ -9,7 +9,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <uchar.h>
 
 void bail (uint32_t err);
 
