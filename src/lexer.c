@@ -485,7 +485,7 @@ inline int charCodeByteLen(uint32_t ch) {
 
 uint32_t fullCharCode(uint16_t ch) {
   // Read UTF Surrogates if necessary
-  if (ch & 0xFC00 == 0xD800)
+  if ((ch & 0xFC00) == 0xD800)
     return ((ch & 0x3FF) << 10) | (*(pos + 1) & 0x3FF) | 0x10000;
   else
     return ch;
