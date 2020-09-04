@@ -29,9 +29,10 @@ export function parse (source, name = '@') {
   if (extraMem > 0)
     wasm.memory.grow(MathCeil(extraMem / 65536));
     
-  copy(source, new _Uint16Array(wasm.memory.buffer, wasm.sa(source.length), source.length + 1));
+  const addr = wasm.sa(source.length);
+  copy(source, new _Uint16Array(wasm.memory.buffer, addr, source.length + 1));
 
-  if (!wasm.parse())
+  if (!wasm.parseCJS(addr, source.length + 1))
     throw ObjectAssign(new _Error(`Parse error ${name}:${StringSplit(StringSlice(source, 0, wasm.e()), '\n').length}:${wasm.e() - StringLastIndexOf(source, '\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   let exports = new _Set(), reexports = new _Set();
@@ -39,13 +40,6 @@ export function parse (source, name = '@') {
     SetAdd(reexports, JSONParse('"' + StringSlice(source, wasm.res() + 1, wasm.ree() - 1) + '"'));
   while (wasm.re()) {
     let expt = StringSlice(source, wasm.es(), wasm.ee());
-    // zero length export used as an indicator for
-    // the switch to webpack exports
-    if (expt.length === 0) {
-      exports = new _Set(['__esModule']);
-      reexports = new _Set();
-      continue;
-    }
     let exportStr;
     // These work as we don't support identifier / string escapes
     if (expt[0] === '\'' || expt[0] === '"')
