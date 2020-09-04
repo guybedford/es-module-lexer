@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <limits.h>
 
-typedef unsigned short uint16_t;
 extern unsigned char __heap_base;
 
 const uint16_t* source = (void*)&__heap_base;

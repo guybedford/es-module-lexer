@@ -5,7 +5,7 @@ const uint16_t* IMPORT_META = (uint16_t*)0x2;
 const uint16_t __empty_char = '\0';
 const uint16_t* EMPTY_CHAR = &__empty_char;
 // tracked depth of template and brackets
-const uint32_t STACK_DEPTH = 2048;
+#define STACK_DEPTH 2048
 const uint16_t* source;
 
 bool lastSlashWasDivision;
@@ -52,7 +52,7 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
 
   templateStackDepth = 0;
   openTokenDepth = 0;
-  templateDepth = 65535;
+  templateDepth = UINT16_MAX;
   lastTokenPos = (uint16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
   parse_error = 0;
@@ -124,12 +124,14 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
       case '}':
         if (openTokenDepth == 0)
           return syntaxError(), false;
+        if (templateDepth > UINT16_MAX)
+        return syntaxError(), false;
         if (openTokenDepth-- == templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
           templateString();
         }
         else {
-          if (templateDepth != 65535 && openTokenDepth < templateDepth)
+          if (templateDepth != UINT16_MAX && openTokenDepth < templateDepth)
             return syntaxError(), false;
         }
         break;
@@ -184,7 +186,7 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
     lastTokenPos = pos;
   }
 
-  if (templateDepth != 65535 || openTokenDepth || has_error)
+  if (templateDepth != UINT16_MAX || openTokenDepth || has_error)
     return false;
 
   // success
