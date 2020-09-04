@@ -1,6 +1,10 @@
 #ifndef __CJS_MODULE_LEXER_H__
 #define __CJS_MODULE_LEXER_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -9,10 +13,7 @@
 
 void bail (uint32_t err);
 
-void (*addExport)(const uint16_t*, const uint16_t*);
-void (*addReexport)(const uint16_t*, const uint16_t*);
-
-bool parseCJS (uint16_t* source, uint32_t sourceLen, void(*addExport)(uint16_t*, uint16_t*), void(*addReexport)(uint16_t*, uint16_t*));
+bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t*, const uint16_t*), void (*addReexport)(const uint16_t*, const uint16_t*));
 
 void tryParseLiteralExports ();
 void tryParseModuleExportsDotAssign ();
@@ -69,5 +70,9 @@ void nextCharSurrogate (uint16_t ch);
 uint16_t readChar ();
 
 void syntaxError ();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CJS_MODULE_LEXER_H__ */

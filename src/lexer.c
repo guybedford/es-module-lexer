@@ -31,15 +31,15 @@ bool has_error = false;
 bool top_level_exec = true;
 uint32_t sourceLen;
 
-void setParseCJSCallbacks (void(*_addExport)(const uint16_t*, const uint16_t*), void(*_addReexport)(const uint16_t*, const uint16_t*)) {
-  addExport = _addExport;
-  addReexport = _addReexport;
-}
+void (*addExport)(const uint16_t*, const uint16_t*);
+void (*addReexport)(const uint16_t*, const uint16_t*);
 
 // Note: parsing is based on the _assumption_ that the source is already valid
-bool parseCJS (uint16_t* _source, uint32_t _sourceLen) {
+bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const uint16_t*, const uint16_t*), void (*_addReexport)(const uint16_t*, const uint16_t*)) {
   source = _source;
   sourceLen = _sourceLen;
+  addExport = _addExport;
+  addReexport = _addReexport;
 
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
