@@ -185,7 +185,7 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   if (templateDepth != 65535 || openTokenDepth || has_error)
     return false;
 
-  // succeess
+  // success
   return true;
 }
 
