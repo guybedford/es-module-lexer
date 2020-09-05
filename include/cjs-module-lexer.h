@@ -14,6 +14,7 @@ void bail (uint32_t err);
 
 bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t*, const uint16_t*), void (*addReexport)(const uint16_t*, const uint16_t*));
 
+void tryParseRequire (uint16_t ch);
 void tryParseLiteralExports ();
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);
