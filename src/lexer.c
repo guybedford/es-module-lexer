@@ -116,6 +116,9 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
+        // if (last_reexport_start == openTokenPosStack[openTokenDepth])
+        //  last_reexport_end = pos;
+        break;
       case '{':
         openClassPosStack[openTokenDepth] = nextBraceIsClass;
         nextBraceIsClass = false;
