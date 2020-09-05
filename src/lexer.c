@@ -696,35 +696,35 @@ bool isBrOrWsOrPunctuatorNotDot (uint16_t c) {
 }
 
 bool str_eq2 (uint16_t* pos, uint16_t c1, uint16_t c2) {
-  return *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2;
 }
 
 bool str_eq3 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3) {
-  return *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3;
 }
 
 bool str_eq4 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4) {
-  return *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4;
 }
 
 bool str_eq5 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5) {
-  return *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5;
 }
 
 bool str_eq6 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6) {
-  return *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6;
 }
 
 bool str_eq7 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7) {
-  return *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7;
 }
 
 bool str_eq13 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7, uint16_t c8, uint16_t c9, uint16_t c10, uint16_t c11, uint16_t c12, uint16_t c13) {
-  return *(pos + 12) == c13 && *(pos + 11) == c12 && *(pos + 10) == c11 && *(pos + 9) == c10 && *(pos + 8) == c9 && *(pos + 7) == c8 && *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7 && *(pos + 7) == c8 && *(pos + 8) == c9 && *(pos + 9) == c10 && *(pos + 10) == c11 && *(pos + 11) == c12 && *(pos + 12) == c13;
 }
 
 bool str_eq18 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7, uint16_t c8, uint16_t c9, uint16_t c10, uint16_t c11, uint16_t c12, uint16_t c13, uint16_t c14, uint16_t c15, uint16_t c16, uint16_t c17, uint16_t c18) {
-  return *(pos + 17) == c18 && *(pos + 16) == c17 && *(pos + 15) == c16 && *(pos + 14) == c15 && *(pos + 13) == c14 && *(pos + 12) == c13 && *(pos + 11) == c12 && *(pos + 10) == c11 && *(pos + 9) == c10 && *(pos + 8) == c9 && *(pos + 7) == c8 && *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7 && *(pos + 7) == c8 && *(pos + 8) == c9 && *(pos + 9) == c10 && *(pos + 10) == c11 && *(pos + 11) == c12 && *(pos + 12) == c13 && *(pos + 13) == c14 && *(pos + 14) == c15 && *(pos + 15) == c16 && *(pos + 16) == c17 && *(pos + 17) == c18;
 }
 
 bool keywordStart (uint16_t* pos) {
