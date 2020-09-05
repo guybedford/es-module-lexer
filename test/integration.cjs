@@ -20,16 +20,16 @@ const files = fs.readdirSync('test/samples')
 	});
 
 suite('Samples', () => {
-  test('Self test', async () => {
-    await init;
+  beforeEach(async () => await init);
 
-    const { exports } = parse(fs.readFileSync(process.cwd() + '/dist/lexer.js'));
+  const selfSource = fs.readFileSync(process.cwd() + '/dist/lexer.js').toString();
+  test('Self test', async () => {
+    const { exports } = parse(selfSource);
     assert.deepStrictEqual(exports, ['parse', 'init']);
   });
 
   files.forEach(({ file, code }) => {
     test(file, async () => {
-      await init;
       try {
         var actual = Reflect.ownKeys(require(process.cwd() + '/' + file));
       }

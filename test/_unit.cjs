@@ -10,6 +10,89 @@ const init = (async () => {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('TypeScript reexports', () => {
+    var { exports, reexports } = parse(`
+      "use strict";
+      function __export(m) {
+          for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+      }
+      Object.defineProperty(exports, "__esModule", { value: true });
+      __export(require("external1"));
+      tslib.__export(require("external2"));
+      __exportStar(require("external3"));
+      tslib1.__exportStar(require("external4"));
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], '__esModule');
+    assert.equal(reexports.length, 4);
+    assert.equal(reexports[0], 'external1');
+    assert.equal(reexports[1], 'external2');
+    assert.equal(reexports[2], 'external3');
+    assert.equal(reexports[3], 'external4');
+  });
+
+  test('Rollup Babel reexports', () => {
+    var { exports, reexports } = parse(`
+      "use strict";
+
+      exports.__esModule = true;
+
+      var _external = require("external");
+
+      Object.keys(_external).forEach(function (key) {
+        if (key === "default" || key === "__esModule") return;
+        exports[key] = _external[key];
+      });
+
+      var _external2 = require("external2");
+
+      Object.keys(_external2).forEach(function (key) {
+        if (key === "default" || key === "__esModule") return;
+        Object.defineProperty(exports, key, {
+          enumerable: true,
+          get: function () {
+            return _external2[key];
+          }
+        });
+      });
+      
+      var external3 = require('external3');
+      const external4 = require('external4');
+      
+      Object.keys(external3).forEach(function (k) {
+        if (k !== 'default') Object.defineProperty(exports, k, {
+          enumerable: true,
+          get: function () {
+            return external3[k];
+          }
+        });
+      });
+      Object.keys(external4).forEach(function (k) {
+        if (k !== 'default') Object.defineProperty(exports, k, {
+          enumerable: true,
+          get: function () {
+            return external4[k];
+          }
+        });
+      });
+      
+    `);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], '__esModule');
+    assert.equal(reexports.length, 4);
+    assert.equal(reexports[0], 'external1');
+    assert.equal(reexports[1], 'external2');
+    assert.equal(reexports[2], 'external3');
+    assert.equal(reexports[3], 'external4');    
+  });
+
+  test('invalid exports cases', () => {
+    var { exports } = parse(`
+      module.exports['?invalid'] = 'asdf';
+    `);
+    assert.equal(exports.length, 0);
+  });
+
   test('Regexp case', () => {
     parse(`
       class Number {
