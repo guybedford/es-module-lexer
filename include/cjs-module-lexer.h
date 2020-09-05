@@ -37,6 +37,8 @@ void lineComment ();
 
 uint16_t readToWsOrPunctuator (uint16_t ch);
 
+int charCodeByteLen (uint32_t ch);
+
 bool isBr (uint16_t c);
 bool isBrOrWs (uint16_t c);
 bool isBrOrWsOrPunctuator (uint16_t c);
