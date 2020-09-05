@@ -82,11 +82,27 @@ EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT
 
 EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
 
-EXPORTS_ASSIGN: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `require` COMMENT_SPACE `(` STRING_LITERAL `)`
+REQUIRE: `require` COMMENT_SPACE `(` COMMENT_SPACE STRING_LITERAL COMMENT_SPACE `)`
+
+EXPORTS_ASSIGN: (`var` | `const` | `let`) IDENTIFIER `=` REQUIRE
+
+MODULE_EXPORTS_ASSIGN: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE REQUIRE
+
+EXPORT_STAR: (`__export` | `__exportStar`) `(` REQUIRE
+
+EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2 `) {`
+  (
+    `if (` IDENTIFIER$2 `===` ( `'default'` | `"default"` ) `||` IDENTIFIER$2 `===` ( '__esModule' | `"__esModule"` ) `) return` `;`? |
+    `if (` IDENTIFIER$2 `!==` ( `'default'` | `"default"` ) `)`
+  )
+  (
+    `exports[` IDENTIFIER$2 `] =` IDENTIFIER$1 `[` IDENTIFIER$2 `]` |
+    `Object.defineProperty(` IDENTIFIER$1 `, ` IDENTIFIER$2 `, { enumerable: true, get: function () { return ` IDENTIFIER$1 `[` IDENTIFIER$2 `]; } })`
+  )
 ```
 
 * The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
-* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `EXPORTS_ASSIGN` matches.
+* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all top-level `MODULE_EXPORTS_ASSIGN` and `EXPORT_STAR` `REQUIRE` matches as well as all `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`
 
 ### Not Supported
 
@@ -146,6 +162,35 @@ module.exports = {
   f: 'f'
 }
 ```
+
+#### Only specific transpiler-style star export patterns match
+
+```js
+// './x' detected as star export
+var x = require('./x');
+Object.keys(x).forEach(function (k) {
+	if (k !== 'default') Object.defineProperty(exports, k, {
+		enumerable: true,
+		get: function () {
+			return x[k];
+		}
+	});
+});
+
+// './y' detected as star export
+let y = require('./y');
+Object.keys(y).forEach(function (kk) {
+	if (kk !== 'default') exports[kk] = y[kk];
+});
+
+// './z' NOT detected as star export
+let z = require('./z');
+for (const key of Object.keys(x)) {
+  exports[key] = x[key];
+}
+```
+
+These patterns can be updated over time to match modern transpiler outputs.
 
 ### Environment Support
 

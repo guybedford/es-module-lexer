@@ -6,6 +6,8 @@ const uint16_t __empty_char = '\0';
 const uint16_t* EMPTY_CHAR = &__empty_char;
 // tracked depth of template and brackets
 #define STACK_DEPTH 2048
+// tracked number of star exports
+#define MAX_STAR_EXPORTS 256
 const uint16_t* source;
 
 bool lastSlashWasDivision;
@@ -18,6 +20,8 @@ uint16_t* pos;
 uint16_t* end;
 uint16_t* templateStack;
 uint16_t** openTokenPosStack;
+uint16_t *(*starExportStack)[4];
+uint16_t starExportStackDepth;
 bool nextBraceIsClass;
 
 uint16_t* lastReexportStart;
@@ -49,9 +53,11 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   uint16_t templateStack_[STACK_DEPTH];
   uint16_t* openTokenPosStack_[STACK_DEPTH];
   bool openClassPosStack[STACK_DEPTH];
+  uint16_t* starExportStack_[MAX_STAR_EXPORTS][4];
 
   templateStackDepth = 0;
   openTokenDepth = 0;
+  starExportStackDepth = 0;
   templateDepth = UINT16_MAX;
   lastTokenPos = (uint16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
@@ -59,6 +65,7 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
+  starExportStack = &starExportStack_[0];
   nextBraceIsClass = false;
 
   pos = (uint16_t*)(source - 1);
@@ -108,6 +115,23 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
       case 'O':
         if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
           tryParseObjectDefine();
+        break;
+      case 'r':
+        if (str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e') && keywordStart(pos)) {
+
+          backtrackStoreRequireBinding();
+        }
+        break;
+      case '_':
+        if (str_eq7(pos + 1, '_', 'e', 'x', 'p', 'o', 'r', 't') && (keywordStart(pos) || *(pos - 1) == '.')) {
+          pos += 8;
+          if (str_eq4(pos, 'S', 't', 'a', 'r'))
+            pos += 4;
+          if (*pos == '(') {
+            openTokenPosStack[openTokenDepth++] = lastTokenPos;
+            tryParseRequire(*(++pos));
+          }
+        }
         break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -191,6 +215,54 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
     return false;
 
   // success
+  return true;
+}
+
+void backtrackStoreRequireBinding (uint16_t* start, uint16_t* end) {
+  uint16_t* curPos = pos - 1;
+  if (*curPos == ' ')
+    curPos--;
+  if (*curPos == '=') {
+    curPos--;
+    uint16_t ch = *curPos;
+    if (ch == ' ')
+      ch = *(--curPos);
+    uint32_t charCode;
+    uint16_t* id_end = curPos;
+    bool identifierStart = false;
+    while (charCode = fullCharCodeAtLast(curPos)) {
+      if (charCode == '\\')
+        return;
+      if (!isIdentifierChar(charCode))
+        break;
+      identifierStart = isIdentifierStart(charCode);
+      curPos -= charCodeByteLen(charCode);
+    }
+    if (identifierStart) {
+      // valid binding -> store!
+      if (starExportStackDepth == MAX_STAR_EXPORTS - 1)
+        return;
+      starExportStack[starExportStackDepth][0] = curPos;
+      starExportStack[starExportStackDepth][1] = id_end;
+      starExportStack[starExportStackDepth][2] = start;
+      starExportStack[starExportStackDepth][3] = end;
+      starExportStackDepth++;
+    }
+  }
+
+  pos += charCodeByteLen(ch);
+  while (ch = fullCharCode(*pos)) {
+    if (isIdentifierChar(ch)) {
+      pos += charCodeByteLen(ch);
+    }
+    else if (ch == '\\') {
+      // no identifier escapes support for now
+      return false;
+    }
+    else {
+      break;
+    }
+  }
   return true;
 }
 
@@ -314,9 +386,8 @@ void tryParseExportsDotAssign (bool assign) {
   pos = revertPos;
 }
 
-void tryParseRequire (uint16_t ch) {
+uint16_t[2] tryParseRequire (uint16_t ch) {
   // require('...')
-  uint16_t* revertPos = pos - 1;
   if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
     pos += 7;
     uint16_t* revertPos = pos - 1;
@@ -330,7 +401,7 @@ void tryParseRequire (uint16_t ch) {
         uint16_t* reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch == ')') {
-          addReexport(reexportStart, reexportEnd);
+          return [reexportStart, reexportEnd];
           return;
         }
       }
@@ -339,13 +410,13 @@ void tryParseRequire (uint16_t ch) {
         uint16_t* reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch == ')') {
-          addReexport(reexportStart, reexportEnd);
+          return [reexportStart, reexportEnd];
           return;
         }
       }
     }
+    pos = revertPos;
   }
-  pos = revertPos;
 }
 
 void tryParseLiteralExports () {
@@ -485,6 +556,14 @@ bool isIdentifierChar(uint32_t code) {
 inline int charCodeByteLen(uint32_t ch) {
   if (ch < 0x10000) return 1;
   return 2;
+}
+
+uint32_t fullCharCodeAtLast(uint16_t* pos) {
+  // Gives the UTF char for backtracking surrogates
+  uint16_t ch = *pos;
+  if ((ch & 0xFC00) == 0xDC00)
+    return fullCharCode(*(pos - 1));
+  return ch;
 }
 
 uint32_t fullCharCode(uint16_t ch) {
