@@ -32,22 +32,16 @@ export function parse (source, name = '@') {
   const addr = wasm.sa(source.length);
   copy(source, new _Uint16Array(wasm.memory.buffer, addr, source.length + 1));
 
-  if (!wasm.parseCJS(addr, source.length + 1))
-    throw ObjectAssign(new _Error(`Parse error ${name}:${StringSplit(StringSlice(source, 0, wasm.e()), '\n').length}:${wasm.e() - StringLastIndexOf(source, '\n', wasm.e() - 1)}`), { idx: wasm.e() });
+  if (!wasm.parseCJS(addr, source.length, 0, 0))
+    throw ObjectAssign(new _Error(`Parse error ${name}${wasm.e()}:${StringSplit(StringSlice(source, 0, wasm.e()), '\n').length}:${wasm.e() - StringLastIndexOf(source, '\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   let exports = new _Set(), reexports = new _Set();
   while (wasm.rre())
-    SetAdd(reexports, JSONParse('"' + StringSlice(source, wasm.res() + 1, wasm.ree() - 1) + '"'));
+    SetAdd(reexports, StringSlice(source, wasm.res(), wasm.ree()));
   while (wasm.re()) {
-    let expt = StringSlice(source, wasm.es(), wasm.ee());
-    let exportStr;
-    // These work as we don't support identifier / string escapes
-    if (expt[0] === '\'' || expt[0] === '"')
-      exportStr = StringSlice(expt, 1, -1);
-    else
-      exportStr = expt;
-    if (!SetHas(strictReserved, exportStr))
-      SetAdd(exports, exportStr);
+    let exptStr = StringSlice(source, wasm.es(), wasm.ee());
+    if (!SetHas(strictReserved, exptStr))
+      SetAdd(exports, exptStr);
   }
 
   return { exports: [...exports], reexports: [...reexports] };

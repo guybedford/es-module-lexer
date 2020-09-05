@@ -116,8 +116,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        // if (last_reexport_start == openTokenPosStack[openTokenDepth])
-        //  last_reexport_end = pos;
         break;
       case '{':
         openClassPosStack[openTokenDepth] = nextBraceIsClass;
@@ -127,8 +125,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
       case '}':
         if (openTokenDepth == 0)
           return syntaxError(), false;
-        if (templateDepth > UINT16_MAX)
-        return syntaxError(), false;
         if (openTokenDepth-- == templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
           templateString();
@@ -183,6 +179,8 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
         break;
       }
       case '`':
+        if (templateDepth == UINT16_MAX - 1)
+          return syntaxError(), false;
         templateString();
         break;
     }
@@ -227,11 +225,10 @@ void tryParseObjectDefine () {
             pos++;
             ch = commentWhitespace();
             if (ch == '\'' || ch == '"') {
-              uint16_t* exportPos = pos;
-              pos++;
+              uint16_t* exportPos = ++pos;
               if (identifier(*pos) && *pos == ch) {
                 // revert for "("
-                addExport(exportPos, pos + 1);
+                addExport(exportPos, pos);
               }
             }
           }
@@ -282,10 +279,10 @@ void tryParseExportsDotAssign (bool assign) {
       pos++;
       ch = commentWhitespace();
       if (ch == '\'' || ch == '"') {
-        uint16_t* startPos = pos;
         pos++;
+        uint16_t* startPos = pos;
         if (identifier(*pos) && *pos == ch) {
-          uint16_t* endPos = ++pos;
+          uint16_t* endPos = pos++;
           ch = commentWhitespace();
           if (ch != ']')
             break;
@@ -309,35 +306,40 @@ void tryParseExportsDotAssign (bool assign) {
         }
 
         // require('...')
-        if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
-          pos += 7;
-          revertPos = pos - 1;
-          ch = commentWhitespace();
-          if (ch == '(') {
-            pos++;
-            ch = commentWhitespace();
-            uint16_t* reexportStart = pos;
-            if (ch == '\'') {
-              singleQuoteString();
-              pos++;
-              uint16_t* reexportEnd = pos;
-              ch = commentWhitespace();
-              if (ch == ')') {
-                addReexport(reexportStart, reexportEnd);
-                return;
-              }
-            }
-            else if (ch == '"') {
-              doubleQuoteString();
-              pos++;
-              uint16_t* reexportEnd = pos;
-              ch = commentWhitespace();
-              if (ch == ')') {
-                addReexport(reexportStart, reexportEnd);
-                return;
-              }
-            }
-          }
+        return tryParseRequire(ch);
+      }
+    }
+  }
+  pos = revertPos;
+}
+
+void tryParseRequire (uint16_t ch) {
+  // require('...')
+  uint16_t* revertPos = pos - 1;
+  if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
+    pos += 7;
+    uint16_t* revertPos = pos - 1;
+    ch = commentWhitespace();
+    if (ch == '(') {
+      pos++;
+      ch = commentWhitespace();
+      uint16_t* reexportStart = pos + 1;
+      if (ch == '\'') {
+        singleQuoteString();
+        uint16_t* reexportEnd = pos++;
+        ch = commentWhitespace();
+        if (ch == ')') {
+          addReexport(reexportStart, reexportEnd);
+          return;
+        }
+      }
+      else if (ch == '"') {
+        doubleQuoteString();
+        uint16_t* reexportEnd = pos++;
+        ch = commentWhitespace();
+        if (ch == ')') {
+          addReexport(reexportStart, reexportEnd);
+          return;
         }
       }
     }
@@ -366,10 +368,9 @@ void tryParseLiteralExports () {
       addExport(startPos, endPos);
     }
     else if (ch == '\'' || ch == '"') {
-      uint16_t* startPos = pos;
-      pos++;
+      uint16_t* startPos = ++pos;
       if (identifier(*pos) && *pos == ch) {
-        uint16_t* endPos = ++pos;
+        uint16_t* endPos = pos++;
         ch = commentWhitespace();
         // this could be written so much more nicely but I have a life to live
         if (ch == ':') {

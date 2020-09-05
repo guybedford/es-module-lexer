@@ -114,6 +114,7 @@ void (*addExport)(const uint16_t*, const uint16_t*) = &_addExport;
 void (*addReexport)(const uint16_t*, const uint16_t*) = &_addReexport;
 bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t* start, const uint16_t* end), void (*addReexport)(const uint16_t* start, const uint16_t* end));
 
+void tryParseRequire (uint16_t ch);
 void tryParseLiteralExports ();
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);
