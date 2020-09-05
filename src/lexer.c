@@ -293,6 +293,7 @@ void tryParseExportsDotAssign (bool assign) {
           addExport(startPos, endPos);
         }
       }
+      break;
     }
     // module.exports =
     case '=': {
@@ -372,7 +373,6 @@ void tryParseLiteralExports () {
       if (identifier(*pos) && *pos == ch) {
         uint16_t* endPos = pos++;
         ch = commentWhitespace();
-        // this could be written so much more nicely but I have a life to live
         if (ch == ':') {
           pos++;
           ch = commentWhitespace();
