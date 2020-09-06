@@ -73,6 +73,16 @@ suite('Lexer', () => {
         if (k !== 'default') exports[k] = external4[k];
       });
 
+      const externalǽ = require('external😃');
+      Object.keys(externalǽ).forEach(function (k) {
+        if (k !== 'default') exports[k] = externalǽ[k];
+      });
+
+      const external𤭢 = require('external𤭢');
+      Object.keys(external𤭢).forEach(function (k) {
+        if (k !== 'default') exports[k] = external𤭢[k];
+      });
+
       const notexternal1 = require('notexternal1');
       Object.keys(notexternal1);
 
@@ -163,16 +173,25 @@ suite('Lexer', () => {
         exports[x] = notexternal16[x];
         extra;
       });
+
+      {
+        const notexternal17 = require('notexternal17');
+        Object.keys(notexternal17).forEach(function(x){
+          if (x ==='default'||x==='__esModule') return
+          exports[x] = notexternal17[x];
+        });
+      }
       
     `);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], '__esModule');
-    console.log(reexports);
-    assert.equal(reexports.length, 4);
+    assert.equal(reexports.length, 6);
     assert.equal(reexports[0], 'external');
     assert.equal(reexports[1], 'external2');
     assert.equal(reexports[2], 'external3');
-    assert.equal(reexports[3], 'external4');    
+    assert.equal(reexports[3], 'external4');
+    assert.equal(reexports[4], 'external😃');
+    assert.equal(reexports[5], 'external𤭢');
   });
 
   test('invalid exports cases', () => {
