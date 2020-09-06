@@ -296,7 +296,7 @@ void tryParseObjectDefineOrKeys () {
         ch = commentWhitespace();
         uint16_t* id_start = pos;
         if (!identifier(ch)) break;
-        size_t id_len = pos - id_start;
+        ptrdiff_t id_len = pos - id_start;
         ch = commentWhitespace();
         if (ch != ')') break;
 
@@ -320,7 +320,7 @@ void tryParseObjectDefineOrKeys () {
         ch = commentWhitespace();
         uint16_t* it_id_start = pos;
         if (!identifier(ch)) break;
-        size_t it_id_len = pos - it_id_start;
+        ptrdiff_t it_id_len = pos - it_id_start;
         ch = commentWhitespace();
         if (ch != ')') break;
         pos++;
