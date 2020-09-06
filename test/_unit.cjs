@@ -37,6 +37,8 @@ suite('Lexer', () => {
 
       exports.__esModule = true;
 
+      not.detect = require("ignored");
+
       var _external = require("external");
 
       Object.keys(_external).forEach(function (key) {
@@ -47,7 +49,7 @@ suite('Lexer', () => {
       var _external2 = require("external2");
 
       Object.keys(_external2).forEach(function (key) {
-        if (key === "default" || key === "__esModule") return;
+        if (key === "default" || /*comment!*/ key === "__esModule") return;
         Object.defineProperty(exports, key, {
           enumerable: true,
           get: function () {
@@ -56,7 +58,7 @@ suite('Lexer', () => {
         });
       });
       
-      var external3 = require('external3');
+      let external3 = require('external3');
       const external4 = require('external4');
       
       Object.keys(external3).forEach(function (k) {
@@ -68,19 +70,106 @@ suite('Lexer', () => {
         });
       });
       Object.keys(external4).forEach(function (k) {
-        if (k !== 'default') Object.defineProperty(exports, k, {
-          enumerable: true,
+        if (k !== 'default') exports[k] = external4[k];
+      });
+
+      const notexternal1 = require('notexternal1');
+      Object.keys(notexternal1);
+
+      const notexternal2 = require('notexternal2');
+      Object.keys(notexternal2).each(function(){
+      });
+
+      const notexternal3 = require('notexternal3');
+      Object.keys(notexternal2).forEach(function () {
+      });
+
+      const notexternal4 = require('notexternal4');
+      Object.keys(notexternal2).forEach(function (x) {
+      });
+
+      const notexternal5 = require('notexternal5');
+      Object.keys(notexternal5).forEach(function (x) {
+        if (true);
+      });
+
+      const notexternal6 = require('notexternal6');
+      Object.keys(notexternal6).forEach(function (x) {
+        if (x);
+      });
+
+      const notexternal7 = require('notexternal7');
+      Object.keys(notexternal7).forEach(function(x){
+        if (x ==='default');
+      });
+
+      const notexternal8 = require('notexternal8');
+      Object.keys(notexternal8).forEach(function(x){
+        if (x ==='default'||y);
+      });
+
+      const notexternal9 = require('notexternal9');
+      Object.keys(notexternal9).forEach(function(x){
+        if (x ==='default'||x==='__esM');
+      });
+
+      const notexternal10 = require('notexternal10');
+      Object.keys(notexternal10).forEach(function(x){
+        if (x !=='default') return
+      });
+
+      const notexternal11 = require('notexternal11');
+      Object.keys(notexternal11).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+      });
+
+      const notexternal12 = require('notexternal12');
+      Object.keys(notexternal12).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+        export[y] = notexternal12[y];
+      });
+
+      const notexternal13 = require('notexternal13');
+      Object.keys(notexternal13).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+        exports[y] = notexternal13[y];
+      });
+
+      const notexternal14 = require('notexternal14');
+      Object.keys(notexternal14).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+        Object.defineProperty(exports, k, {
+          enumerable: false,
           get: function () {
-            return external4[k];
+            return external14[k];
           }
         });
+      });
+
+      const notexternal15 = require('notexternal15');
+      Object.keys(notexternal15).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+        Object.defineProperty(exports, k, {
+          enumerable: false,
+          get: function () {
+            return externalnone[k];
+          }
+        });
+      });
+
+      const notexternal16 = require('notexternal16');
+      Object.keys(notexternal16).forEach(function(x){
+        if (x ==='default'||x==='__esModule') return
+        exports[x] = notexternal16[x];
+        extra;
       });
       
     `);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], '__esModule');
+    console.log(reexports);
     assert.equal(reexports.length, 4);
-    assert.equal(reexports[0], 'external1');
+    assert.equal(reexports[0], 'external');
     assert.equal(reexports[1], 'external2');
     assert.equal(reexports[2], 'external3');
     assert.equal(reexports[3], 'external4');    

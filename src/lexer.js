@@ -15,7 +15,7 @@ export function parse (source, name = '@') {
   copy(source, new Uint16Array(wasm.memory.buffer, addr, source.length + 1));
 
   if (!wasm.parseCJS(addr, source.length, 0, 0))
-    throw Object.assign(new _Error(`Parse error ${name}${wasm.e()}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
+    throw Object.assign(new Error(`Parse error ${name}${wasm.e()}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   let exports = new Set(), reexports = new Set();
   while (wasm.rre())

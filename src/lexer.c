@@ -20,8 +20,7 @@ uint16_t* pos;
 uint16_t* end;
 uint16_t* templateStack;
 uint16_t** openTokenPosStack;
-uint16_t *(*starExportStack)[4];
-uint16_t starExportStackDepth;
+StarExportBinding* starExportStack;
 bool nextBraceIsClass;
 
 uint16_t* lastReexportStart;
@@ -35,6 +34,12 @@ bool has_error = false;
 bool top_level_exec = true;
 uint32_t sourceLen;
 
+uint16_t templateStack_[STACK_DEPTH];
+uint16_t* openTokenPosStack_[STACK_DEPTH];
+bool openClassPosStack[STACK_DEPTH];
+StarExportBinding starExportStack_[MAX_STAR_EXPORTS];
+const StarExportBinding* STAR_EXPORT_STACK_END = &starExportStack_[MAX_STAR_EXPORTS - 1];
+
 void (*addExport)(const uint16_t*, const uint16_t*);
 void (*addReexport)(const uint16_t*, const uint16_t*);
 
@@ -47,17 +52,8 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   if (_addReexport)
     addReexport = _addReexport;
 
-  // stack allocations
-  // these are done here to avoid data section \0\0\0 repetition bloat
-  // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  uint16_t templateStack_[STACK_DEPTH];
-  uint16_t* openTokenPosStack_[STACK_DEPTH];
-  bool openClassPosStack[STACK_DEPTH];
-  uint16_t* starExportStack_[MAX_STAR_EXPORTS][4];
-
   templateStackDepth = 0;
   openTokenDepth = 0;
-  starExportStackDepth = 0;
   templateDepth = UINT16_MAX;
   lastTokenPos = (uint16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
@@ -71,7 +67,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   pos = (uint16_t*)(source - 1);
   uint16_t ch = '\0';
   end = pos + sourceLen;
-
 
   // Handle #!
   if (*source == '#' && *(source + 1) == '!') {
@@ -114,14 +109,14 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
         break;
       case 'O':
         if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
-          tryParseObjectDefine();
+          tryParseObjectDefineOrKeys();
         break;
-      case 'r':
-        if (str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e') && keywordStart(pos)) {
-
-          backtrackStoreRequireBinding();
-        }
+      case 'r': {
+        uint16_t* startPos = pos;
+        if (tryParseRequire(false) && keywordStart(startPos))
+          tryBacktrackAddStarExportBinding(startPos - 1);
         break;
+      }
       case '_':
         if (str_eq7(pos + 1, '_', 'e', 'x', 'p', 'o', 'r', 't') && (keywordStart(pos) || *(pos - 1) == '.')) {
           pos += 8;
@@ -129,7 +124,8 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
             pos += 4;
           if (*pos == '(') {
             openTokenPosStack[openTokenDepth++] = lastTokenPos;
-            tryParseRequire(*(++pos));
+            if (*(++pos) == 'r')
+              tryParseRequire(true);
           }
         }
         break;
@@ -218,55 +214,48 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   return true;
 }
 
-void backtrackStoreRequireBinding (uint16_t* start, uint16_t* end) {
-  uint16_t* curPos = pos - 1;
-  if (*curPos == ' ')
-    curPos--;
-  if (*curPos == '=') {
-    curPos--;
-    uint16_t ch = *curPos;
-    if (ch == ' ')
-      ch = *(--curPos);
+void tryBacktrackAddStarExportBinding (uint16_t* bPos) {
+  while (*bPos == ' ' && bPos > source)
+    bPos--;
+  if (*bPos == '=') {
+    bPos--;
+    while (*bPos == ' ' && bPos > source)
+      bPos--;
     uint32_t charCode;
-    uint16_t* id_end = curPos;
+    uint16_t* id_end = bPos;
     bool identifierStart = false;
-    while (charCode = fullCharCodeAtLast(curPos)) {
+    while ((charCode = fullCharCodeAtLast(bPos)) && bPos > source) {
       if (charCode == '\\')
         return;
       if (!isIdentifierChar(charCode))
         break;
       identifierStart = isIdentifierStart(charCode);
-      curPos -= charCodeByteLen(charCode);
+      bPos -= charCodeByteLen(charCode);
     }
-    if (identifierStart) {
-      // valid binding -> store!
-      if (starExportStackDepth == MAX_STAR_EXPORTS - 1)
+    if (identifierStart && *bPos == ' ') {
+      // gracefully overflow if there are too many star export bindings to track
+      if (starExportStack == STAR_EXPORT_STACK_END)
         return;
-      starExportStack[starExportStackDepth][0] = curPos;
-      starExportStack[starExportStackDepth][1] = id_end;
-      starExportStack[starExportStackDepth][2] = start;
-      starExportStack[starExportStackDepth][3] = end;
-      starExportStackDepth++;
+      starExportStack->id_start = bPos + 1;
+      starExportStack->id_end = id_end + 1;
+      while (*bPos == ' ' && bPos > source)
+        bPos--;
+      switch (*bPos) {
+        case 'r':
+          if (!readPrecedingKeyword2(bPos - 1, 'v', 'a'))
+            return;
+        case 't':
+        break;
+          if (!readPrecedingKeyword2(bPos - 1, 'l', 'e') || !readPrecedingKeyword4(bPos - 1, 'c', 'o', 'n', 's'))
+            return;
+        default: return;
+      }
+      starExportStack++;
     }
   }
-
-  pos += charCodeByteLen(ch);
-  while (ch = fullCharCode(*pos)) {
-    if (isIdentifierChar(ch)) {
-      pos += charCodeByteLen(ch);
-    }
-    else if (ch == '\\') {
-      // no identifier escapes support for now
-      return false;
-    }
-    else {
-      break;
-    }
-  }
-  return true;
 }
 
-void tryParseObjectDefine () {
+void tryParseObjectDefineOrKeys () {
   pos += 6;
   uint16_t* revertPos = pos - 1;
   uint16_t ch = commentWhitespace();
@@ -277,38 +266,308 @@ void tryParseObjectDefine () {
       pos += 14;
       revertPos = pos - 1;
       ch = commentWhitespace();
-      if (ch == '(') {
-        pos++;
+      if (ch != '(') {
+        pos = revertPos;
+        return;
+      }
+      pos++;
+      ch = commentWhitespace();
+      if (readExportsOrModuleDotExports(ch)) {
         ch = commentWhitespace();
-        if (ch == 'm' && str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e')) {
-          pos += 6;
-          ch = commentWhitespace();
-          if (ch != '.') {
-            pos = revertPos;
-            return;
-          }
+        if (ch == ',') {
           pos++;
           ch = commentWhitespace();
-        }
-        if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
-          pos += 7;
-          ch = commentWhitespace();
-          if (ch == ',') {
-            pos++;
-            ch = commentWhitespace();
-            if (ch == '\'' || ch == '"') {
-              uint16_t* exportPos = ++pos;
-              if (identifier(*pos) && *pos == ch) {
-                // revert for "("
-                addExport(exportPos, pos);
-              }
+          if (ch == '\'' || ch == '"') {
+            uint16_t* exportPos = ++pos;
+            if (identifier(*pos) && *pos == ch) {
+              // revert for "("
+              addExport(exportPos, pos);
             }
           }
         }
       }
     }
+    else if (ch == 'k' && str_eq3(pos + 1, 'e', 'y', 's')) {
+      while (true) {
+        pos += 4;
+        revertPos = pos - 1;
+        ch = commentWhitespace();
+        if (ch != '(') break;
+        pos++;
+        ch = commentWhitespace();
+        uint16_t* id_start = pos;
+        if (!identifier(ch)) break;
+        size_t id_len = pos - id_start;
+        ch = commentWhitespace();
+        if (ch != ')') break;
+
+        revertPos = pos++;
+        ch = commentWhitespace();
+        if (ch != '.') break;
+        pos++;
+        ch = commentWhitespace();
+        if (ch != 'f' || !str_eq6(pos + 1, 'o', 'r', 'E', 'a', 'c', 'h')) break;
+        pos += 7;
+        ch = commentWhitespace();
+        revertPos = pos - 1;
+        if (ch != '(') break;
+        pos++;
+        ch = commentWhitespace();
+        if (ch != 'f' || !str_eq7(pos + 1, 'u', 'n', 'c', 't', 'i', 'o', 'n')) break;
+        pos += 8;
+        ch = commentWhitespace();
+        if (ch != '(') break;
+        pos++;
+        ch = commentWhitespace();
+        uint16_t* it_id_start = pos;
+        if (!identifier(ch)) break;
+        size_t it_id_len = pos - it_id_start;
+        ch = commentWhitespace();
+        if (ch != ')') break;
+        pos++;
+        ch = commentWhitespace();
+        if (ch != '{') break;
+        pos++;
+        ch = commentWhitespace();
+        if (ch != 'i' || !str_eq2(pos + 1, 'f', ' ')) break;
+        pos += 3;
+        ch = commentWhitespace();
+        if (ch != '(') break;
+        pos++;
+        ch = commentWhitespace();
+        if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+        pos += it_id_len;
+        ch = commentWhitespace();
+        // `if (` IDENTIFIER$2 `===` ( `'default'` | `"default"` ) `||` IDENTIFIER$2 `===` ( '__esModule' | `"__esModule"` ) `) return` `;`? |
+        if (ch == '=') {
+          if (!str_eq2(pos + 1, '=', '=')) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (ch != '"' && ch != '\'') break;
+          uint16_t quot = ch;
+          if (!str_eq7(pos + 1, 'd', 'e', 'f', 'a', 'u', 'l', 't')) break;
+          pos += 8;
+          ch = commentWhitespace();
+          if (ch != quot) break;
+          pos += 1;
+          ch = commentWhitespace();
+          if (ch != '|' || *(pos + 1) != '|') break;
+          pos += 2;
+          ch = commentWhitespace();
+          if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+          pos += it_id_len;
+          ch = commentWhitespace();
+          if (ch != '=' || !str_eq2(pos + 1, '=', '=')) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (ch != '"' && ch != '\'') break;
+          quot = ch;
+          if (!str_eq10(pos + 1, '_', '_', 'e', 's', 'M', 'o', 'd', 'u', 'l', 'e')) break;
+          pos += 11;
+          ch = commentWhitespace();
+          if (ch != quot) break;
+          pos += 1;
+          ch = commentWhitespace();
+          if (ch != ')') break;
+          pos += 1;
+          ch = commentWhitespace();
+          if (ch != 'r' || !str_eq5(pos + 1, 'e', 't', 'u', 'r', 'n')) break;
+          pos += 6;
+          ch = commentWhitespace();
+          if (ch == ';')
+            pos++;
+          ch = commentWhitespace();
+        }
+        // `if (` IDENTIFIER$2 `!==` ( `'default'` | `"default"` ) `)`
+        else if (ch == '!') {
+          if (!str_eq2(pos + 1, '=', '=')) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (ch != '"' && ch != '\'') break;
+          uint16_t quot = ch;
+          if (!str_eq7(pos + 1, 'd', 'e', 'f', 'a', 'u', 'l', 't')) break;
+          pos += 8;
+          ch = commentWhitespace();
+          if (ch != quot) break;
+          pos += 1;
+          ch = commentWhitespace();
+          if (ch != ')') break;
+          pos += 1;
+          ch = commentWhitespace();
+        }
+        else break;
+
+        // EXPORTS_IDENTIFIER `[` IDENTIFIER$2 `] =` IDENTIFIER$1 `[` IDENTIFIER$2 `]`
+        if (readExportsOrModuleDotExports(ch)) {
+          ch = commentWhitespace();
+          if (ch != '[') break;
+          pos++;
+          ch = commentWhitespace();
+          if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+          pos += it_id_len;
+          ch = commentWhitespace();
+          if (ch != ']') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != '=') break;
+          pos++;
+          ch = commentWhitespace();
+          if (memcmp(pos, id_start, id_len * sizeof(uint16_t)) != 0) break;
+          pos += id_len;
+          ch = commentWhitespace();
+          if (ch != '[') break;
+          pos++;
+          ch = commentWhitespace();
+          if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+          pos += it_id_len;
+          ch = commentWhitespace();
+          if (ch != ']') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch == ';') {
+            pos++;
+            ch = commentWhitespace();
+          }
+        }
+        // `Object.defineProperty(` EXPORTS_IDENTIFIER `, ` IDENTIFIER$2 `, { enumerable: true, get: function () { return ` IDENTIFIER$1 `[` IDENTIFIER$2 `]; } })`
+        else if (ch == 'O') {
+          if (!str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't')) break;
+          pos += 6;
+          ch = commentWhitespace();
+          if (ch != '.') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 'd' || !str_eq13(pos + 1, 'e', 'f', 'i', 'n', 'e', 'P', 'r', 'o', 'p', 'e', 'r', 't', 'y')) break;
+          pos += 14;
+          ch = commentWhitespace();
+          if (ch != '(') break;
+          pos++;
+          ch = commentWhitespace();
+          if (!readExportsOrModuleDotExports(ch)) break;
+          ch = commentWhitespace();
+          if (ch != ',') break;
+          pos++;
+          ch = commentWhitespace();
+          if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+          pos += it_id_len;
+          ch = commentWhitespace();
+          if (ch != ',') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != '{') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 'e' || !str_eq9(pos + 1, 'n', 'u', 'm', 'e', 'r', 'a', 'b', 'l', 'e')) break;
+          pos += 10;
+          ch = commentWhitespace();
+          if (ch != ':') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 't' && !str_eq3(pos + 1, 'r', 'u', 'e')) break;
+          pos += 4;
+          ch = commentWhitespace();
+          if (ch != ',') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 'g' || !str_eq2(pos + 1, 'e', 't')) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (ch != ':') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 'f' || !str_eq7(pos + 1, 'u', 'n', 'c', 't', 'i', 'o', 'n')) break;
+          pos += 8;
+          ch = commentWhitespace();
+          if (ch != '(') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != ')') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != '{') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != 'r' || !str_eq5(pos + 1, 'e', 't', 'u', 'r', 'n')) break;
+          pos += 6;
+          ch = commentWhitespace();
+          if (memcmp(pos, id_start, id_len * sizeof(uint16_t)) != 0) break;
+          pos += id_len;
+          ch = commentWhitespace();
+          if (ch != '[') break;
+          pos++;
+          ch = commentWhitespace();
+          if (memcmp(pos, it_id_start, it_id_len * sizeof(uint16_t)) != 0) break;
+          pos += it_id_len;
+          ch = commentWhitespace();
+          if (ch != ']') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch == ';') {
+            pos++;
+            ch = commentWhitespace();
+          }
+          if (ch != '}') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != '}') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch != ')') break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch == ';') {
+            pos++;
+            ch = commentWhitespace();
+          }
+        }
+        else break;
+
+        if (ch != '}') break;
+        pos++;
+        ch = commentWhitespace();
+        if (ch != ')') break;
+
+        // search through export bindings to see if this is a star export
+        // this is done last because it is a linear search through all require bindings
+        // and by doing this search last after verifying the structure match,
+        // we don't have to worry about the slow search algorithm
+        StarExportBinding* curCheckBinding = &starExportStack_[0];
+        while (curCheckBinding != starExportStack) {
+          if (id_len == curCheckBinding->id_end - curCheckBinding->id_start &&
+              0 == memcmp(id_start, curCheckBinding->id_start, id_len * sizeof(uint16_t))) {
+            addReexport(curCheckBinding->specifier_start, curCheckBinding->specifier_end);
+            pos = revertPos;
+            return;
+          }
+          curCheckBinding++;
+        }
+        return;
+      }
+    }
   }
   pos = revertPos;
+}
+
+bool readExportsOrModuleDotExports (uint16_t ch) {
+  uint16_t* revertPos = pos;
+  if (ch == 'm' && str_eq5(pos + 1, 'o', 'd', 'u', 'l', 'e')) {
+    pos += 6;
+    ch = commentWhitespace();
+    if (ch != '.') {
+      pos = revertPos;
+      return false;
+    }
+    pos++;
+    ch = commentWhitespace();
+  }
+  if (ch == 'e' && str_eq6(pos + 1, 'x', 'p', 'o', 'r', 't', 's')) {
+    pos += 7;
+    return true;
+  }
+  else {
+    pos = revertPos;
+    return false;
+  }
 }
 
 void tryParseModuleExportsDotAssign () {
@@ -379,19 +638,20 @@ void tryParseExportsDotAssign (bool assign) {
         }
 
         // require('...')
-        return tryParseRequire(ch);
+        if (ch == 'r')
+          tryParseRequire(true);
       }
     }
   }
   pos = revertPos;
 }
 
-uint16_t[2] tryParseRequire (uint16_t ch) {
+bool tryParseRequire (bool directStarExport) {
   // require('...')
-  if (ch == 'r' && str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
+  if (str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
     pos += 7;
     uint16_t* revertPos = pos - 1;
-    ch = commentWhitespace();
+    uint16_t ch = commentWhitespace();
     if (ch == '(') {
       pos++;
       ch = commentWhitespace();
@@ -401,8 +661,14 @@ uint16_t[2] tryParseRequire (uint16_t ch) {
         uint16_t* reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch == ')') {
-          return [reexportStart, reexportEnd];
-          return;
+          if (directStarExport) {
+            addReexport(reexportStart, reexportEnd);
+          }
+          else {
+            starExportStack->specifier_start = reexportStart;
+            starExportStack->specifier_end = reexportEnd;
+          }
+          return true;
         }
       }
       else if (ch == '"') {
@@ -410,13 +676,20 @@ uint16_t[2] tryParseRequire (uint16_t ch) {
         uint16_t* reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch == ')') {
-          return [reexportStart, reexportEnd];
-          return;
+          if (directStarExport) {
+            addReexport(reexportStart, reexportEnd);
+          }
+          else {
+            starExportStack->specifier_start = reexportStart;
+            starExportStack->specifier_end = reexportEnd;
+          }
+          return true;
         }
       }
     }
     pos = revertPos;
   }
+  return false;
 }
 
 void tryParseLiteralExports () {
@@ -796,6 +1069,14 @@ bool str_eq6 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4,
 
 bool str_eq7 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7) {
   return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7;
+}
+
+bool str_eq9 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7, uint16_t c8, uint16_t c9) {
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7 && *(pos + 7) == c8 && *(pos + 8) == c9;
+}
+
+bool str_eq10 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7, uint16_t c8, uint16_t c9, uint16_t c10) {
+  return *pos == c1 && *(pos + 1) == c2 && *(pos + 2) == c3 && *(pos + 3) == c4 && *(pos + 4) == c5 && *(pos + 5) == c6 && *(pos + 6) == c7 && *(pos + 7) == c8 && *(pos + 8) == c9 && *(pos + 9) == c10;
 }
 
 bool str_eq13 (uint16_t* pos, uint16_t c1, uint16_t c2, uint16_t c3, uint16_t c4, uint16_t c5, uint16_t c6, uint16_t c7, uint16_t c8, uint16_t c9, uint16_t c10, uint16_t c11, uint16_t c12, uint16_t c13) {
