@@ -8,7 +8,7 @@ Outputs the list of named exports (`exports.name = ...`), whether the `__esModul
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
-_Comprehensively handles the JS language grammar while remaining small and fast. - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
+_Comprehensively handles the JS language grammar while remaining small and fast. - ~90ms per MB of JS cold and ~15ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
 ### Usage
 
@@ -19,35 +19,30 @@ npm install cjs-module-lexer
 For use in CommonJS:
 
 ```js
-const { init, parse } = require('cjs-module-lexer');
+const parse = require('cjs-module-lexer');
 
-(async () => {
-  // Init must be called first.
-  await init();
+const { exports, reexports, esModule } = parse(`
+  // named exports detection
+  module.exports.a = 'a';
+  (function () {
+    exports.b = 'b';
+  })();
+  Object.defineProperty(exports, 'c', { value: 'c' });
+  /* exports.d = 'not detected'; */
 
-  const { exports, reexports, esModule } = parse(`
-    // named exports detection
-    module.exports.a = 'a';
-    (function () {
-      exports.b = 'b';
-    })();
-    Object.defineProperty(exports, 'c', { value: 'c' });
-    /* exports.d = 'not detected'; */
+  // reexports detection
+  if (maybe) module.exports = require('./dep1.js');
+  if (another) module.exports = require('./dep2.js');
 
-    // reexports detection
-    if (maybe) module.exports = require('./dep1.js');
-    if (another) module.exports = require('./dep2.js');
+  // literal exports assignments
+  module.exports = { a, b: c, d, 'e': f }
 
-    // literal exports assignments
-    module.exports = { a, b: c, d, 'e': f }
+  // __esModule detection
+  Object.defineProperty(module.exports, '__esModule', { value: true })
+`);
 
-    // __esModule detection
-    Object.defineProperty(module.exports, '__esModule', { value: true })
-  `);
-
-  // exports === ['a', 'b', 'c', '__esModule']
-  // reexports === ['./dep1.js', './dep2.js']
-})();
+// exports === ['a', 'b', 'c', '__esModule']
+// reexports === ['./dep1.js', './dep2.js']
 ```
 
 ### Grammar
@@ -210,46 +205,34 @@ Benchmarks can be run with `npm run bench`.
 Current results:
 
 ```
+Module load time
+> 2ms
 Cold Run, All Samples
-test/samples/*.js (3057 KiB)
-> 24ms
+test/samples/*.js (3635 KiB)
+> 318ms
 
 Warm Runs (average of 25 runs)
-test/samples/angular.js (719 KiB)
-> 5.12ms
-test/samples/angular.min.js (188 KiB)
-> 3.04ms
-test/samples/d3.js (491 KiB)
-> 4.08ms
-test/samples/d3.min.js (274 KiB)
-> 2.04ms
+test/samples/angular.js (1410 KiB)
+> 18.64ms
+test/samples/angular.min.js (303 KiB)
+> 5.96ms
+test/samples/d3.js (553 KiB)
+> 8.88ms
+test/samples/d3.min.js (250 KiB)
+> 4.88ms
 test/samples/magic-string.js (34 KiB)
-> 0ms
+> 1ms
 test/samples/magic-string.min.js (20 KiB)
-> 0ms
-test/samples/rollup.js (902 KiB)
-> 5.92ms
-test/samples/rollup.min.js (429 KiB)
-> 3.08ms
+> 0.32ms
+test/samples/rollup.js (698 KiB)
+> 11.68ms
+test/samples/rollup.min.js (367 KiB)
+> 7.84ms
 
 Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3057 KiB)
-> 17.4ms
+test/samples/*.js (3635 KiB)
+> 54.48ms
 ```
-
-### Building
-
-To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
-
-The Makefile assumes that the `clang` in PATH corresponds to LLVM 8 (provided by WASI SDK as well, or a standard clang 8 install can be used as well), and that `../wasi-sdk-6` contains the SDK as extracted above, which is important to locate the WASI sysroot.
-
-The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
-
-On Windows it may be preferable to use the Linux subsystem.
-
-After the Web Assembly build, the CJS build can be triggered via `npm run build`.
-
-Optimization passes are run with [Binaryen](https://github.com/WebAssembly/binaryen) prior to publish to reduce the Web Assembly footprint.
 
 ### License
 

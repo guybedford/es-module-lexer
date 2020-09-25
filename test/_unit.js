@@ -1,15 +1,7 @@
 const assert = require('assert');
-
-let parse;
-const init = (async () => {
-  let init;
-  ({ parse, init } = await import('../dist/lexer.mjs'));
-  await init();
-})();
+const parse = require('../lexer.js');
 
 suite('Lexer', () => {
-  beforeEach(async () => await init);
-
   test('TypeScript reexports', () => {
     var { exports, reexports } = parse(`
       "use strict";
@@ -516,7 +508,6 @@ suite('Lexer', () => {
   });
 
   test('dynamic import method', async () => {
-    await init;
     const source = `
       class A {
         import() {

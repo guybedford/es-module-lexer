@@ -1,12 +1,6 @@
 const fs = require('fs');
 const assert = require('assert');
-
-let parse;
-const init = (async () => {
-  let init;
-  ({ parse, init } = await import('../dist/lexer.mjs'));
-  await init();
-})();
+const parse = require('../lexer.js');
 
 const files = fs.readdirSync('test/samples')
 	.map(f => `test/samples/${f}`)
@@ -20,15 +14,15 @@ const files = fs.readdirSync('test/samples')
 	});
 
 suite('Samples', () => {
-  beforeEach(async () => await init);
-
-  const selfSource = fs.readFileSync(process.cwd() + '/dist/lexer.js').toString();
+  const selfSource = fs.readFileSync(process.cwd() + '/lexer.js').toString();
   test('Self test', async () => {
     const { exports } = parse(selfSource);
-    assert.deepStrictEqual(exports, ['parse', 'init']);
+    assert.deepStrictEqual(exports, []);
   });
 
   files.forEach(({ file, code }) => {
+    if (file.endsWith('magic-string.js') || file.endsWith('rollup.js'))
+      return;
     test(file, async () => {
       try {
         var actual = Reflect.ownKeys(require(process.cwd() + '/' + file));

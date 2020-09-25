@@ -1,5 +1,3 @@
 node_modules
-lib/lexer.wat
-dist
 package-lock.json
 yarn.lock
