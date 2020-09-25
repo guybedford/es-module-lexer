@@ -1,6 +1,18 @@
 const fs = require('fs');
 const assert = require('assert');
-const parse = require('../lexer.js');
+
+let parse;
+async function loadParser () {
+  if (parse) return;
+  if (process.env.WASM) {
+    const m = await import('../dist/lexer.mjs');
+    await m.init();
+    parse = m.parse;
+  }
+  else {
+    parse = require('../lexer.js');
+  }
+}
 
 const files = fs.readdirSync('test/samples')
 	.map(f => `test/samples/${f}`)
@@ -14,6 +26,8 @@ const files = fs.readdirSync('test/samples')
 	});
 
 suite('Samples', () => {
+  beforeEach(async () => await loadParser());
+
   const selfSource = fs.readFileSync(process.cwd() + '/lexer.js').toString();
   test('Self test', async () => {
     const { exports } = parse(selfSource);

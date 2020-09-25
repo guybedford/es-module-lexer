@@ -1,7 +1,21 @@
 const assert = require('assert');
-const parse = require('../lexer.js');
+
+let parse;
+async function loadParser () {
+  if (parse) return;
+  if (process.env.WASM) {
+    const m = await import('../dist/lexer.mjs');
+    await m.init();
+    parse = m.parse;
+  }
+  else {
+    parse = require('../lexer.js');
+  }
+}
 
 suite('Lexer', () => {
+  beforeEach(async () => await loadParser());
+
   test('TypeScript reexports', () => {
     var { exports, reexports } = parse(`
       "use strict";

@@ -21,7 +21,7 @@ For use in CommonJS:
 ```js
 const parse = require('cjs-module-lexer');
 
-const { exports, reexports, esModule } = parse(`
+const { exports, reexports } = parse(`
   // named exports detection
   module.exports.a = 'a';
   (function () {
@@ -44,6 +44,17 @@ const { exports, reexports, esModule } = parse(`
 // exports === ['a', 'b', 'c', '__esModule']
 // reexports === ['./dep1.js', './dep2.js']
 ```
+
+When using the ESM version, Wasm is supported instead:
+
+```js
+import { parse, init } from 'cjs-module-lexer';
+// init needs to be called and waited upon
+await init();
+const { exports, reexports } = parse(source);
+```
+
+The Wasm build is around 1.5x faster.
 
 ### Grammar
 
@@ -233,6 +244,20 @@ Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3635 KiB)
 > 54.48ms
 ```
+
+### Wasm Build
+
+To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
+
+The Makefile assumes the existence of "wasi-sdk-10.0", "binaryen" and "wabt" (both optional) as sibling folders to this project.
+
+The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
+
+On Windows it may be preferable to use the Linux subsystem.
+
+After the Web Assembly build, the CJS build can be triggered via `npm run build`.
+
+Optimization passes are run with [Binaryen](https://github.com/WebAssembly/binaryen) prior to publish to reduce the Web Assembly footprint.
 
 ### License
 

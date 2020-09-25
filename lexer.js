@@ -4,6 +4,7 @@ let openTokenDepth,
   lastTokenPos,
   lastSlashWasDivision,
   templateStack,
+  templateStackDepth,
   openTokenPosStack,
   openClassPosStack,
   nextBraceIsClass,
@@ -17,9 +18,10 @@ function resetState () {
   templateDepth = -1;
   lastTokenPos = -1;
   lastSlashWasDivision = false;
-  templateStack = [];
-  openTokenPosStack = [];
-  openClassPosStack = [];
+  templateStack = new Array(1024);
+  templateStackDepth = 0;
+  openTokenPosStack = new Array(1024);
+  openClassPosStack = new Array(1024);
   nextBraceIsClass = false;
   starExportMap = Object.create(null);
   lastStarExportSpecifier = null;
@@ -134,7 +136,7 @@ function parseSource (cjsSource) {
         if (openTokenDepth === 0)
           throw new Error('Unexpected closing brace.');
         if (openTokenDepth-- === templateDepth) {
-          templateDepth = templateStack.pop();
+          templateDepth = templateStack[--templateStackDepth];
           templateString();
         }
         else {
@@ -819,7 +821,7 @@ function templateString () {
     const ch = source.charCodeAt(pos);
     if (ch === 36/*$*/ && source.charCodeAt(pos + 1) === 123/*{*/) {
       pos++;
-      templateStack.push(templateDepth);
+      templateStack[templateStackDepth++] = templateDepth;
       templateDepth = ++openTokenDepth;
       return;
     }
