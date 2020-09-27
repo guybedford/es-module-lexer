@@ -76,6 +76,35 @@ function parseSource (cjsSource) {
     if (ch === 32 || ch < 14 && ch > 8)
       continue;
 
+    if (openTokenDepth === 0) {
+      switch (ch) {
+        case 105/*i*/:
+          if (source.slice(pos + 1, pos + 6) === 'mport' && keywordStart(pos))
+            throwIfImportStatement();
+          lastTokenPos = pos;
+          continue;
+        case 114/*r*/:
+          const startPos = pos;
+          if (tryParseRequire(false) && keywordStart(startPos))
+            tryBacktrackAddStarExportBinding(startPos - 1);
+          lastTokenPos = pos;
+          continue;
+        case 95/*_*/:
+          if (source.slice(pos + 1, pos + 8) === '_export' && (keywordStart(pos) || source.charCodeAt(pos - 1) === 46/*.*/)) {
+            pos += 8;
+            if (source.slice(pos, pos + 4) === 'Star')
+              pos += 4;
+            if (source.charCodeAt(pos) === 40/*(*/) {
+              openTokenPosStack[openTokenDepth++] = lastTokenPos;
+              if (source.charCodeAt(++pos) === 114/*r*/)
+                tryParseRequire(true);
+            }
+          }
+          lastTokenPos = pos;
+          continue;
+      }
+    }
+
     switch (ch) {
       case 101/*e*/:
         if (source.slice(pos + 1, pos + 6) === 'xport' && keywordStart(pos)) {
@@ -84,10 +113,6 @@ function parseSource (cjsSource) {
           else if (openTokenDepth === 0)
             throwIfExportStatement();
         }
-        break;
-      case 105/*i*/:
-        if (source.slice(pos + 1, pos + 6) === 'mport' && keywordStart(pos))
-          throwIfImportStatement();
         break;
       case 99/*c*/:
         if (keywordStart(pos) && source.slice(pos + 1, pos + 5) === 'lass' && isBrOrWs(source.charCodeAt(pos + 5)))
@@ -99,25 +124,7 @@ function parseSource (cjsSource) {
         break;
       case 79/*O*/:
         if (source.slice(pos + 1, pos + 6) === 'bject' && keywordStart(pos))
-          tryParseObjectDefineOrKeys();
-        break;
-      case 114/*r*/: {
-        const startPos = pos;
-        if (openTokenDepth === 0 && tryParseRequire(false) && keywordStart(startPos))
-          tryBacktrackAddStarExportBinding(startPos - 1);
-        break;
-      }
-      case 95/*_*/:
-        if (openTokenDepth === 0 && source.slice(pos + 1, pos + 8) === '_export' && (keywordStart(pos) || source.charCodeAt(pos - 1) === 46/*.*/)) {
-          pos += 8;
-          if (source.slice(pos, pos + 4) === 'Star')
-            pos += 4;
-          if (source.charCodeAt(pos) === 40/*(*/) {
-            openTokenPosStack[openTokenDepth++] = lastTokenPos;
-            if (source.charCodeAt(++pos) === 114/*r*/)
-              tryParseRequire(true);
-          }
-        }
+          tryParseObjectDefineOrKeys(openTokenDepth === 0);
         break;
       case 40/*(*/:
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -240,7 +247,7 @@ function tryBacktrackAddStarExportBinding (bPos) {
   }
 }
 
-function tryParseObjectDefineOrKeys () {
+function tryParseObjectDefineOrKeys (keys) {
   pos += 6;
   let revertPos = pos - 1;
   let ch = commentWhitespace();
@@ -272,7 +279,7 @@ function tryParseObjectDefineOrKeys () {
         }
       }
     }
-    else if (ch === 107/*k*/ && source.slice(pos + 1, pos + 4) === 'eys') {
+    else if (keys && ch === 107/*k*/ && source.slice(pos + 1, pos + 4) === 'eys') {
       while (true) {
         pos += 4;
         revertPos = pos - 1;
@@ -941,7 +948,7 @@ function readPrecedingKeyword1 (pos, ch) {
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,
-//   return, throw, typeof, void, yield ,await
+//   return, throw, typeof, void, yield, await
 function isExpressionKeyword (pos) {
   switch (source.charCodeAt(pos)) {
     case 100/*d*/:
@@ -1037,7 +1044,7 @@ function isExpressionPunctuator (ch) {
 
 function isExpressionTerminator (curPos) {
   // detects:
-  // > ; ) -1 finally catch
+  // => ; ) finally catch else
   // as all of these followed by a { will indicate a statement brace
   switch (source.charCodeAt(curPos)) {
     case 62/*>*/:

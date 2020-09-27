@@ -54,7 +54,7 @@ await init();
 const { exports, reexports } = parse(source);
 ```
 
-The Wasm build is around 1.5x faster.
+The Wasm build is around 1.5x faster and without a cold start.
 
 ### Grammar
 
@@ -109,101 +109,132 @@ EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2
 ```
 
 * The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
-* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all top-level `MODULE_EXPORTS_ASSIGN` and `EXPORT_STAR` `REQUIRE` matches as well as all `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`
+* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `MODULE_EXPORTS_ASSIGN` as well as all _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
 
-### Not Supported
+### Parsing Examples
 
-#### No scope analysis:
+#### Named Exports Parsing
+
+The basic matching rules for named exports are `exports.name`, `exports['name']` or `Object.defineProperty(exports, 'name', ...)`. This matching is done without scope analysis and regardless of the expression position:
 
 ```js
-// "a" WILL be detected as an export
+// DETECTS EXPORTS: a, b, c
 (function (exports) {
   exports.a = 'a'; 
-})(notExports);
-
-// "b" WONT be detected as an export
-(function (m) {
-  m.a = 'a';
+  exports['b'] = 'b';
+  Object.defineProperty(exports, 'c', { value: 'c' });
 })(exports);
 ```
 
-#### `module.exports` require assignment only handled at the base-level
+Because there is no scope analysis, the above detection may overclassify:
 
 ```js
-// OK
-module.exports = require('./a.js');
-
-// OK
-if (condition)
-  module.exports = require('./b.js');
-
-// NOT OK -> nested top-level detections not implemented
-if (condition) {
-  module.exports = require('./c.js');
-}
-(function () {
-  module.exports = require('./d.js');
-})();
+// DETECTS EXPORTS: a, b, c
+(function (exports, Object) {
+  exports.a = 'a';
+  exports['b'] = 'b';
+  if (false)
+    Object.defineProperty(exports, 'c', { value: 'c' });
+})(NOT_EXPORTS, NOT_OBJECT);
 ```
 
-#### No object expression parsing
+It will in turn underclassify in cases where the identifiers are renamed:
 
 ```js
-// These WONT be detected as exports
-Object.defineProperties(exports, {
-  a: { value: 'a' },
-  b: { value: 'b' }
-});
+// DETECTS: NO EXPORTS
+(function (e, defineProperty) {
+  e.a = 'a';
+  e['b'] = 'b';
+  defineProperty(e, 'c', { value: 'c' });
+})(exports, defineProperty);
+```
 
+#### Exports Object Assignment
+
+A best-effort is made to detect `module.exports` object assignments, but because this is not a full parser, arbitrary expressions are not handled in the
+object parsing process.
+
+Simple object definitions are supported:
+
+```js
+// DETECTS EXPORTS: a, b, c
 module.exports = {
-  // These WILL be detected as exports
-  a: a,
-  b: b,
-  
-  // This WILL be detected as an export
-  e: require('d'),
-
-  // These WONT be detected as exports
-  // because the object parser stops on the non-identifier
-  // expression "require('d')"
-  f: 'f'
-}
+  a,
+  b: 'c',
+  c: c
+};
 ```
 
-#### Only specific transpiler-style star export patterns match
+Object properties that are not identifiers or string expressions will bail out of the object detection:
 
 ```js
-// './x' detected as star export
-var x = require('./x');
-Object.keys(x).forEach(function (k) {
-	if (k !== 'default') Object.defineProperty(exports, k, {
-		enumerable: true,
-		get: function () {
-			return x[k];
-		}
-	});
-});
-
-// './y' detected as star export
-let y = require('./y');
-Object.keys(y).forEach(function (kk) {
-	if (kk !== 'default') exports[kk] = y[kk];
-});
-
-// './z' NOT detected as star export
-let z = require('./z');
-for (const key of Object.keys(x)) {
-  exports[key] = x[key];
+// DETECTS EXPORTS: a, b
+module.exports = {
+  a,
+  b: require('c'),
+  c: "not detected since require('c') above bails the object detection"
 }
 ```
 
-These patterns can be updated over time to match modern transpiler outputs.
+`Object.defineProperties` is not currently supported either.
+
+#### module.exports reexport assignment
+
+Any `module.exports = require('mod')` assignment is detected as a reexport:
+
+```js
+// DETECTS REEXPORTS: a, b, c
+module.exports = require('a');
+(module => module.exports = require('b'))(NOT_MODULE);
+if (false) module.exports = require('c');
+```
+
+As a result, the total list of exports would be inferred as the union of all of these reexported modules, which can lead to possible over-classification.
+
+#### Transpiler Re-exports
+
+For named exports, transpiler output works well with the rules described above.
+
+But for star re-exports, special care is taken to support common patterns of transpiler outputs from Babel and TypeScript as well as bundlers like RollupJS.
+These reexport and star reexport patterns are restricted to only be detected at the top-level as provided by the direct output of these tools.
+
+For example, `export * from 'external'` is output by Babel as:
+
+```js
+"use strict";
+
+exports.__esModule = true;
+
+var _external = require("external");
+
+Object.keys(_external).forEach(function (key) {
+  if (key === "default" || key === "__esModule") return;
+  exports[key] = _external[key];
+});
+```
+
+Where the `var _external = require("external")` is specifically detected as well as the `Object.keys(_external)` statement, down to the exact
+for of that entire expression including minor variations of the output. The `_external` and `key` identifiers are carefully matched in this
+detection.
+
+Similarly for TypeScript, `export * from 'external'` is output as:
+
+```js
+"use strict";
+function __export(m) {
+    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+}
+Object.defineProperty(exports, "__esModule", { value: true });
+__export(require("external"));
+```
+
+Where the `__export(require("external"))` statement is explicitly detected as a reexport, including variations `tslib.__export` and `__exportStar`.
 
 ### Environment Support
 
 Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
 
-### Grammar Support
+### JS Grammar Support
 
 * Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
 * Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
@@ -215,37 +246,70 @@ Benchmarks can be run with `npm run bench`.
 
 Current results:
 
+JS Build:
+
 ```
 Module load time
 > 2ms
 Cold Run, All Samples
 test/samples/*.js (3635 KiB)
-> 318ms
+> 333ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (1410 KiB)
-> 18.64ms
+> 16.48ms
 test/samples/angular.min.js (303 KiB)
-> 5.96ms
+> 5.36ms
 test/samples/d3.js (553 KiB)
-> 8.88ms
+> 8.32ms
 test/samples/d3.min.js (250 KiB)
-> 4.88ms
+> 4.28ms
 test/samples/magic-string.js (34 KiB)
 > 1ms
 test/samples/magic-string.min.js (20 KiB)
-> 0.32ms
+> 0.36ms
 test/samples/rollup.js (698 KiB)
-> 11.68ms
+> 10.48ms
 test/samples/rollup.min.js (367 KiB)
-> 7.84ms
+> 6.64ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3635 KiB)
-> 54.48ms
+> 49.28ms
 ```
 
-### Wasm Build
+Wasm Build:
+```
+Module load time
+> 11ms
+Cold Run, All Samples
+test/samples/*.js (3635 KiB)
+> 48ms
+
+Warm Runs (average of 25 runs)
+test/samples/angular.js (1410 KiB)
+> 12.32ms
+test/samples/angular.min.js (303 KiB)
+> 3.76ms
+test/samples/d3.js (553 KiB)
+> 6.08ms
+test/samples/d3.min.js (250 KiB)
+> 3ms
+test/samples/magic-string.js (34 KiB)
+> 0.24ms
+test/samples/magic-string.min.js (20 KiB)
+> 0ms
+test/samples/rollup.js (698 KiB)
+> 7.2ms
+test/samples/rollup.min.js (367 KiB)
+> 4.2ms
+
+Warm Runs, All Samples (average of 25 runs)
+test/samples/*.js (3635 KiB)
+> 33.6ms
+```
+
+### Wasm Build Steps
 
 To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
 

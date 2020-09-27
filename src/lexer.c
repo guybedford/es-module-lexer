@@ -85,6 +85,36 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
     if (ch == 32 || ch < 14 && ch > 8)
       continue;
 
+    if (openTokenDepth == 0) {
+      switch (ch) {
+        case 'i':
+          if (str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't') && keywordStart(pos))
+            throwIfImportStatement();
+          lastTokenPos = pos;
+          continue;
+        case 'r': {
+          uint16_t* startPos = pos;
+          if (tryParseRequire(false) && keywordStart(startPos))
+            tryBacktrackAddStarExportBinding(startPos - 1);
+          lastTokenPos = pos;
+          continue;
+        }
+        case '_':
+          if (str_eq7(pos + 1, '_', 'e', 'x', 'p', 'o', 'r', 't') && (keywordStart(pos) || *(pos - 1) == '.')) {
+            pos += 8;
+            if (str_eq4(pos, 'S', 't', 'a', 'r'))
+              pos += 4;
+            if (*pos == '(') {
+              openTokenPosStack[openTokenDepth++] = lastTokenPos;
+              if (*(++pos) == 'r')
+                tryParseRequire(true);
+            }
+          }
+          lastTokenPos = pos;
+          continue;
+      }
+    }
+
     switch (ch) {
       case 'e':
         if (str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't') && keywordStart(pos)) {
@@ -93,10 +123,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
           else if (openTokenDepth == 0)
             throwIfExportStatement();
         }
-        break;
-      case 'i':
-        if (str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't') && keywordStart(pos))
-          throwIfImportStatement();
         break;
       case 'c':
         if (keywordStart(pos) && str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWs(*(pos + 5)))
@@ -108,25 +134,7 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
         break;
       case 'O':
         if (str_eq5(pos + 1, 'b', 'j', 'e', 'c', 't') && keywordStart(pos))
-          tryParseObjectDefineOrKeys();
-        break;
-      case 'r': {
-        uint16_t* startPos = pos;
-        if (openTokenDepth == 0 && tryParseRequire(false) && keywordStart(startPos))
-          tryBacktrackAddStarExportBinding(startPos - 1);
-        break;
-      }
-      case '_':
-        if (openTokenDepth == 0 && str_eq7(pos + 1, '_', 'e', 'x', 'p', 'o', 'r', 't') && (keywordStart(pos) || *(pos - 1) == '.')) {
-          pos += 8;
-          if (str_eq4(pos, 'S', 't', 'a', 'r'))
-            pos += 4;
-          if (*pos == '(') {
-            openTokenPosStack[openTokenDepth++] = lastTokenPos;
-            if (*(++pos) == 'r')
-              tryParseRequire(true);
-          }
-        }
+          tryParseObjectDefineOrKeys(openTokenDepth == 0);
         break;
       case '(':
         openTokenPosStack[openTokenDepth++] = lastTokenPos;
@@ -255,7 +263,7 @@ void tryBacktrackAddStarExportBinding (uint16_t* bPos) {
   }
 }
 
-void tryParseObjectDefineOrKeys () {
+void tryParseObjectDefineOrKeys (bool keys) {
   pos += 6;
   uint16_t* revertPos = pos - 1;
   uint16_t ch = commentWhitespace();
@@ -287,7 +295,7 @@ void tryParseObjectDefineOrKeys () {
         }
       }
     }
-    else if (ch == 'k' && str_eq3(pos + 1, 'e', 'y', 's')) {
+    else if (keys && ch == 'k' && str_eq3(pos + 1, 'e', 'y', 's')) {
       while (true) {
         pos += 4;
         revertPos = pos - 1;

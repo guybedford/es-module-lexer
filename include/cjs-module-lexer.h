@@ -35,7 +35,7 @@ void tryParseLiteralExports ();
 bool readExportsOrModuleDotExports (uint16_t ch);
 void tryParseModuleExportsDotAssign ();
 void tryParseExportsDotAssign (bool assign);
-void tryParseObjectDefineOrKeys ();
+void tryParseObjectDefineOrKeys (bool keys);
 bool identifier (uint16_t ch);
 
 void throwIfImportStatement ();
