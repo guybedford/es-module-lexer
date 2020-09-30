@@ -160,7 +160,7 @@ Simple object definitions are supported:
 // DETECTS EXPORTS: a, b, c
 module.exports = {
   a,
-  b: 'c',
+  'b': b,
   c: c
 };
 ```
