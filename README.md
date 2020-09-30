@@ -58,9 +58,13 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
 
   // Returns "asdf"
   source.substring(imports[0].s, imports[0].e);
+  // "s" is shorthand for "start"
+  // "e" is shorthand for "end"
 
   // Returns "import { a } from 'asdf';"
   source.substring(imports[0].ss, imports[0].se);
+  // "ss" is shorthand for "statement start"
+  // "se" is shorthand for "statement end"
 
   // Returns "p,q"
   exports.toString();
@@ -74,6 +78,10 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   source.substring(imports[1].s, imports[1].e);
   // Returns "import /*comment!*/ ("
   source.substring(imports[1].d, imports[1].s);
+  // Returns "import /*comment!*/ ('asdf')"
+  source.substring(imports[1].d, imports[1].e + 1);
+  // imports[1].ss and imports[1].se is not meaningful 
+  // because dynamic import is not a statement
 
   // import.meta is indicated by imports[2].d === -2
   // Returns true
