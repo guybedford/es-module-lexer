@@ -249,64 +249,65 @@ Current results:
 JS Build:
 
 ```
+--- JS Build ---
 Module load time
 > 2ms
 Cold Run, All Samples
 test/samples/*.js (3635 KiB)
-> 333ms
+> 311ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (1410 KiB)
-> 16.48ms
+> 14.76ms
 test/samples/angular.min.js (303 KiB)
-> 5.36ms
+> 5.04ms
 test/samples/d3.js (553 KiB)
-> 8.32ms
+> 7.12ms
 test/samples/d3.min.js (250 KiB)
-> 4.28ms
+> 4ms
 test/samples/magic-string.js (34 KiB)
-> 1ms
+> 0.84ms
 test/samples/magic-string.min.js (20 KiB)
-> 0.36ms
+> 0.08ms
 test/samples/rollup.js (698 KiB)
-> 10.48ms
+> 9.08ms
 test/samples/rollup.min.js (367 KiB)
-> 6.64ms
+> 6ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3635 KiB)
-> 49.28ms
+> 41.32ms
 ```
 
 Wasm Build:
 ```
 Module load time
-> 11ms
+> 10ms
 Cold Run, All Samples
 test/samples/*.js (3635 KiB)
-> 48ms
+> 47ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (1410 KiB)
-> 12.32ms
+> 12.96ms
 test/samples/angular.min.js (303 KiB)
-> 3.76ms
+> 4ms
 test/samples/d3.js (553 KiB)
-> 6.08ms
+> 6.12ms
 test/samples/d3.min.js (250 KiB)
-> 3ms
+> 3.08ms
 test/samples/magic-string.js (34 KiB)
-> 0.24ms
+> 0.32ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (698 KiB)
-> 7.2ms
+> 7.8ms
 test/samples/rollup.min.js (367 KiB)
-> 4.2ms
+> 4.64ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3635 KiB)
-> 33.6ms
+> 35.64ms
 ```
 
 ### Wasm Build Steps
