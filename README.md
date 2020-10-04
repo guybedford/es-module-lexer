@@ -109,7 +109,7 @@ EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2
 ```
 
 * The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
-* The reexport specifiers are taken to be the `STRING_LITERAL` slots of all `MODULE_EXPORTS_ASSIGN` as well as all _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
+* The reexport specifiers are taken to be the `STRING_LITERAL` slot of the last `MODULE_EXPORTS_ASSIGN` as well as all _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
 
 ### Parsing Examples
 
@@ -180,16 +180,16 @@ module.exports = {
 
 #### module.exports reexport assignment
 
-Any `module.exports = require('mod')` assignment is detected as a reexport:
+Any `module.exports = require('mod')` assignment is detected as a reexport, but only the last one is returned:
 
 ```js
-// DETECTS REEXPORTS: a, b, c
+// DETECTS REEXPORTS: c
 module.exports = require('a');
 (module => module.exports = require('b'))(NOT_MODULE);
 if (false) module.exports = require('c');
 ```
 
-As a result, the total list of exports would be inferred as the union of all of these reexported modules, which can lead to possible over-classification.
+This is to avoid overclassification in Webpack bundles with externals which include `module.exports = require('external')` in their source for every external dependency.
 
 #### Transpiler Re-exports
 

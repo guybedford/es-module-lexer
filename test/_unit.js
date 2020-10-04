@@ -423,9 +423,8 @@ suite('Lexer', () => {
     `);
     assert.equal(exports.length, 1);
     assert.equal(exports[0], 'asdf');
-    assert.equal(reexports.length, 2);
-    assert.equal(reexports[0], './asdf');
-    assert.equal(reexports[1], './another');
+    assert.equal(reexports.length, 1);
+    assert.equal(reexports[0], './another');
   });
 
   test('Single parse cases', () => {

@@ -10,6 +10,7 @@ let openTokenDepth,
   nextBraceIsClass,
   starExportMap,
   lastStarExportSpecifier,
+  lastExportsAssignSpecifier,
   _exports,
   reexports;
 
@@ -25,10 +26,16 @@ function resetState () {
   nextBraceIsClass = false;
   starExportMap = Object.create(null);
   lastStarExportSpecifier = null;
+  lastExportsAssignSpecifier = null;
 
   _exports = new Set();
   reexports = new Set();
 }
+
+// RequireType
+const Import = 0;
+const ExportAssign = 1;
+const ExportStar = 2;
 
 const strictReserved = new Set(['implements', 'interface', 'let', 'package', 'private', 'protected', 'public', 'static', 'yield', 'enum']);
 
@@ -42,6 +49,8 @@ module.exports = function parseCJS (source, name = '@') {
     e.loc = pos;
     throw e;
   }
+  if (lastExportsAssignSpecifier)
+    reexports.add(lastExportsAssignSpecifier);
   const result = { exports: [..._exports], reexports: [...reexports] };
   resetState();
   return result;
@@ -85,7 +94,7 @@ function parseSource (cjsSource) {
           continue;
         case 114/*r*/:
           const startPos = pos;
-          if (tryParseRequire(false) && keywordStart(startPos))
+          if (tryParseRequire(Import) && keywordStart(startPos))
             tryBacktrackAddStarExportBinding(startPos - 1);
           lastTokenPos = pos;
           continue;
@@ -97,7 +106,7 @@ function parseSource (cjsSource) {
             if (source.charCodeAt(pos) === 40/*(*/) {
               openTokenPosStack[openTokenDepth++] = lastTokenPos;
               if (source.charCodeAt(++pos) === 114/*r*/)
-                tryParseRequire(true);
+                tryParseRequire(ExportStar);
             }
           }
           lastTokenPos = pos;
@@ -623,14 +632,14 @@ function tryParseExportsDotAssign (assign) {
 
         // require('...')
         if (ch === 114/*r*/)
-          tryParseRequire(true);
+          tryParseRequire(ExportAssign);
       }
     }
   }
   pos = revertPos;
 }
 
-function tryParseRequire (directStarExport) {
+function tryParseRequire (requireType) {
   // require('...')
   if (source.startsWith('equire', pos + 1)) {
     pos += 7;
@@ -645,13 +654,17 @@ function tryParseRequire (directStarExport) {
         const reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch === 41/*)*/) {
-          if (directStarExport) {
-            reexports.add(source.slice(reexportStart, reexportEnd));
+          switch (requireType) {
+            case ExportAssign:
+              lastExportsAssignSpecifier = source.slice(reexportStart, reexportEnd);
+              return true;
+            case ExportStar:
+              reexports.add(source.slice(reexportStart, reexportEnd));
+              return true;
+            default:
+              lastStarExportSpecifier = source.slice(reexportStart, reexportEnd);
+              return true;
           }
-          else {
-            lastStarExportSpecifier = source.slice(reexportStart, reexportEnd);
-          }
-          return true;
         }
       }
       else if (ch === 34/*"*/) {
@@ -659,13 +672,17 @@ function tryParseRequire (directStarExport) {
         const reexportEnd = pos++;
         ch = commentWhitespace();
         if (ch === 41/*)*/) {
-          if (directStarExport) {
-            reexports.add(source.slice(reexportStart, reexportEnd));
+          switch (requireType) {
+            case ExportAssign:
+              lastExportsAssignSpecifier = source.slice(reexportStart, reexportEnd);
+              return true;
+            case ExportStar:
+              reexports.add(source.slice(reexportStart, reexportEnd));
+              return true;
+            default:
+              lastStarExportSpecifier = source.slice(reexportStart, reexportEnd);
+              return true;
           }
-          else {
-            lastStarExportSpecifier = source.slice(reexportStart, reexportEnd);
-          }
-          return true;
         }
       }
     }

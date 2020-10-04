@@ -29,8 +29,14 @@ void bail (uint32_t err);
 
 bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t*, const uint16_t*), void (*addReexport)(const uint16_t*, const uint16_t*));
 
+enum RequireType {
+  Import,
+  ExportAssign,
+  ExportStar
+};
+
 void tryBacktrackAddStarExportBinding (uint16_t* pos);
-bool tryParseRequire (bool directStarExport);
+bool tryParseRequire (enum RequireType requireType);
 void tryParseLiteralExports ();
 bool readExportsOrModuleDotExports (uint16_t ch);
 void tryParseModuleExportsDotAssign ();
