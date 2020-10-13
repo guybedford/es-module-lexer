@@ -29,7 +29,7 @@ function copyBE (src, outBuf16) {
   let i = 0;
   while (i < len) {
     const ch = src.charCodeAt(i);
-    outBuf16[i++] = (ch & 0xff) << 8 | (ch & 0xff0) >> 8;
+    outBuf16[i++] = (ch & 0xff) << 8 | ch >>> 8;
   }
 }
 
