@@ -398,6 +398,61 @@ function tryParseObjectDefineOrKeys (keys) {
         }
         else break;
 
+        // `if (` IDENTIFIER$2 `in` EXPORTS_IDENTIFIER `&&` EXPORTS_IDENTIFIER `[` IDENTIFIER$2 `] ===` IDENTIFIER$1 `[` IDENTIFIER$2 `]) return` `;`?
+        if (ch === 105/*i*/ && source.startsWith('f ', pos + 1)) {
+          pos += 3;
+          ch = commentWhitespace();
+          if (ch !== 40/*(*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (!source.startsWith(it_id, pos)) break;
+          pos += it_id.length;
+          ch = commentWhitespace();
+          if (ch !== 105/*i*/ || !source.startsWith('n ', pos + 1)) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (!readExportsOrModuleDotExports(ch)) break;
+          ch = commentWhitespace();
+          if (ch !== 38/*&*/ || source.charCodeAt(pos + 1) !== 38/*&*/) break;
+          pos += 2;
+          ch = commentWhitespace();
+          if (!readExportsOrModuleDotExports(ch)) break;
+          ch = commentWhitespace();
+          if (ch !== 91/*[*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (!source.startsWith(it_id, pos)) break;
+          pos += it_id.length;
+          ch = commentWhitespace();
+          if (ch !== 93/*]*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch !== 61/*=*/ || !source.startsWith('==', pos + 1)) break;
+          pos += 3;
+          ch = commentWhitespace();
+          if (!source.startsWith(id, pos)) break;
+          pos += id.length;
+          ch = commentWhitespace();
+          if (ch !== 91/*[*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (!source.startsWith(it_id, pos)) break;
+          pos += it_id.length;
+          ch = commentWhitespace();
+          if (ch !== 93/*]*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch !== 41/*)*/) break;
+          pos++;
+          ch = commentWhitespace();
+          if (ch !== 114/*r*/ || !source.startsWith('eturn', pos + 1)) break;
+          pos += 6;
+          ch = commentWhitespace();
+          if (ch === 59/*;*/)
+            pos++;
+          ch = commentWhitespace();
+        }
+
         // EXPORTS_IDENTIFIER `[` IDENTIFIER$2 `] =` IDENTIFIER$1 `[` IDENTIFIER$2 `]`
         if (readExportsOrModuleDotExports(ch)) {
           ch = commentWhitespace();
