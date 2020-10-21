@@ -10,7 +10,6 @@ let openTokenDepth,
   nextBraceIsClass,
   starExportMap,
   lastStarExportSpecifier,
-  lastExportsAssignSpecifier,
   _exports,
   reexports;
 
@@ -26,7 +25,6 @@ function resetState () {
   nextBraceIsClass = false;
   starExportMap = Object.create(null);
   lastStarExportSpecifier = null;
-  lastExportsAssignSpecifier = null;
 
   _exports = new Set();
   reexports = new Set();
@@ -49,8 +47,6 @@ module.exports = function parseCJS (source, name = '@') {
     e.loc = pos;
     throw e;
   }
-  if (lastExportsAssignSpecifier)
-    reexports.add(lastExportsAssignSpecifier);
   const result = { exports: [..._exports], reexports: [...reexports] };
   resetState();
   return result;
@@ -677,6 +673,8 @@ function tryParseExportsDotAssign (assign) {
     // module.exports =
     case 61/*=*/: {
       if (assign) {
+        if (reexports.size)
+          reexports = new Set();
         pos++;
         ch = commentWhitespace();
         // { ... }
@@ -696,9 +694,9 @@ function tryParseExportsDotAssign (assign) {
 
 function tryParseRequire (requireType) {
   // require('...')
+  const revertPos = pos;
   if (source.startsWith('equire', pos + 1)) {
     pos += 7;
-    const revertPos = pos - 1;
     let ch = commentWhitespace();
     if (ch === 40/*(*/) {
       pos++;
@@ -711,7 +709,7 @@ function tryParseRequire (requireType) {
         if (ch === 41/*)*/) {
           switch (requireType) {
             case ExportAssign:
-              lastExportsAssignSpecifier = source.slice(reexportStart, reexportEnd);
+              reexports.add(source.slice(reexportStart, reexportEnd));
               return true;
             case ExportStar:
               reexports.add(source.slice(reexportStart, reexportEnd));
@@ -729,7 +727,7 @@ function tryParseRequire (requireType) {
         if (ch === 41/*)*/) {
           switch (requireType) {
             case ExportAssign:
-              lastExportsAssignSpecifier = source.slice(reexportStart, reexportEnd);
+              reexports.add(source.slice(reexportStart, reexportEnd));
               return true;
             case ExportStar:
               reexports.add(source.slice(reexportStart, reexportEnd));
@@ -765,6 +763,17 @@ function tryParseLiteralExports () {
         ch = source.charCodeAt(pos);
       }
       addExport(source.slice(startPos, endPos));
+    }
+    else if (ch === 46/*.*/ && source.startsWith('..', pos + 1)) {
+      pos += 3;
+      if (source.charCodeAt(pos) === 114/*r*/ && tryParseRequire(ExportAssign)) {
+        pos++;
+      }
+      else if (!identifier()) {
+        pos = revertPos;
+        return;
+      }
+      ch = commentWhitespace();
     }
     else if (ch === 39/*'*/ || ch === 34/*"*/) {
       const startPos = ++pos;

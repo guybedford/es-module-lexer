@@ -119,9 +119,14 @@ void _addReexport (const uint16_t* start, const uint16_t* end) {
   reexport->end = end;
   reexport->next = NULL;
 }
+void _clearReexports () {
+  reexport_write_head = NULL;
+  first_reexport = NULL;
+}
 void (*addExport)(const uint16_t*, const uint16_t*) = &_addExport;
 void (*addReexport)(const uint16_t*, const uint16_t*) = &_addReexport;
-bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t* start, const uint16_t* end), void (*addReexport)(const uint16_t* start, const uint16_t* end));
+void (*clearReexports)() = &_clearReexports;
+bool parseCJS (uint16_t* source, uint32_t sourceLen, void (*addExport)(const uint16_t* start, const uint16_t* end), void (*addReexport)(const uint16_t* start, const uint16_t* end), void (*clearReexports)());
 
 enum RequireType {
   Import,

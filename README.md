@@ -82,11 +82,13 @@ EXPORTS_LITERAL_COMPUTED_ASSIGN: EXPORTS_IDENTIFIER COMMENT_SPACE `[` COMMENT_SP
 
 EXPORTS_LITERAL_PROP: (IDENTIFIER (COMMENT_SPACE `:` COMMENT_SPACE IDENTIFIER)?) | (IDENTIFIER_STRING COMMENT_SPACE `:` COMMENT_SPACE IDENTIFIER)
 
+EXPORTS_SPREAD: `...` COMMENT_SPACE (IDENTIFIER | REQUIRE)
+
 EXPORTS_MEMBER: EXPORTS_DOT_ASSIGN | EXPORTS_LITERAL_COMPUTED_ASSIGN
 
 EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT_SPACE `(` EXPORTS_IDENTIFIER COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
 
-EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
+EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP | EXPORTS_SPREAD) COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
 
 REQUIRE: `require` COMMENT_SPACE `(` COMMENT_SPACE STRING_LITERAL COMMENT_SPACE `)`
 
@@ -112,7 +114,9 @@ EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2
 ```
 
 * The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
-* The reexport specifiers are taken to be the `STRING_LITERAL` slot of the last `MODULE_EXPORTS_ASSIGN` as well as all _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
+* The reexport specifiers are taken to be the the combination of:
+  1. The `REQUIRE` matches of the last matched of either `MODULE_EXPORTS_ASSIGN` or `EXPORTS_LITERAL`.
+  2. All _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
 
 ### Parsing Examples
 
@@ -164,16 +168,18 @@ Simple object definitions are supported:
 module.exports = {
   a,
   'b': b,
-  c: c
+  c: c,
+  ...d
 };
 ```
 
-Object properties that are not identifiers or string expressions will bail out of the object detection:
+Object properties that are not identifiers or string expressions will bail out of the object detection, while spreads are ignored:
 
 ```js
 // DETECTS EXPORTS: a, b
 module.exports = {
   a,
+  ...d,
   b: require('c'),
   c: "not detected since require('c') above bails the object detection"
 }
@@ -192,7 +198,18 @@ module.exports = require('a');
 if (false) module.exports = require('c');
 ```
 
-This is to avoid overclassification in Webpack bundles with externals which include `module.exports = require('external')` in their source for every external dependency.
+This is to avoid over-classification in Webpack bundles with externals which include `module.exports = require('external')` in their source for every external dependency.
+
+In exports object assignment, any spread of `require()` are detected as multiple separate reexports:
+
+```js
+// DETECTS REEXPORTS: a, b
+module.exports = require('ignored');
+module.exports = {
+  ...require('a'),
+  ...require('b')
+};
+```
 
 #### Transpiler Re-exports
 

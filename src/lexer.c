@@ -21,8 +21,6 @@ uint16_t* end;
 uint16_t* templateStack;
 uint16_t** openTokenPosStack;
 StarExportBinding* starExportStack;
-uint16_t* reexportAssignStart;
-uint16_t* reexportAssignEnd;
 bool nextBraceIsClass;
 
 uint16_t* lastReexportStart;
@@ -43,9 +41,10 @@ const StarExportBinding* STAR_EXPORT_STACK_END = &starExportStack_[MAX_STAR_EXPO
 
 void (*addExport)(const uint16_t*, const uint16_t*);
 void (*addReexport)(const uint16_t*, const uint16_t*);
+void (*clearReexports)();
 
 // Note: parsing is based on the _assumption_ that the source is already valid
-bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const uint16_t*, const uint16_t*), void (*_addReexport)(const uint16_t*, const uint16_t*)) {
+bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const uint16_t*, const uint16_t*), void (*_addReexport)(const uint16_t*, const uint16_t*), void (*_clearReexports)()) {
   source = _source;
   sourceLen = _sourceLen;
   if (_addExport)
@@ -64,8 +63,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
   openTokenPosStack = &openTokenPosStack_[0];
   starExportStack = &starExportStack_[0];
   nextBraceIsClass = false;
-  reexportAssignStart = NULL;
-  reexportAssignEnd = NULL;
 
   pos = (uint16_t*)(source - 1);
   uint16_t ch = '\0';
@@ -220,9 +217,6 @@ bool parseCJS (uint16_t* _source, uint32_t _sourceLen, void (*_addExport)(const 
 
   if (templateDepth != UINT16_MAX || openTokenDepth || has_error)
     return false;
-
-  if (reexportAssignStart)
-    addReexport(reexportAssignStart, reexportAssignEnd);
 
   // success
   return true;
@@ -700,6 +694,7 @@ void tryParseExportsDotAssign (bool assign) {
     // module.exports =
     case '=': {
       if (assign) {
+        clearReexports();
         pos++;
         ch = commentWhitespace();
         // { ... }
@@ -718,10 +713,10 @@ void tryParseExportsDotAssign (bool assign) {
 }
 
 bool tryParseRequire (enum RequireType requireType) {
+  uint16_t* revertPos = pos;
   // require('...')
   if (str_eq6(pos + 1, 'e', 'q', 'u', 'i', 'r', 'e')) {
     pos += 7;
-    uint16_t* revertPos = pos - 1;
     uint16_t ch = commentWhitespace();
     if (ch == '(') {
       pos++;
@@ -737,8 +732,7 @@ bool tryParseRequire (enum RequireType requireType) {
               addReexport(reexportStart, reexportEnd);
               return true;
             case ExportAssign:
-              reexportAssignStart = reexportStart;
-              reexportAssignEnd = reexportEnd;
+              addReexport(reexportStart, reexportEnd);
               return true;
             default:
               starExportStack->specifier_start = reexportStart;
@@ -757,8 +751,7 @@ bool tryParseRequire (enum RequireType requireType) {
               addReexport(reexportStart, reexportEnd);
               return true;
             case ExportAssign:
-              reexportAssignStart = reexportStart;
-              reexportAssignEnd = reexportEnd;
+              addReexport(reexportStart, reexportEnd);
               return true;
             default:
               starExportStack->specifier_start = reexportStart;
@@ -811,6 +804,17 @@ void tryParseLiteralExports () {
           addExport(startPos, endPos);
         }
       }
+    }
+    else if (ch == '.' && str_eq2(pos + 1, '.', '.')) {
+      pos += 3;
+      if (*pos == 'r' && tryParseRequire(ExportAssign)) {
+        pos++;
+      }
+      else if (!identifier(*pos)) {
+        pos = revertPos;
+        return;
+      }
+      ch = commentWhitespace();
     }
     else {
       pos = revertPos;

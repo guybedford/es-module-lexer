@@ -234,6 +234,25 @@ suite('Lexer', () => {
     assert.equal(exports.length, 0);
   });
 
+  test('module exports reexport spread', () => {
+    const { exports, reexports } = parse(`
+      module.exports = {
+        ...a,
+        ...b,
+        ...require('dep1'),
+        c: d,
+        ...require('dep2'),
+        name
+      };
+    `);
+    assert.equal(exports.length, 2);
+    assert.equal(exports[0], 'c');
+    assert.equal(exports[1], 'name');
+    assert.equal(reexports.length, 2);
+    assert.equal(reexports[0], 'dep1');
+    assert.equal(reexports[1], 'dep2');
+  });
+
   test('Regexp case', () => {
     parse(`
       class Number {
