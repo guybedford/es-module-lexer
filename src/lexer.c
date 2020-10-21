@@ -344,8 +344,8 @@ void tryParseObjectDefineOrKeys (bool keys) {
         if (ch != '{') break;
         pos++;
         ch = commentWhitespace();
-        if (ch != 'i' || !str_eq2(pos + 1, 'f', ' ')) break;
-        pos += 3;
+        if (ch != 'i' || *(pos + 1) != 'f') break;
+        pos += 2;
         ch = commentWhitespace();
         if (ch != '(') break;
         pos++;
@@ -414,8 +414,8 @@ void tryParseObjectDefineOrKeys (bool keys) {
 
 
         // `if (` IDENTIFIER$2 `in` EXPORTS_IDENTIFIER `&&` EXPORTS_IDENTIFIER `[` IDENTIFIER$2 `] ===` IDENTIFIER$1 `[` IDENTIFIER$2 `]) return` `;`?
-        if (ch == 'i' && str_eq2(pos + 1, 'f', ' ')) {
-          pos += 3;
+        if (ch == 'i' && *(pos + 1) == 'f') {
+          pos += 2;
           ch = commentWhitespace();
           if (ch != '(') break;
           pos++;

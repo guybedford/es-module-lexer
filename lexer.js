@@ -330,8 +330,8 @@ function tryParseObjectDefineOrKeys (keys) {
         if (ch !== 123/*{*/) break;
         pos++;
         ch = commentWhitespace();
-        if (ch !== 105/*i*/ || !source.startsWith('f ', pos + 1)) break;
-        pos += 3;
+        if (ch !== 105/*i*/ || source.charCodeAt(pos + 1) !== 102/*f*/) break;
+        pos += 2;
         ch = commentWhitespace();
         if (ch !== 40/*(*/) break;
         pos++;
@@ -399,8 +399,8 @@ function tryParseObjectDefineOrKeys (keys) {
         else break;
 
         // `if (` IDENTIFIER$2 `in` EXPORTS_IDENTIFIER `&&` EXPORTS_IDENTIFIER `[` IDENTIFIER$2 `] ===` IDENTIFIER$1 `[` IDENTIFIER$2 `]) return` `;`?
-        if (ch === 105/*i*/ && source.startsWith('f ', pos + 1)) {
-          pos += 3;
+        if (ch === 105/*i*/ && source.charCodeAt(pos + 1) === 102/*f*/) {
+          pos += 2;
           ch = commentWhitespace();
           if (ch !== 40/*(*/) break;
           pos++;
