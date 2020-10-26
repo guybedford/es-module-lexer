@@ -332,7 +332,7 @@ test/samples/*.js (3635 KiB)
 
 ### Wasm Build Steps
 
-To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
+To build download the WASI SDK from https://github.com/WebAssembly/wasi-sdk/releases.
 
 The Makefile assumes the existence of "wasi-sdk-11.0" and "wabt" (optional) as sibling folders to this project.
 
