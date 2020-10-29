@@ -453,10 +453,8 @@ suite('Lexer', () => {
       Object.defineProperty(module.exports, 'thing', { value: true });
       Object.defineProperty(exports, "__esModule", { value: true });
     `);
-    assert.equal(exports.length, 3);
-    assert.equal(exports[0], 'namedExport');
-    assert.equal(exports[1], 'thing');
-    assert.equal(exports[2], '__esModule');
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0], '__esModule');
   });
 
   test('module assign', () => {

@@ -86,7 +86,7 @@ EXPORTS_SPREAD: `...` COMMENT_SPACE (IDENTIFIER | REQUIRE)
 
 EXPORTS_MEMBER: EXPORTS_DOT_ASSIGN | EXPORTS_LITERAL_COMPUTED_ASSIGN
 
-EXPORTS_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT_SPACE `(` EXPORTS_IDENTIFIER COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
+ES_MODULE_DEFINE: `Object` COMMENT_SPACE `.` COMMENT_SPACE `defineProperty COMMENT_SPACE `(` COMMENT_SPACE `__esModule` COMMENT_SPACE `,` COMMENT_SPACE IDENTIFIER_STRING
 
 EXPORTS_LITERAL: MODULE_EXPORTS COMMENT_SPACE `=` COMMENT_SPACE `{` COMMENT_SPACE (EXPORTS_LITERAL_PROP | EXPORTS_SPREAD) COMMENT_SPACE `,` COMMENT_SPACE)+ `}`
 
@@ -113,7 +113,9 @@ EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2
   `})`
 ```
 
-* The returned export names are the matched `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER`, `EXPORTS_DEFINE` and `EXPORTS_LITERAL` matches.
+* The returned export names are taken to be the combination of:
+  1. `IDENTIFIER` and `IDENTIFIER_STRING` slots for all `EXPORTS_MEMBER` and `EXPORTS_LITERAL` matches.
+  2. `__esModule` if there is an `ES_MODULE_DEFINE` match.
 * The reexport specifiers are taken to be the the combination of:
   1. The `REQUIRE` matches of the last matched of either `MODULE_EXPORTS_ASSIGN` or `EXPORTS_LITERAL`.
   2. All _top-level_ `EXPORT_STAR` `REQUIRE` matches and `EXPORTS_ASSIGN` matches whose `IDENTIFIER` also matches the first `IDENTIFIER` in `EXPORT_STAR_LIB`.
@@ -125,11 +127,10 @@ EXPORT_STAR_LIB: `Object.keys(` IDENTIFIER$1 `).forEach(function (` IDENTIFIER$2
 The basic matching rules for named exports are `exports.name`, `exports['name']` or `Object.defineProperty(exports, 'name', ...)`. This matching is done without scope analysis and regardless of the expression position:
 
 ```js
-// DETECTS EXPORTS: a, b, c
+// DETECTS EXPORTS: a, b
 (function (exports) {
   exports.a = 'a'; 
   exports['b'] = 'b';
-  Object.defineProperty(exports, 'c', { value: 'c' });
 })(exports);
 ```
 
@@ -141,7 +142,7 @@ Because there is no scope analysis, the above detection may overclassify:
   exports.a = 'a';
   exports['b'] = 'b';
   if (false)
-    Object.defineProperty(exports, 'c', { value: 'c' });
+    exports.c = 'c';
 })(NOT_EXPORTS, NOT_OBJECT);
 ```
 
@@ -149,12 +150,23 @@ It will in turn underclassify in cases where the identifiers are renamed:
 
 ```js
 // DETECTS: NO EXPORTS
-(function (e, defineProperty) {
+(function (e) {
   e.a = 'a';
   e['b'] = 'b';
-  defineProperty(e, 'c', { value: 'c' });
-})(exports, defineProperty);
+})(exports);
 ```
+
+#### __esModule Detection
+
+In addition, `__esModule` is detected as an export when set by `Object.defineProperty`:
+
+```js
+// DETECTS: __esModule
+Object.defineProperty(exports, 'a', { value: 'a' });
+Object.defineProperty(exports, '__esModule', { value: true });
+```
+
+No other named exports are detected for `defineProperty` calls in order not to trigger getters or non-enumerable properties unnecessarily.
 
 #### Exports Object Assignment
 

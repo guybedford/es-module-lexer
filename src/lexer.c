@@ -290,7 +290,8 @@ void tryParseObjectDefineOrKeys (bool keys) {
             uint16_t* exportPos = ++pos;
             if (identifier(*pos) && *pos == ch) {
               // revert for "("
-              addExport(exportPos, pos);
+              if (pos - exportPos == 10 && str_eq10(exportPos, '_', '_', 'e', 's', 'M', 'o', 'd', 'u', 'l', 'e'))
+                addExport(exportPos, pos);
             }
           }
         }
