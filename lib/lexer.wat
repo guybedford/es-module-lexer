@@ -1530,6 +1530,26 @@
           local.get 0
           i32.ne
           br_if 1 (;@2;)
+          local.get 2
+          local.get 3
+          i32.sub
+          i32.const 20
+          i32.ne
+          br_if 1 (;@2;)
+          local.get 3
+          i32.const 95
+          i32.const 95
+          i32.const 101
+          i32.const 115
+          i32.const 77
+          i32.const 111
+          i32.const 100
+          i32.const 117
+          i32.const 108
+          i32.const 101
+          call 45
+          i32.eqz
+          br_if 1 (;@2;)
           local.get 3
           local.get 2
           i32.const 0
