@@ -138,46 +138,46 @@ Benchmarks can be run with `npm run bench`.
 Current results:
 
 ```
+Module load time
+> 7ms
 Cold Run, All Samples
 test/samples/*.js (3057 KiB)
-> 24ms
+> 33ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (719 KiB)
-> 5.12ms
-test/samples/angular.min.js (188 KiB)
-> 3.04ms
-test/samples/d3.js (491 KiB)
 > 4.08ms
+test/samples/angular.min.js (188 KiB)
+> 2.08ms
+test/samples/d3.js (491 KiB)
+> 4.72ms
 test/samples/d3.min.js (274 KiB)
-> 2.04ms
+> 3ms
 test/samples/magic-string.js (34 KiB)
-> 0ms
+> 0.04ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (902 KiB)
-> 5.92ms
+> 8.16ms
 test/samples/rollup.min.js (429 KiB)
-> 3.08ms
+> 4.28ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3057 KiB)
-> 17.4ms
+> 25.68ms
 ```
 
 ### Building
 
-To build download the WASI SDK from https://github.com/CraneStation/wasi-sdk/releases.
+To build download the WASI SDK from https://github.com/WebAssembly/wasi-sdk/releases.
 
-The Makefile assumes the existence of "wasi-sdk-10.0", "binaryen" and "wabt" (both optional) as sibling folders to this project.
+The Makefile assumes the existence of "wasi-sdk-11.0" and "wabt" (optional) as sibling folders to this project.
 
 The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
 
 On Windows it may be preferable to use the Linux subsystem.
 
 After the Web Assembly build, the CJS build can be triggered via `npm run build`.
-
-Optimization passes are run with [Binaryen](https://github.com/WebAssembly/binaryen) prior to publish to reduce the Web Assembly footprint.
 
 ### License
 
