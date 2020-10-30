@@ -9,8 +9,5 @@ lib/lexer.wasm: src/lexer.h src/lexer.c
 	-Wno-logical-op-parentheses -Wno-parentheses \
 	-Oz
 
-optimize: lib/lexer.wasm
-	../binaryen/bin/wasm-opt -Oz lib/lexer.wasm -o lib/lexer.wasm
-
 clean:
 	rm lib/*
