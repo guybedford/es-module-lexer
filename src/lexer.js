@@ -22,7 +22,6 @@ export function parse (source, name = '@') {
     const s = wasm.is();
     const e = wasm.ie();
     let n;
-    // only eval safe known strings!
     if (wasm.ip())
       n = decode(source.slice(s - 1, e + 1));
     imports.push({ n, s, e, ss: wasm.ss(), se: wasm.se(), d: wasm.id() });
