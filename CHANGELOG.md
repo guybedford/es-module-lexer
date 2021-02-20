@@ -1,3 +1,7 @@
+0.4.0
+* Adds support for .n property with unescaped specifier string (https://github.com/guybedford/es-module-lexer/pull/62)
+* Only use atob global in browser environments (https://github.com/guybedford/es-module-lexer/pull/58)
+
 0.3.13
 * Fix comment support in export var statements (https://github.com/guybedford/es-module-lexer/pull/35)
 
