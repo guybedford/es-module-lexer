@@ -75,7 +75,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   // Returns true
   imports[1].d > -1;
 
-  // Returns "'asdf'"
+  // Returns "asdf"
   imports[1].n
   source.substring(imports[1].s, imports[1].e);
   // Returns "import /*comment!*/ ("
