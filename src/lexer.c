@@ -204,6 +204,29 @@ void tryParseImportStatement () {
         return;
       // dynamic import indicated by positive d
       addImport(startPos, pos + 1, 0, startPos);
+      // try parse a string, to record a safe dynamic import string
+      pos++;
+      ch = commentWhitespace();
+      if (ch == '\'') {
+        singleQuoteString();
+      }
+      else if (ch == '"') {
+        doubleQuoteString();
+      }
+      else {
+        pos--;
+        return;
+      }
+      pos++;
+      ch = commentWhitespace();
+      if (ch == ')') {
+        openTokenDepth--;
+        import_write_head->end = pos;
+        import_write_head->safe = true;
+      }
+      else {
+        pos--;
+      }
       return;
     // import.meta
     case '.':

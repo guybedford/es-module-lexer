@@ -18,8 +18,22 @@ export function parse (source, name = '@') {
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   const imports = [], exports = [];
-  while (wasm.ri()) imports.push({ s: wasm.is(), e: wasm.ie(),  ss: wasm.ss(), se: wasm.se(), d: wasm.id() });
+  while (wasm.ri()) {
+    const s = wasm.is();
+    const e = wasm.ie();
+    let n;
+    if (wasm.ip())
+      n = decode(source.slice(s - 1, e + 1));
+    imports.push({ n, s, e, ss: wasm.ss(), se: wasm.se(), d: wasm.id() });
+  }
   while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
+
+  function decode (str) {
+    try {
+      return (0, eval)(str);
+    }
+    catch {}
+  }
 
   return [imports, exports, !!wasm.f()];
 }

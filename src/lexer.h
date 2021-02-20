@@ -19,6 +19,7 @@ struct Import {
   const char16_t* statement_start;
   const char16_t* statement_end;
   const char16_t* dynamic;
+  bool safe;
   struct Import* next;
 };
 typedef struct Import Import;
@@ -99,6 +100,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->start = start;
   import->end = end;
   import->dynamic = dynamic;
+  import->safe = dynamic == STANDARD_IMPORT;
   import->next = NULL;
 }
 
@@ -144,6 +146,10 @@ uint32_t id () {
   else if (dynamic == IMPORT_META)
     return -2;
   return import_read_head->dynamic - source;
+}
+// getImportSafeString
+uint32_t ip () {
+  return import_read_head->safe;
 }
 // getExportStart
 uint32_t es () {
