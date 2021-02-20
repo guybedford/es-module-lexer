@@ -93,7 +93,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
 })();
 ```
 
-### Encoding
+### Escape Sequences
 
 To handle escape sequences in specifier strings, the `.n` field of imported specifiers will be provided where possible.
 
