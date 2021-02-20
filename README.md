@@ -57,6 +57,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   const [imports, exports] = parse(source, 'optional-sourcename');
 
   // Returns "asdf"
+  imports[0].n
   source.substring(imports[0].s, imports[0].e);
   // "s" is shorthand for "start"
   // "e" is shorthand for "end"
@@ -75,6 +76,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   imports[1].d > -1;
 
   // Returns "'asdf'"
+  imports[1].n
   source.substring(imports[1].s, imports[1].e);
   // Returns "import /*comment!*/ ("
   source.substring(imports[1].d, imports[1].s);
@@ -90,6 +92,14 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   source.substring(imports[2].s, imports[2].e);
 })();
 ```
+
+### Encoding
+
+Both specifiers and export names support escape sequences, which will be decoded where possible into the `.n` field of exports and imports.
+
+For this reason, this field should be used instead of raw slices where possible.
+
+For dynamic import expressions, this field will be empty if not a valid JS string.
 
 ### Facade Detection
 
