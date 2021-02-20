@@ -66,12 +66,16 @@ suite('Lexer', () => {
       import './\\u{20204}.js';
       import('./\\u{20204}.js');
       import('./\\u{20204}.js' + dyn);
+      import('./\\u{20204}.js' );
+      import('./\\u{20204}.js' ());
     `);
-    assert.equal(imports.length, 4);
+    assert.equal(imports.length, 6);
     assert.equal(imports[0].n, './abc.js');
     assert.equal(imports[1].n, './𠈄.js');
     assert.equal(imports[2].n, './𠈄.js');
     assert.equal(imports[3].n, undefined);
+    assert.equal(imports[4].n, './𠈄.js');
+    assert.equal(imports[5].n, undefined);
   })
 
   test('Regexp case', () => {

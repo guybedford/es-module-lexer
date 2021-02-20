@@ -224,6 +224,9 @@ void tryParseImportStatement () {
         import_write_head->end = pos;
         import_write_head->safe = true;
       }
+      else {
+        pos--;
+      }
       return;
     // import.meta
     case '.':
