@@ -95,9 +95,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
 
 ### Encoding
 
-Both specifiers and export names support escape sequences, which will be decoded where possible into the `.n` field of exports and imports.
-
-For this reason, this field should be used instead of raw slices where possible.
+To handle escape sequences in specifier strings, the `.n` field of imported specifiers will be provided where possible.
 
 For dynamic import expressions, this field will be empty if not a valid JS string.
 
