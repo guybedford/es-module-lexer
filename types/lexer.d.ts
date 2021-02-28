@@ -19,7 +19,7 @@ export interface ImportSpecifier {
    * imports3[0].n;
    * // Returns undefined
    */
-  readonly n?: string;
+  readonly n: string | undefined;
   /**
    * Start of module specifier
    * 
