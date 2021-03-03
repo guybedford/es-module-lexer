@@ -60,6 +60,11 @@ export { d as a, p as b, z as c, r as d, q }`;
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('Export', () => {
+      const [, exports] = parse(`export var p=5`);
+      assert.equal(exports[0], 'p');
+  });
+
   test('String encoding', () => {
     const [imports, exports] = parse(`
       import './\\x61\\x62\\x63.js';
