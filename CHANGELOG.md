@@ -1,3 +1,7 @@
+0.4.1
+* Add TypeScript types (https://github.com/guybedford/es-module-lexer/pull/63, https://github.com/guybedford/es-module-lexer/pull/64 @xiaoxiangmoe)
+* Better export detection before bailing on `=` (https://github.com/guybedford/es-module-lexer/pull/66)
+
 0.4.0
 * Adds support for .n property with unescaped specifier string (https://github.com/guybedford/es-module-lexer/pull/62)
 * Only use atob global in browser environments (https://github.com/guybedford/es-module-lexer/pull/58)
