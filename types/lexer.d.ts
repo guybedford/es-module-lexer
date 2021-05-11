@@ -41,7 +41,7 @@ export interface ImportSpecifier {
    * @example
    * const source = `import { a } from 'asdf'`;
    * const [imports, exports] = parse(source);
-   * source.substring(imports[0].s, imports[0].e);
+   * source.substring(imports[0].ss, imports[0].se);
    * // Returns "import { a } from 'asdf';"
    */
   readonly ss: number;
