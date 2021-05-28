@@ -57,7 +57,7 @@ function copyLE (src, outBuf16) {
 let wasm;
 
 export const init = WebAssembly.compile(
-  (binary => typeof atob === 'function' ? Uint8Array.from(atob(binary), x => x.charCodeAt(0)) : Buffer.from(binary, 'base64'))
+  (binary => typeof Buffer !== 'undefined' ? Buffer.from(binary, 'base64') : Uint8Array.from(atob(binary), x => x.charCodeAt(0)))
   ('WASM_BINARY')
 )
 .then(WebAssembly.instantiate)
