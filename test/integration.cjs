@@ -1,5 +1,4 @@
 const fs = require('fs');
-const assert = require('assert');
 
 let parse;
 const init = (async () => {

@@ -19,7 +19,7 @@ suite('Invalid syntax', () => {
       parse(source);
     }
     catch (err) {
-      assert.equal(err.message, 'Parse error @:2:19');
+      assert.strictEqual(err.message, 'Parse error @:2:19');
     }
   });
 
@@ -41,7 +41,7 @@ export { d as a, p as b, z as c, r as d, q }`;
       parse(source);
     }
     catch (err) {
-      assert.equal(err.message, 'Parse error @:9:5');
+      assert.strictEqual(err.message, 'Parse error @:9:5');
     }
   });
 
@@ -52,7 +52,7 @@ export { d as a, p as b, z as c, r as d, q }`;
       assert(false, 'Should error');
     }
     catch (err) {
-      assert.equal(err.idx, 11);
+      assert.strictEqual(err.idx, 11);
     }
   });
 });
@@ -62,7 +62,7 @@ suite('Lexer', () => {
 
   test('Export', () => {
       const [, exports] = parse(`export var p=5`);
-      assert.equal(exports[0], 'p');
+      assert.strictEqual(exports[0], 'p');
   });
 
   test('String encoding', () => {
@@ -74,13 +74,13 @@ suite('Lexer', () => {
       import('./\\u{20204}.js' );
       import('./\\u{20204}.js' ());
     `);
-    assert.equal(imports.length, 6);
-    assert.equal(imports[0].n, './abc.js');
-    assert.equal(imports[1].n, './𠈄.js');
-    assert.equal(imports[2].n, './𠈄.js');
-    assert.equal(imports[3].n, undefined);
-    assert.equal(imports[4].n, './𠈄.js');
-    assert.equal(imports[5].n, undefined);
+    assert.strictEqual(imports.length, 6);
+    assert.strictEqual(imports[0].n, './abc.js');
+    assert.strictEqual(imports[1].n, './𠈄.js');
+    assert.strictEqual(imports[2].n, './𠈄.js');
+    assert.strictEqual(imports[3].n, undefined);
+    assert.strictEqual(imports[4].n, './𠈄.js');
+    assert.strictEqual(imports[5].n, undefined);
   })
 
   test('Regexp case', () => {
@@ -88,9 +88,9 @@ suite('Lexer', () => {
       class Number {
 
       }
-      
+
       /("|')(?<value>(\\\\(\\1)|[^\\1])*)?(\\1)/.exec(\`'\\\\"\\\\'aa'\`);
-      
+
       const x = \`"\${label.replace(/"/g, "\\\\\\"")}"\`
     `);
   });
@@ -114,7 +114,7 @@ suite('Lexer', () => {
       function log(r){
         if(g>=0){u[g++]=m;g>=n.logSz&&(g=0)}else{u.push(m);u.length>=n.logSz&&(g=0)}/^(DBG|TICK): /.test(r)||t.Ticker.tick(454,o.slice(0,200));
       }
-      
+
       (function(n){
       })();
     `);
@@ -132,10 +132,10 @@ suite('Lexer', () => {
   test('Simple export with unicode conversions', () => {
     const source = `export var p𓀀s,q`;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 0);
-    assert.equal(exports.length, 2);
-    assert.equal(exports[0], 'p𓀀s');
-    assert.equal(exports[1], 'q');
+    assert.strictEqual(imports.length, 0);
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0], 'p𓀀s');
+    assert.strictEqual(exports[1], 'q');
   });
 
   test('Simple import', () => {
@@ -144,34 +144,34 @@ suite('Lexer', () => {
       console.log(test);
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d, n } = imports[0];
-    assert.equal(d, -1);
-    assert.equal(n, 'test');
-    assert.equal(source.slice(ss, se), 'import test from "test"');
-    assert.equal(exports.length, 0);
+    assert.strictEqual(d, -1);
+    assert.strictEqual(n, 'test');
+    assert.strictEqual(source.slice(ss, se), 'import test from "test"');
+    assert.strictEqual(exports.length, 0);
   });
 
   test('Empty single quote string import', () => {
     const source = `import ''`;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -1);
-    assert.equal(source.slice(s, e), '');
-    assert.equal(source.slice(ss, se), `import ''`);
-    assert.equal(exports.length, 0);
+    assert.strictEqual(d, -1);
+    assert.strictEqual(source.slice(s, e), '');
+    assert.strictEqual(source.slice(ss, se), `import ''`);
+    assert.strictEqual(exports.length, 0);
   });
 
   test('Empty double quote string import', () => {
     const source = `import ""`;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -1);
-    assert.equal(source.slice(s, e), '');
-    assert.equal(source.slice(ss, se), 'import ""');
-    assert.equal(exports.length, 0);
+    assert.strictEqual(d, -1);
+    assert.strictEqual(source.slice(s, e), '');
+    assert.strictEqual(source.slice(ss, se), 'import ""');
+    assert.strictEqual(exports.length, 0);
   });
 
   test('Import/Export with comments', () => {
@@ -180,8 +180,8 @@ suite('Lexer', () => {
       import/* 'x' */ 'a';
 
       import /* 'x' */ 'b';
-      
-      export var z  /*  */  
+
+      export var z  /*  */
       export {
         a,
         // b,
@@ -189,12 +189,12 @@ suite('Lexer', () => {
       };
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 2);
-    assert.equal(source.slice(imports[0].s, imports[0].e), 'a');
-    assert.equal(source.slice(imports[0].ss, imports[0].se), `import/* 'x' */ 'a'`);
-    assert.equal(source.slice(imports[1].s, imports[1].e), 'b');
-    assert.equal(source.slice(imports[1].ss, imports[1].se), `import /* 'x' */ 'b'`);
-    assert.equal(exports.toString(), 'z,a,d');
+    assert.strictEqual(imports.length, 2);
+    assert.strictEqual(source.slice(imports[0].s, imports[0].e), 'a');
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].se), `import/* 'x' */ 'a'`);
+    assert.strictEqual(source.slice(imports[1].s, imports[1].e), 'b');
+    assert.strictEqual(source.slice(imports[1].ss, imports[1].se), `import /* 'x' */ 'b'`);
+    assert.strictEqual(exports.toString(), 'z,a,d');
   });
 
   test('Exported function', () => {
@@ -207,8 +207,8 @@ suite('Lexer', () => {
       }
     `;
     const [, exports] = parse(source);
-    assert.equal(exports[0], 'a𓀀');
-    assert.equal(exports[1], 'Q');
+    assert.strictEqual(exports[0], 'a𓀀');
+    assert.strictEqual(exports[1], 'Q');
   });
 
   test('Export destructuring', () => {
@@ -218,35 +218,35 @@ suite('Lexer', () => {
       export { ok };
     `;
     const [, exports] = parse(source);
-    assert.equal(exports[0], 'ok');
+    assert.strictEqual(exports[0], 'ok');
   });
 
   test('Minified import syntax', () => {
     const source = `import{TemplateResult as t}from"lit-html";import{a as e}from"./chunk-4be41b30.js";export{j as SVGTemplateResult,i as TemplateResult,g as html,h as svg}from"./chunk-4be41b30.js";window.JSCompiler_renameProperty='asdf';`;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 3);
-    assert.equal(imports[0].s, 32);
-    assert.equal(imports[0].e, 40);
-    assert.equal(imports[0].ss, 0);
-    assert.equal(imports[0].se, 41);
-    assert.equal(imports[1].s, 61);
-    assert.equal(imports[1].e, 80);
-    assert.equal(imports[1].ss, 42);
-    assert.equal(imports[1].se, 81);
-    assert.equal(imports[2].s, 156);
-    assert.equal(imports[2].e, 175);
-    assert.equal(imports[2].ss, 82);
-    assert.equal(imports[2].se, 176);
+    assert.strictEqual(imports.length, 3);
+    assert.strictEqual(imports[0].s, 32);
+    assert.strictEqual(imports[0].e, 40);
+    assert.strictEqual(imports[0].ss, 0);
+    assert.strictEqual(imports[0].se, 41);
+    assert.strictEqual(imports[1].s, 61);
+    assert.strictEqual(imports[1].e, 80);
+    assert.strictEqual(imports[1].ss, 42);
+    assert.strictEqual(imports[1].se, 81);
+    assert.strictEqual(imports[2].s, 156);
+    assert.strictEqual(imports[2].e, 175);
+    assert.strictEqual(imports[2].ss, 82);
+    assert.strictEqual(imports[2].se, 176);
   });
 
   test('More minified imports', () => {
     const source = `import"some/import.js";`
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
-    assert.equal(imports[0].s, 7);
-    assert.equal(imports[0].e, 21);
-    assert.equal(imports[0].ss, 0);
-    assert.equal(imports[0].se, 22);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].s, 7);
+    assert.strictEqual(imports[0].e, 21);
+    assert.strictEqual(imports[0].ss, 0);
+    assert.strictEqual(imports[0].se, 22);
   });
 
   test('plus plus division', () => {
@@ -265,14 +265,14 @@ suite('Lexer', () => {
       export { hello as default } from "test-dep";
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -1);
-    assert.equal(source.slice(s, e), 'test-dep');
-    assert.equal(source.slice(ss, se), 'export { hello as default } from "test-dep"');
+    assert.strictEqual(d, -1);
+    assert.strictEqual(source.slice(s, e), 'test-dep');
+    assert.strictEqual(source.slice(ss, se), 'export { hello as default } from "test-dep"');
 
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'default');
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'default');
   });
 
   test('import.meta', () => {
@@ -281,12 +281,12 @@ suite('Lexer', () => {
       console.log(import.meta.url);
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -2);
-    assert.equal(ss, 53);
-    assert.equal(se, 64);
-    assert.equal(source.slice(s, e), 'import.meta');
+    assert.strictEqual(d, -2);
+    assert.strictEqual(ss, 53);
+    assert.strictEqual(se, 64);
+    assert.strictEqual(source.slice(s, e), 'import.meta');
   });
 
   test('import meta edge cases', () => {
@@ -300,12 +300,12 @@ suite('Lexer', () => {
         meta
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -2);
-    assert.equal(ss, 28);
-    assert.equal(se, 47);
-    assert.equal(source.slice(s, e), 'import.\n       meta');
+    assert.strictEqual(d, -2);
+    assert.strictEqual(ss, 28);
+    assert.strictEqual(se, 47);
+    assert.strictEqual(source.slice(s, e), 'import.\n       meta');
   });
 
   test('dynamic import method', async () => {
@@ -317,7 +317,7 @@ suite('Lexer', () => {
       }
     `;
     const [imports] = parse(source);
-    assert.equal(imports.length, 0);
+    assert.strictEqual(imports.length, 0);
   });
 
   test('dynamic import edge cases', () => {
@@ -343,22 +343,22 @@ suite('Lexer', () => {
       }
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 3);
+    assert.strictEqual(imports.length, 3);
     var { s, e, ss, se, d } = imports[0];
-    assert.equal(ss, d);
-    assert.equal(se, 0);
-    assert.equal(source.substr(d, 6), 'import');
-    assert.equal(source.slice(s, e), 'is1');
+    assert.strictEqual(ss, d);
+    assert.strictEqual(se, 0);
+    assert.strictEqual(source.substr(d, 6), 'import');
+    assert.strictEqual(source.slice(s, e), 'is1');
 
     var { s, e, ss, se, d } = imports[1];
-    assert.equal(ss, d);
-    assert.equal(se, 0);
-    assert.equal(source.slice(s, e), 'is2');
+    assert.strictEqual(ss, d);
+    assert.strictEqual(se, 0);
+    assert.strictEqual(source.slice(s, e), 'is2');
 
     var { s, e, ss, se, d } = imports[2];
-    assert.equal(ss, d);
-    assert.equal(se, 0);
-    assert.equal(source.slice(s, e), 'some_url');
+    assert.strictEqual(ss, d);
+    assert.strictEqual(se, 0);
+    assert.strictEqual(source.slice(s, e), 'some_url');
   });
 
   test('import after code', () => {
@@ -370,13 +370,13 @@ suite('Lexer', () => {
       import { g } from './test-circular2.js';
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
+    assert.strictEqual(imports.length, 1);
     const { s, e, ss, se, d } = imports[0];
-    assert.equal(d, -1);
-    assert.equal(source.slice(s, e), './test-circular2.js');
-    assert.equal(source.slice(ss, se), `import { g } from './test-circular2.js'`);
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'f');
+    assert.strictEqual(d, -1);
+    assert.strictEqual(source.slice(s, e), './test-circular2.js');
+    assert.strictEqual(source.slice(ss, se), `import { g } from './test-circular2.js'`);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'f');
   });
 
   test('Comments', () => {
@@ -401,11 +401,11 @@ function x() {
       }
     `
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 1);
-    assert.equal(source.slice(imports[0].s, imports[0].e), 'util');
-    assert.equal(source.slice(imports[0].ss, imports[0].se), `import util from 'util'`);
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'a');
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(source.slice(imports[0].s, imports[0].e), 'util');
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].se), `import util from 'util'`);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'a');
   });
 
   test('Strings', () => {
@@ -421,17 +421,17 @@ function x() {
       export { a }
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 2);
+    assert.strictEqual(imports.length, 2);
     assert.notEqual(imports[0].d, -1);
-    assert.equal(imports[0].ss, imports[0].d);
-    assert.equal(imports[0].se, 0);
-    assert.equal(source.slice(imports[0].d, imports[0].s), 'import(');
+    assert.strictEqual(imports[0].ss, imports[0].d);
+    assert.strictEqual(imports[0].se, 0);
+    assert.strictEqual(source.slice(imports[0].d, imports[0].s), 'import(');
     assert.notEqual(imports[1].d, -1);
-    assert.equal(imports[1].ss, imports[1].d);
-    assert.equal(imports[1].se, 0);
-    assert.equal(source.slice(imports[1].d, imports[1].s), 'import(');
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'a');
+    assert.strictEqual(imports[1].ss, imports[1].d);
+    assert.strictEqual(imports[1].se, 0);
+    assert.strictEqual(source.slice(imports[1].d, imports[1].s), 'import(');
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'a');
   });
 
   test('Bracket matching', () => {
@@ -477,9 +477,9 @@ function x() {
       export { a };
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 0);
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'a');
+    assert.strictEqual(imports.length, 0);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'a');
   });
 
   test('Template string expression ambiguity', () => {
@@ -493,9 +493,9 @@ function x() {
       \`{$}\`
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 2);
-    assert.equal(exports.length, 1);
-    assert.equal(exports[0], 'b');
+    assert.strictEqual(imports.length, 2);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'b');
   });
 
   test('many exports', () => {
@@ -509,8 +509,8 @@ function x() {
       export {};
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 0);
-    assert.equal(exports.length, 0);
+    assert.strictEqual(imports.length, 0);
+    assert.strictEqual(exports.length, 0);
   });
 
   test('Export * as', () => {
@@ -519,10 +519,10 @@ function x() {
       export *  as  yy from './g';
     `;
     const [imports, exports] = parse(source);
-    assert.equal(imports.length, 2);
-    assert.equal(exports.length, 2);
-    assert.equal(exports[0], 'X');
-    assert.equal(exports[1], 'yy');
+    assert.strictEqual(imports.length, 2);
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0], 'X');
+    assert.strictEqual(exports[1], 'yy');
   });
 
   test('Facade', () => {
@@ -532,7 +532,7 @@ function x() {
       export { a as b } from 'external3';
       export { ns };
     `);
-    assert.equal(facade, true);
+    assert.strictEqual(facade, true);
   });
 
   test('Facade default', () => {
@@ -540,27 +540,27 @@ function x() {
       import * as ns from 'external';
       export default ns;
     `);
-    assert.equal(facade, false);
+    assert.strictEqual(facade, false);
   });
 
   test('Facade declaration1', () => {
     const [,, facade] = parse(`export function p () {}`);
-    assert.equal(facade, false);
+    assert.strictEqual(facade, false);
   });
 
   test('Facade declaration2', () => {
     const [,, facade] = parse(`export var p`);
-    assert.equal(facade, false);
+    assert.strictEqual(facade, false);
   });
 
   test('Facade declaration3', () => {
     const [,, facade] = parse(`export {}l`);
-    assert.equal(facade, false);
+    assert.strictEqual(facade, false);
   });
 
   test('Facade declaration4', () => {
     const [,, facade] = parse(`export class Q{}`);
-    assert.equal(facade, false);
+    assert.strictEqual(facade, false);
   });
 
   test('Facade side effect', () => {
