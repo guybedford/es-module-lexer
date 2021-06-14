@@ -1,3 +1,6 @@
+0.5.0
+* Add support for import assertions (https://github.com/guybedford/es-module-lexer/pull/74)
+
 0.4.1
 * Add TypeScript types (https://github.com/guybedford/es-module-lexer/pull/63, https://github.com/guybedford/es-module-lexer/pull/64 @xiaoxiangmoe)
 * Better export detection before bailing on `=` (https://github.com/guybedford/es-module-lexer/pull/66)
