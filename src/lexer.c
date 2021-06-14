@@ -104,8 +104,11 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (import_write_head && import_write_head->dynamic == openTokenPosStack[openTokenDepth])
-          import_write_head->end = pos;
+        if (import_write_head && import_write_head->dynamic == openTokenPosStack[openTokenDepth]) {
+          if (import_write_head->end == 0)
+            import_write_head->end = pos;
+          import_write_head->statement_end = pos;
+        }
         break;
       case '{':
         // dynamic import followed by { is not a dynamic import (so remove)
@@ -220,12 +223,17 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace();
       if (ch == ',') {
-        import_write_head->assert_index = pos + 1;
+        import_write_head->end = pos;
+        pos++;
+        ch = commentWhitespace();
+        import_write_head->assert_index = pos;
         import_write_head->safe = true;
+        pos--;
       }
       else if (ch == ')') {
         openTokenDepth--;
         import_write_head->end = pos;
+        import_write_head->statement_end = pos;
         import_write_head->safe = true;
       }
       else {

@@ -22,7 +22,7 @@ export function parse (source, name = '@') {
     const s = wasm.is(), e = wasm.ie(), a = wasm.ai(), as = wasm.as(), ae = wasm.ae(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
-      n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : a == -1 ? e : a - 1));
+      n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
     imports.push({ n, s, e, ss, se, d, a, as, ae });
   }
   while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
