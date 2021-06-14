@@ -63,19 +63,14 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   // "s" = start
   // "e" = end
 
-  // Returns "import { name } from 'mod';"
+  // Returns "import { name } from 'mod'"
   source.substring(imports[0].ss, imports[0].se);
   // "ss" = statement start
   // "se" = statement end
 
-  // Returns "assert"
-  source.slice(imports[1].a, 6);
-  // "a" = assert
-
   // Returns "{ type: 'json' }"
-  source.substring(imports[1].as, imports[1].ae);
-  // "as" = assert start
-  // "ae" = assert end
+  source.substring(imports[1].a, imports[1].se);
+  // "a" = assert
 
   // Returns "p,q"
   exports.toString();

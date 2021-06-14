@@ -22,8 +22,8 @@ suite('Invalid syntax', () => {
     const [imports, exports] = parse(source);
     assert.strictEqual(imports.length, 3);
     assert.strictEqual(imports[0].n, './foo.json');
-    assert.strictEqual(source.substring(imports[0].a, imports[0].as), 'assert ');
-    assert.strictEqual(source.substring(imports[0].as, imports[0].ae), '{ type: "json" }');
+    assert.strictEqual(source.substring(imports[0].s, imports[0].e), './foo.json');
+    assert.strictEqual(source.substring(imports[0].a, imports[0].se), '{ type: "json" }');
     assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ assert: { type: "json" } }');
     assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
     assert.strictEqual(imports[1].n, 'foo.json');

@@ -487,9 +487,8 @@ void readImportString (const char16_t* ss, char16_t ch) {
     pos = assertIndex;
     return;
   } while (true);
-  import_write_head->assert_index = assertIndex;
-  import_write_head->assert_start = assertStart;
-  import_write_head->assert_end = pos + 1;
+  import_write_head->assert_index = assertStart;
+  import_write_head->statement_end = pos + 1;
 }
 
 char16_t commentWhitespace (bool br) {
