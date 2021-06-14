@@ -93,7 +93,7 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   source.substring(imports[2].d, imports[2].s);
   // Returns "import /*comment!*/ ('asdf', { assert: { type: 'json' } })"
   source.substring(imports[2].d, imports[2].se + 1);
-  // Returns " { assert: { type: 'json' } }"
+  // Returns "{ assert: { type: 'json' } }"
   source.substring(imports[2].a, imports[2].e);
   // ss is the same as d
   // as, ae not used for dynamic imports
