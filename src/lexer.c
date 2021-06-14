@@ -219,7 +219,11 @@ void tryParseImportStatement () {
       }
       pos++;
       ch = commentWhitespace();
-      if (ch == ')') {
+      if (ch == ',') {
+        import_write_head->assert_index = pos + 1;
+        import_write_head->safe = true;
+      }
+      else if (ch == ')') {
         openTokenDepth--;
         import_write_head->end = pos;
         import_write_head->safe = true;
@@ -403,19 +407,81 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 }
 
 void readImportString (const char16_t* ss, char16_t ch) {
+  const char16_t* startPos = pos + 1;
   if (ch == '\'') {
-    const char16_t* startPos = pos + 1;
     singleQuoteString();
-    addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
   else if (ch == '"') {
-    const char16_t* startPos = pos + 1;
     doubleQuoteString();
-    addImport(ss, startPos, pos, STANDARD_IMPORT);
   }
   else {
     syntaxError();
+    return;
   }
+  addImport(ss, startPos, pos, STANDARD_IMPORT);
+  pos++;
+  ch = commentWhitespaceNoBr();
+  if (ch != 'a' || !str_eq5(pos + 1, 's', 's', 'e', 'r', 't')) {
+    pos--;
+    return;
+  }
+  char16_t* assertIndex = pos;
+  pos += 6;
+  ch = commentWhitespace();
+  if (ch != '{') {
+    pos = assertIndex;
+    return;
+  }
+  const char16_t* assertStart = pos;
+  do {
+    pos++;
+    ch = commentWhitespace();
+    if (ch == '\'') {
+      singleQuoteString();
+      pos++;
+      ch = commentWhitespace();
+    }
+    else if (ch == '"') {
+      doubleQuoteString();
+      pos++;
+      ch = commentWhitespace();
+    }
+    else {
+      ch = readToWsOrPunctuator(ch);
+    }
+    if (ch != ':') {
+      pos = assertIndex;
+      return;
+    }
+    pos++;
+    ch = commentWhitespace();
+    if (ch == '\'') {
+      singleQuoteString();
+    }
+    else if (ch == '"') {
+      doubleQuoteString();
+    }
+    else {
+      pos = assertIndex;
+      return;
+    }
+    pos++;
+    ch = commentWhitespace();
+    if (ch == ',') {
+      pos++;
+      ch = commentWhitespace();
+      if (ch == '}')
+        break;
+      continue;
+    }
+    if (ch == '}')
+      break;
+    pos = assertIndex;
+    return;
+  } while (true);
+  import_write_head->assert_index = assertIndex;
+  import_write_head->assert_start = assertStart;
+  import_write_head->assert_end = pos + 1;
 }
 
 char16_t commentWhitespace () {
@@ -432,6 +498,26 @@ char16_t commentWhitespace () {
         return ch;
     }
     else if (!isBrOrWs(ch)) {
+      return ch;
+    }
+  } while (pos++ < end);
+  return ch;
+}
+
+char16_t commentWhitespaceNoBr () {
+  char16_t ch;
+  do {
+    ch = *pos;
+    if (ch == '/') {
+      char16_t next_ch = *(pos + 1);
+      if (next_ch == '/')
+        lineComment();
+      else if (next_ch == '*')
+        blockCommentNoBr();
+      else
+        return ch;
+    }
+    else if (!isWsNotBr(ch)) {
       return ch;
     }
   } while (pos++ < end);
@@ -459,6 +545,19 @@ void blockComment () {
   pos++;
   while (pos++ < end) {
     char16_t ch = *pos;
+    if (ch == '*' && *(pos + 1) == '/') {
+      pos++;
+      return;
+    }
+  }
+}
+
+void blockCommentNoBr () {
+  pos++;
+  while (pos++ < end) {
+    char16_t ch = *pos;
+    if (isBr(ch))
+      return;
     if (ch == '*' && *(pos + 1) == '/') {
       pos++;
       return;
@@ -547,6 +646,10 @@ char16_t readToWsOrPunctuator (char16_t ch) {
 // if there is a significant user need this can be reconsidered
 bool isBr (char16_t c) {
   return c == '\r' || c == '\n';
+}
+
+bool isWsNotBr (char16_t c) {
+  return c == 9 || c == 11 || c == 12 || c == 32 || c == 160;
 }
 
 bool isBrOrWs (char16_t c) {

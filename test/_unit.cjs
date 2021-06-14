@@ -10,6 +10,28 @@ const init = (async () => {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Import assertions', () => {
+    const source = `
+      import json from "./foo.json" assert { type: "json" };
+      import("foo.json", { assert: { type: "json" } });
+
+      import test from './asdf'
+      assert { not: 'an assertion!' }
+      export var p = 5;
+    `
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 3);
+    assert.strictEqual(imports[0].n, './foo.json');
+    assert.strictEqual(source.substring(imports[0].a, imports[0].as), 'assert ');
+    assert.strictEqual(source.substring(imports[0].as, imports[0].ae), '{ type: "json" }');
+    assert.strictEqual(imports[1].n, 'foo.json');
+    assert.strictEqual(source.substring(imports[1].a, imports[1].e), ' { assert: { type: "json" } }');
+    assert.strictEqual(imports[2].n, './asdf');
+    assert.strictEqual(imports[2].a, -1);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0], 'p');
+  });
+
   test('Unterminated object', () => {
     const source = `
       const foo = };
@@ -568,3 +590,4 @@ function x() {
     facade === false;
   });
 });
+

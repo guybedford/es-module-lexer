@@ -43,47 +43,59 @@ import { init, parse } from 'es-module-lexer/dist/lexer.js';
   await init;
 
   const source = `
-    import { a } from 'asdf';
+    import { name } from 'mod';
+    import json from './json.json' assert { type: 'json' }
     export var p = 5;
     export function q () {
 
     };
 
     // Comments provided to demonstrate edge cases
-    import /*comment!*/ ('asdf');
+    import /*comment!*/ ('asdf', { assert: { type: 'json' }});
     import /*comment!*/.meta.asdf;
   `;
 
   const [imports, exports] = parse(source, 'optional-sourcename');
 
-  // Returns "asdf"
+  // Returns "mod"
   imports[0].n
   source.substring(imports[0].s, imports[0].e);
-  // "s" is shorthand for "start"
-  // "e" is shorthand for "end"
+  // "s" = start
+  // "e" = end
 
-  // Returns "import { a } from 'asdf';"
+  // Returns "import { name } from 'mod';"
   source.substring(imports[0].ss, imports[0].se);
-  // "ss" is shorthand for "statement start"
-  // "se" is shorthand for "statement end"
+  // "ss" = statement start
+  // "se" = statement end
+
+  // Returns "assert"
+  source.slice(imports[1].a, 6);
+  // "a" = assert
+
+  // Returns "{ type: 'json' }"
+  source.substring(imports[1].as, imports[1].ae);
+  // "as" = assert start
+  // "ae" = assert end
 
   // Returns "p,q"
   exports.toString();
 
-  // Dynamic imports are indicated by imports[1].d > -1
+  // Dynamic imports are indicated by imports[2].d > -1
   // In this case the "d" index is the start of the dynamic import
   // Returns true
-  imports[1].d > -1;
+  imports[2].d > -1;
 
   // Returns "asdf"
-  imports[1].n
-  source.substring(imports[1].s, imports[1].e);
+  imports[2].n
+  // Returns "'asdf', { assert: { type: 'json' } }"
+  source.substring(imports[2].s, imports[2].e);
   // Returns "import /*comment!*/ ("
-  source.substring(imports[1].d, imports[1].s);
-  // Returns "import /*comment!*/ ('asdf')"
-  source.substring(imports[1].d, imports[1].e + 1);
-  // imports[1].ss and imports[1].se is not meaningful 
-  // because dynamic import is not a statement
+  source.substring(imports[2].d, imports[2].s);
+  // Returns "import /*comment!*/ ('asdf', { assert: { type: 'json' } })"
+  source.substring(imports[2].d, imports[2].e + 1);
+  // Returns " { assert: { type: 'json' } }"
+  source.substring(imports[2].a, imports[2].e);
+  // ss, se, as, ae not meaningful for dynamic imports
 
   // import.meta is indicated by imports[2].d === -2
   // Returns true
@@ -193,3 +205,4 @@ MIT
 
 [travis-url]: https://travis-ci.org/guybedford/es-module-lexer
 [travis-image]: https://travis-ci.org/guybedford/es-module-lexer.svg?branch=master
+
