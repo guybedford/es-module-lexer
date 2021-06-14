@@ -1,3 +1,6 @@
+0.6.0
+* Simplify import assertions implementation (https://github.com/guybedford/es-module-lexer/pull/75)
+
 0.5.0
 * Add support for import assertions (https://github.com/guybedford/es-module-lexer/pull/74)
 
