@@ -60,7 +60,7 @@ bool parse () {
           continue;
         }
         else if (next_ch == '*') {
-          blockComment();
+          blockComment(true);
           // dont update lastToken
           continue;
         }
@@ -151,7 +151,7 @@ bool parse () {
           continue;
         }
         else if (next_ch == '*') {
-          blockComment();
+          blockComment(true);
           // dont update lastToken
           continue;
         }
@@ -197,7 +197,7 @@ void tryParseImportStatement () {
 
   pos += 6;
 
-  char16_t ch = commentWhitespace();
+  char16_t ch = commentWhitespace(true);
   
   switch (ch) {
     // dynamic import
@@ -209,7 +209,7 @@ void tryParseImportStatement () {
       addImport(startPos, pos + 1, 0, startPos);
       // try parse a string, to record a safe dynamic import string
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       if (ch == '\'') {
         singleQuoteString();
       }
@@ -221,11 +221,11 @@ void tryParseImportStatement () {
         return;
       }
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       if (ch == ',') {
         import_write_head->end = pos;
         pos++;
-        ch = commentWhitespace();
+        ch = commentWhitespace(true);
         import_write_head->assert_index = pos;
         import_write_head->safe = true;
         pos--;
@@ -243,7 +243,7 @@ void tryParseImportStatement () {
     // import.meta
     case '.':
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       // import.meta indicated by d == -2
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
         addImport(startPos, startPos, pos + 4, IMPORT_META);
@@ -281,7 +281,7 @@ void tryParseExportStatement () {
 
   char16_t* curPos = pos;
 
-  char16_t ch = commentWhitespace();
+  char16_t ch = commentWhitespace(true);
 
   if (pos == curPos && !isPunctuator(ch))
     return;
@@ -295,14 +295,14 @@ void tryParseExportStatement () {
     // export async? function*? name () {
     case 'a':
       pos += 5;
-      commentWhitespace();
+      commentWhitespace(true);
     // fallthrough
     case 'f':
       pos += 8;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       if (ch == '*') {
         pos++;
-        ch = commentWhitespace();
+        ch = commentWhitespace(true);
       }
       const char16_t* startPos = pos;
       ch = readToWsOrPunctuator(ch);
@@ -313,7 +313,7 @@ void tryParseExportStatement () {
     case 'c':
       if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
         pos += 5;
-        ch = commentWhitespace();
+        ch = commentWhitespace(true);
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
         addExport(startPos, pos);
@@ -332,7 +332,7 @@ void tryParseExportStatement () {
       facade = false;
       do {
         pos++;
-        ch = commentWhitespace();
+        ch = commentWhitespace(true);
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
         // dont yet handle [ { destructurings
@@ -343,7 +343,7 @@ void tryParseExportStatement () {
         if (pos == startPos)
           return;
         addExport(startPos, pos);
-        ch = commentWhitespace();
+        ch = commentWhitespace(true);
         if (ch == '=') {
           pos--;
           return;
@@ -356,17 +356,17 @@ void tryParseExportStatement () {
     // export {...}
     case '{':
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       while (true) {
         char16_t* startPos = pos;
         readToWsOrPunctuator(ch);
         char16_t* endPos = pos;
-        commentWhitespace();
+        commentWhitespace(true);
         ch = readExportAs(startPos, endPos);
         // ,
         if (ch == ',') {
           pos++;
-          ch = commentWhitespace();
+          ch = commentWhitespace(true);
         }
         if (ch == '}')
           break;
@@ -376,23 +376,23 @@ void tryParseExportStatement () {
           return syntaxError();
       }
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
     break;
     
     // export *
     // export * as X
     case '*':
       pos++;
-      commentWhitespace();
+      commentWhitespace(true);
       ch = readExportAs(pos, pos);
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
     break;
   }
 
   // from ...
   if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
     pos += 4;
-    readImportString(sStartPos, commentWhitespace());
+    readImportString(sStartPos, commentWhitespace(true));
   }
   else {
     pos--;
@@ -403,11 +403,11 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
   if (ch == 'a') {
     pos += 2;
-    ch = commentWhitespace();
+    ch = commentWhitespace(true);
     startPos = pos;
     readToWsOrPunctuator(ch);
     endPos = pos;
-    ch = commentWhitespace();
+    ch = commentWhitespace(true);
   }
   if (pos != startPos)
     addExport(startPos, endPos);
@@ -428,14 +428,14 @@ void readImportString (const char16_t* ss, char16_t ch) {
   }
   addImport(ss, startPos, pos, STANDARD_IMPORT);
   pos++;
-  ch = commentWhitespaceNoBr();
+  ch = commentWhitespace(false);
   if (ch != 'a' || !str_eq5(pos + 1, 's', 's', 'e', 'r', 't')) {
     pos--;
     return;
   }
   char16_t* assertIndex = pos;
   pos += 6;
-  ch = commentWhitespace();
+  ch = commentWhitespace(true);
   if (ch != '{') {
     pos = assertIndex;
     return;
@@ -443,16 +443,16 @@ void readImportString (const char16_t* ss, char16_t ch) {
   const char16_t* assertStart = pos;
   do {
     pos++;
-    ch = commentWhitespace();
+    ch = commentWhitespace(true);
     if (ch == '\'') {
       singleQuoteString();
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
     }
     else if (ch == '"') {
       doubleQuoteString();
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
     }
     else {
       ch = readToWsOrPunctuator(ch);
@@ -462,7 +462,7 @@ void readImportString (const char16_t* ss, char16_t ch) {
       return;
     }
     pos++;
-    ch = commentWhitespace();
+    ch = commentWhitespace(true);
     if (ch == '\'') {
       singleQuoteString();
     }
@@ -474,10 +474,10 @@ void readImportString (const char16_t* ss, char16_t ch) {
       return;
     }
     pos++;
-    ch = commentWhitespace();
+    ch = commentWhitespace(true);
     if (ch == ',') {
       pos++;
-      ch = commentWhitespace();
+      ch = commentWhitespace(true);
       if (ch == '}')
         break;
       continue;
@@ -492,7 +492,7 @@ void readImportString (const char16_t* ss, char16_t ch) {
   import_write_head->assert_end = pos + 1;
 }
 
-char16_t commentWhitespace () {
+char16_t commentWhitespace (bool br) {
   char16_t ch;
   do {
     ch = *pos;
@@ -501,31 +501,11 @@ char16_t commentWhitespace () {
       if (next_ch == '/')
         lineComment();
       else if (next_ch == '*')
-        blockComment();
+        blockComment(br);
       else
         return ch;
     }
-    else if (!isBrOrWs(ch)) {
-      return ch;
-    }
-  } while (pos++ < end);
-  return ch;
-}
-
-char16_t commentWhitespaceNoBr () {
-  char16_t ch;
-  do {
-    ch = *pos;
-    if (ch == '/') {
-      char16_t next_ch = *(pos + 1);
-      if (next_ch == '/')
-        lineComment();
-      else if (next_ch == '*')
-        blockCommentNoBr();
-      else
-        return ch;
-    }
-    else if (!isWsNotBr(ch)) {
+    else if (br ? !isBrOrWs(ch) : !isWsNotBr(ch)) {
       return ch;
     }
   } while (pos++ < end);
@@ -549,22 +529,11 @@ void templateString () {
   syntaxError();
 }
 
-void blockComment () {
+void blockComment (bool br) {
   pos++;
   while (pos++ < end) {
     char16_t ch = *pos;
-    if (ch == '*' && *(pos + 1) == '/') {
-      pos++;
-      return;
-    }
-  }
-}
-
-void blockCommentNoBr () {
-  pos++;
-  while (pos++ < end) {
-    char16_t ch = *pos;
-    if (isBr(ch))
+    if (!br && isBr(ch))
       return;
     if (ch == '*' && *(pos + 1) == '/') {
       pos++;

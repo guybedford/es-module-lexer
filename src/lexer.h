@@ -209,14 +209,12 @@ void tryParseExportStatement ();
 void readImportString (const char16_t* ss, char16_t ch);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
-char16_t commentWhitespace ();
-char16_t commentWhitespaceNoBr ();
+char16_t commentWhitespace (bool br);
 void singleQuoteString ();
 void doubleQuoteString ();
 void regularExpression ();
 void templateString ();
-void blockComment ();
-void blockCommentNoBr ();
+void blockComment (bool br);
 void lineComment ();
 
 char16_t readToWsOrPunctuator (char16_t ch);
