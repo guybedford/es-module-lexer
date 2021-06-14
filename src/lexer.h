@@ -18,6 +18,9 @@ struct Import {
   const char16_t* end;
   const char16_t* statement_start;
   const char16_t* statement_end;
+  const char16_t* assert_index;
+  const char16_t* assert_start;
+  const char16_t* assert_end;
   const char16_t* dynamic;
   bool safe;
   struct Import* next;
@@ -99,6 +102,9 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
     import->statement_end = source;
   import->start = start;
   import->end = end;
+  import->assert_index = 0;
+  import->assert_start = 0;
+  import->assert_end = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
   import->next = NULL;
@@ -137,6 +143,18 @@ uint32_t ss () {
 // getImportStatementEnd
 uint32_t se () {
   return import_read_head->statement_end - source;
+}
+// getAssertIndex
+uint32_t ai () {
+  return import_read_head->assert_index == 0 ? -1 : import_read_head->assert_index - source;
+}
+// getAssertStart
+uint32_t as () {
+  return import_read_head->assert_start - source;
+}
+// getAssertEnd
+uint32_t ae () {
+  return import_read_head->assert_end - source;
 }
 // getImportDynamic
 uint32_t id () {
@@ -191,17 +209,18 @@ void tryParseExportStatement ();
 void readImportString (const char16_t* ss, char16_t ch);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
-char16_t commentWhitespace ();
+char16_t commentWhitespace (bool br);
 void singleQuoteString ();
 void doubleQuoteString ();
 void regularExpression ();
 void templateString ();
-void blockComment ();
+void blockComment (bool br);
 void lineComment ();
 
 char16_t readToWsOrPunctuator (char16_t ch);
 
 bool isBr (char16_t c);
+bool isWsNotBr (char16_t c);
 bool isBrOrWs (char16_t c);
 bool isBrOrWsOrPunctuator (char16_t c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
