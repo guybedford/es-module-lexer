@@ -55,6 +55,12 @@ export interface ImportSpecifier {
    * Otherwise this is `-1`.
    */
   readonly d: number;
+
+  /**
+   * If this import has an import assertion, this is the start value.
+   * Otherwise this is `-1`.
+   */
+  readonly a: number;
 }
 
 /**
