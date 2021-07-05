@@ -104,10 +104,11 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (import_write_head && import_write_head->dynamic == openTokenPosStack[openTokenDepth]) {
-          if (import_write_head->end == 0)
-            import_write_head->end = pos;
-          import_write_head->statement_end = pos;
+        if (cur_dynamic_import && cur_dynamic_import->dynamic == openTokenPosStack[openTokenDepth]) {
+          if (cur_dynamic_import->end == 0)
+            cur_dynamic_import->end = pos;
+          cur_dynamic_import->statement_end = pos;
+          cur_dynamic_import = NULL;
         }
         break;
       case '{':
@@ -207,6 +208,7 @@ void tryParseImportStatement () {
         return;
       // dynamic import indicated by positive d
       addImport(startPos, pos + 1, 0, startPos);
+      cur_dynamic_import = import_write_head;
       // try parse a string, to record a safe dynamic import string
       pos++;
       ch = commentWhitespace(true);

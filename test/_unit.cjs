@@ -33,6 +33,14 @@ suite('Invalid syntax', () => {
     assert.strictEqual(exports[0], 'p');
   });
 
+  test('Import meta inside dynamic import', () => {
+    const source = `import(import.meta.url)`;
+    const [imports] = parse(source);
+
+    assert.strictEqual(imports.length, 2);
+    assert.strictEqual(source.substring(imports[0].s, imports[0].e), 'import.meta.url');
+  });
+
   test('Unterminated object', () => {
     const source = `
       const foo = };
