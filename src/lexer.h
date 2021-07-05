@@ -39,6 +39,7 @@ Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
+Import* cur_dynamic_import = NULL;
 void* analysis_base;
 void* analysis_head;
 
