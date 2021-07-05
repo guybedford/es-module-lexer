@@ -7,11 +7,10 @@
   "types": "types/lexer.d.ts",
   "exports": {
     ".": {
+      "module" "./dist/lexer.js",
       "import": "./dist/lexer.js",
       "require": "./dist/lexer.cjs"
-    },
-    "./package.json": "./package.json",
-    "./": "./"
+    }
   },
   "scripts": {
     "test": "NODE_OPTIONS=\"--experimental-modules\" mocha -b -u tdd test/*.cjs",
