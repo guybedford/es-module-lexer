@@ -1,3 +1,10 @@
+0.7.1
+* Fix nested import.meta inside of dynamic import (https://github.com/guybedford/es-module-lexer/pull/80)
+* Add missing typings for import assertions (https://github.com/guybedford/es-module-lexer/pull/78, @marvinhagemeister)
+
+0.7.0
+* Fix package exports for Node.js 12.18 (https://github.com/guybedford/es-module-lexer/pull/77, @marvinhagemeister)
+
 0.6.0
 * Simplify import assertions implementation (https://github.com/guybedford/es-module-lexer/pull/75)
 
