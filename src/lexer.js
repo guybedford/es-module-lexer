@@ -31,7 +31,7 @@ export function parse (source, name = '@') {
     try {
       return (0, eval)(str);
     }
-    catch {}
+    catch (e) {}
   }
 
   return [imports, exports, !!wasm.f()];
