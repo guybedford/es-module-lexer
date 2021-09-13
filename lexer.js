@@ -11,7 +11,8 @@ let source, pos, end,
   templateDepth,
   templateStack,
   imports,
-  exports;
+  exports,
+  name;
 
 function addImport (ss, s, e, d) {
   const impt = { ss, se: d === -2 ? e : d === -1 ? e + 1 : 0, s, e, d, a: -1, n: undefined };
@@ -27,7 +28,7 @@ function readName (impt) {
 }
 
 // Note: parsing is based on the _assumption_ that the source is already valid
-export function parse (_source) {
+export function parse (_source, _name) {
   openTokenDepth = 0;
   curDynamicImport = null;
   templateDepth = -1;
@@ -39,6 +40,7 @@ export function parse (_source) {
   openClassPosStack = Array(1024);
   nextBraceIsClass = false;
   facade = true;
+  name = _name || '@';
 
   imports = [];
   exports = new Set();
@@ -893,5 +895,5 @@ function isExpressionTerminator (curPos) {
 }
 
 function syntaxError () {
-  throw new SyntaxError();
+  throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, pos).split('\n').length}:${pos - source.lastIndexOf('\n', pos - 1)}`), { idx: pos });
 }

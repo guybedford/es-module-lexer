@@ -16,6 +16,7 @@
   "scripts": {
     "test:js": "mocha -b -u tdd test/*.cjs",
     "test:wasm": "cross-env WASM=1 mocha -b -u tdd test/*.cjs",
+    "test": "npm run test:js && npm run test:wasm",
     "build": "node build.js && babel dist/lexer.js | terser -o dist/lexer.cjs",
     "build-wasm": "make lib/lexer.wasm && node build.js",
     "bench": "node --expose-gc bench/index.js",

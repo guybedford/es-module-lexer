@@ -56,7 +56,7 @@ suite('Invalid syntax', () => {
       parse(source);
     }
     catch (err) {
-      assert.ok(err instanceof SyntaxError);
+      assert.strictEqual(err.message, 'Parse error @:2:19');
     }
   });
 
@@ -78,7 +78,7 @@ export { d as a, p as b, z as c, r as d, q }`;
       parse(source);
     }
     catch (err) {
-      assert.ok(err instanceof SyntaxError);
+      assert.strictEqual(err.message, 'Parse error @:9:5');
     }
   });
 
@@ -89,7 +89,7 @@ export { d as a, p as b, z as c, r as d, q }`;
       assert(false, 'Should error');
     }
     catch (err) {
-      assert.ok(err instanceof SyntaxError);
+      assert.strictEqual(err.idx, 11);
     }
   });
 });
