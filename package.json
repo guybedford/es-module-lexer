@@ -6,15 +6,19 @@
   "module": "dist/lexer.js",
   "types": "types/lexer.d.ts",
   "exports": {
-    "module": "./dist/lexer.js",
-    "import": "./dist/lexer.js",
-    "require": "./dist/lexer.cjs"
+    ".": {
+      "module": "./dist/lexer.js",
+      "import": "./dist/lexer.js",
+      "require": "./dist/lexer.cjs"
+    },
+    "./js": "./lexer.js"
   },
   "scripts": {
-    "test": "NODE_OPTIONS=\"--experimental-modules\" mocha -b -u tdd test/*.cjs",
-    "build": "node --experimental-modules build.js && babel dist/lexer.js | terser -o dist/lexer.cjs",
+    "test:js": "mocha -b -u tdd test/*.cjs",
+    "test:wasm": "cross-env WASM=1 mocha -b -u tdd test/*.cjs",
+    "build": "node build.js && babel dist/lexer.js | terser -o dist/lexer.cjs",
     "build-wasm": "make lib/lexer.wasm && node build.js",
-    "bench": "node --experimental-modules --expose-gc bench/index.js",
+    "bench": "node --expose-gc bench/index.js",
     "prepublishOnly": "npm run build",
     "footprint": "npm run build && cat dist/lexer.js | gzip -9f | wc -c"
   },
@@ -24,13 +28,15 @@
     "@babel/cli": "^7.5.5",
     "@babel/core": "^7.5.5",
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
+    "cross-env": "^7.0.3",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
     "terser": "^4.1.4"
   },
   "files": [
     "dist",
-    "types"
+    "types",
+    "lexer.js"
   ],
   "type": "module",
   "repository": {
