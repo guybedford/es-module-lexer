@@ -2,9 +2,15 @@ const assert = require('assert');
 
 let parse;
 const init = (async () => {
-  let init;
-  ({ parse, init } = await import('../dist/lexer.js'));
-  await init;
+  if (parse) return;
+  if (process.env.WASM) {
+    const m = await import('../dist/lexer.js');
+    await m.init;
+    parse = m.parse;
+  }
+  else {
+    ({ parse } = await import('../lexer.js'));
+  }
 })();
 
 suite('Invalid syntax', () => {
