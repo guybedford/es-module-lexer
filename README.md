@@ -164,36 +164,70 @@ The above cases are handled gracefully in that the lexer will keep going fine, i
 
 Benchmarks can be run with `npm run bench`.
 
-Current results:
+Current results for a high spec machine:
+
+#### Wasm Build
 
 ```
 Module load time
-> 7ms
+> 5ms
 Cold Run, All Samples
-test/samples/*.js (3057 KiB)
-> 33ms
+test/samples/*.js (3123 KiB)
+> 20ms
 
 Warm Runs (average of 25 runs)
-test/samples/angular.js (719 KiB)
-> 4.08ms
+test/samples/angular.js (739 KiB)
+> 2.12ms
 test/samples/angular.min.js (188 KiB)
-> 2.08ms
-test/samples/d3.js (491 KiB)
-> 4.72ms
-test/samples/d3.min.js (274 KiB)
+> 1ms
+test/samples/d3.js (508 KiB)
 > 3ms
-test/samples/magic-string.js (34 KiB)
-> 0.04ms
+test/samples/d3.min.js (274 KiB)
+> 2ms
+test/samples/magic-string.js (35 KiB)
+> 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
-test/samples/rollup.js (902 KiB)
-> 8.16ms
+test/samples/rollup.js (929 KiB)
+> 4.12ms
 test/samples/rollup.min.js (429 KiB)
-> 4.28ms
+> 2.08ms
 
 Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3057 KiB)
-> 25.68ms
+test/samples/*.js (3123 KiB)
+> 13.76ms
+```
+
+#### JS Build
+
+```
+Module load time
+> 2ms
+Cold Run, All Samples
+test/samples/*.js (3123 KiB)
+> 203ms
+
+Warm Runs (average of 25 runs)
+test/samples/angular.js (739 KiB)
+> 2.2ms
+test/samples/angular.min.js (188 KiB)
+> 1.12ms
+test/samples/d3.js (508 KiB)
+> 3.12ms
+test/samples/d3.min.js (274 KiB)
+> 2ms
+test/samples/magic-string.js (35 KiB)
+> 0ms
+test/samples/magic-string.min.js (20 KiB)
+> 0ms
+test/samples/rollup.js (929 KiB)
+> 5ms
+test/samples/rollup.min.js (429 KiB)
+> 3ms
+
+Warm Runs, All Samples (average of 25 runs)
+test/samples/*.js (3123 KiB)
+> 16.2ms
 ```
 
 ### Building
