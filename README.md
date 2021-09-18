@@ -198,7 +198,7 @@ test/samples/*.js (3123 KiB)
 > 14.4ms
 ```
 
-#### JS Build
+#### JS Build (asm.js)
 
 ```
 Module load time
