@@ -9,7 +9,7 @@ const init = (async () => {
     parse = m.parse;
   }
   else {
-    ({ parse } = await import('../lexer.js'));
+    ({ parse } = await import('../dist/lexer.asm.js'));
   }
 })();
 

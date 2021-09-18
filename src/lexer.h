@@ -13,6 +13,10 @@ const char16_t* EMPTY_CHAR = &__empty_char;
 const uint32_t STACK_DEPTH = 2048;
 const char16_t* source = (void*)&__heap_base;
 
+void setSource (void* ptr) {
+  source = ptr;
+}
+
 struct Import {
   const char16_t* start;
   const char16_t* end;
