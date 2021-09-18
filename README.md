@@ -100,7 +100,7 @@ import { init, parse } from 'es-module-lexer';
 })();
 ```
 
-### CSP Build
+### CSP asm.js Build
 
 The default version of the library uses Wasm and (safe) eval usage for performance and a minimal footprint.
 
@@ -109,10 +109,10 @@ Neither of these represent security escalation possibilities since there are no 
 For a version that works with CSP eval disabled, use the `es-module-lexer/js` build:
 
 ```js
-import { init, parse } from 'es-module-lexer/js';
+import { parse } from 'es-module-lexer/js';
 ```
 
-Instead of Web Assembly, this uses a version of the lexer in JS, which has similar warm performance but much slower cold start due to leaning more heavily on v8 compilation for JS optimization.
+Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
 
 ### Escape Sequences
 
