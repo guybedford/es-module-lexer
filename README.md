@@ -205,29 +205,29 @@ Module load time
 > 2ms
 Cold Run, All Samples
 test/samples/*.js (3123 KiB)
-> 59ms
+> 35ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (739 KiB)
 > 3ms
 test/samples/angular.min.js (188 KiB)
-> 2ms
+> 1.08ms
 test/samples/d3.js (508 KiB)
-> 4.04ms
+> 3.04ms
 test/samples/d3.min.js (274 KiB)
-> 2.04ms
+> 2ms
 test/samples/magic-string.js (35 KiB)
 > 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (929 KiB)
-> 7ms
+> 5.04ms
 test/samples/rollup.min.js (429 KiB)
-> 4.04ms
+> 3ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3123 KiB)
-> 22.28ms
+> 17ms
 ```
 
 ### Building
