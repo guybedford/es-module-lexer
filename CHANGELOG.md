@@ -1,3 +1,10 @@
+0.9.0
+* JS Build using asm.js (https://github.com/guybedford/es-module-lexer/pull/86)
+
+0.8.0
+* JS CSP Build (https://github.com/guybedford/es-module-lexer/pull/85)
+* Error catch syntax fix (https://github.com/guybedford/es-module-lexer/pull/84)
+
 0.7.1
 * Fix nested import.meta inside of dynamic import (https://github.com/guybedford/es-module-lexer/pull/80)
 * Add missing typings for import assertions (https://github.com/guybedford/es-module-lexer/pull/78, @marvinhagemeister)
