@@ -31,7 +31,7 @@ Promise.resolve().then(async () => {
 	console.log('Module load time');
 	{
 		const start = process.hrtime.bigint();
-		var { parse } = await import('../lexer.js');
+		var { parse } = await import('../dist/lexer.asm.js');
 		console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
 	}
 

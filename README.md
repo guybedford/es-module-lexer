@@ -100,7 +100,7 @@ import { init, parse } from 'es-module-lexer';
 })();
 ```
 
-### CSP Build
+### CSP asm.js Build
 
 The default version of the library uses Wasm and (safe) eval usage for performance and a minimal footprint.
 
@@ -109,10 +109,10 @@ Neither of these represent security escalation possibilities since there are no 
 For a version that works with CSP eval disabled, use the `es-module-lexer/js` build:
 
 ```js
-import { init, parse } from 'es-module-lexer/js';
+import { parse } from 'es-module-lexer/js';
 ```
 
-Instead of Web Assembly, this uses a version of the lexer in JS, which has similar warm performance but much slower cold start due to leaning more heavily on v8 compilation for JS optimization.
+Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
 
 ### Escape Sequences
 
@@ -181,7 +181,7 @@ test/samples/angular.js (739 KiB)
 test/samples/angular.min.js (188 KiB)
 > 1ms
 test/samples/d3.js (508 KiB)
-> 3ms
+> 3.04ms
 test/samples/d3.min.js (274 KiB)
 > 2ms
 test/samples/magic-string.js (35 KiB)
@@ -189,31 +189,31 @@ test/samples/magic-string.js (35 KiB)
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (929 KiB)
-> 4.12ms
+> 4.04ms
 test/samples/rollup.min.js (429 KiB)
-> 2.08ms
+> 2.16ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3123 KiB)
-> 13.76ms
+> 14.4ms
 ```
 
-#### JS Build
+#### JS Build (asm.js)
 
 ```
 Module load time
 > 2ms
 Cold Run, All Samples
 test/samples/*.js (3123 KiB)
-> 203ms
+> 35ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (739 KiB)
-> 2.2ms
+> 3ms
 test/samples/angular.min.js (188 KiB)
-> 1.12ms
+> 1.08ms
 test/samples/d3.js (508 KiB)
-> 3.12ms
+> 3.04ms
 test/samples/d3.min.js (274 KiB)
 > 2ms
 test/samples/magic-string.js (35 KiB)
@@ -221,13 +221,13 @@ test/samples/magic-string.js (35 KiB)
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (929 KiB)
-> 5ms
+> 5.04ms
 test/samples/rollup.min.js (429 KiB)
 > 3ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3123 KiB)
-> 16.2ms
+> 17ms
 ```
 
 ### Building
