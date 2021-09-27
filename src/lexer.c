@@ -373,13 +373,11 @@ void tryParseExportStatement () {
         // export { "not~id" as }
         // export { "%notid" as }
         if (isQuote(ch)) {
-          char16_t end_quote = *(++pos);
-          while (end_quote != '}') {
-            if (end_quote == ch) {
+          char16_t end_quote;
+          while ((end_quote = *(++pos)) != '}') {
+            if (end_quote == ch && *(pos - 1) != '\\') {
               break;
             }
-
-            end_quote = *(++pos);
           }
 
           if (end_quote == '}') {
