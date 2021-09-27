@@ -139,10 +139,10 @@ bool parse () {
         }
         break;
       case '\'':
-        singleQuoteString();
+        stringLiteral(ch);
         break;
       case '"':
-        doubleQuoteString();
+        stringLiteral(ch);
         break;
       case '/': {
         char16_t next_ch = *(pos + 1);
@@ -213,10 +213,10 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace(true);
       if (ch == '\'') {
-        singleQuoteString();
+        stringLiteral(ch);
       }
       else if (ch == '"') {
-        doubleQuoteString();
+        stringLiteral(ch);
       }
       else {
         pos--;
@@ -419,10 +419,10 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 void readImportString (const char16_t* ss, char16_t ch) {
   const char16_t* startPos = pos + 1;
   if (ch == '\'') {
-    singleQuoteString();
+    stringLiteral(ch);
   }
   else if (ch == '"') {
-    doubleQuoteString();
+    stringLiteral(ch);
   }
   else {
     syntaxError();
@@ -447,12 +447,12 @@ void readImportString (const char16_t* ss, char16_t ch) {
     pos++;
     ch = commentWhitespace(true);
     if (ch == '\'') {
-      singleQuoteString();
+      stringLiteral(ch);
       pos++;
       ch = commentWhitespace(true);
     }
     else if (ch == '"') {
-      doubleQuoteString();
+      stringLiteral(ch);
       pos++;
       ch = commentWhitespace(true);
     }
@@ -466,10 +466,10 @@ void readImportString (const char16_t* ss, char16_t ch) {
     pos++;
     ch = commentWhitespace(true);
     if (ch == '\'') {
-      singleQuoteString();
+      stringLiteral(ch);
     }
     else if (ch == '"') {
-      doubleQuoteString();
+      stringLiteral(ch);
     }
     else {
       pos = assertIndex;
@@ -551,26 +551,10 @@ void lineComment () {
   }
 }
 
-void singleQuoteString () {
+void stringLiteral (char16_t quote) {
   while (pos++ < end) {
     char16_t ch = *pos;
-    if (ch == '\'')
-      return;
-    if (ch == '\\') {
-      ch = *++pos;
-      if (ch == '\r' && *(pos + 1) == '\n')
-        pos++;
-    }
-    else if (isBr(ch))
-      break;
-  }
-  syntaxError();
-}
-
-void doubleQuoteString () {
-  while (pos++ < end) {
-    char16_t ch = *pos;
-    if (ch == '"')
+    if (ch == quote)
       return;
     if (ch == '\\') {
       ch = *++pos;
