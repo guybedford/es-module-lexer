@@ -361,8 +361,35 @@ void tryParseExportStatement () {
       ch = commentWhitespace(true);
       while (true) {
         char16_t* startPos = pos;
-        readToWsOrPunctuator(ch);
+
+        ch = readToWsOrPunctuatorOrQuote(ch);
+
         char16_t* endPos = pos;
+        // export { "identifer" as }
+        // export { "@notid" as }
+        // export { "spa ce" as }
+        // export { " space" as }
+        // export { "space " as }
+        // export { "not~id" as }
+        // export { "%notid" as }
+        if (isQuote(ch)) {
+          char16_t end_quote = *(++pos);
+          while (end_quote != '}') {
+            if (end_quote == ch) {
+              break;
+            }
+
+            end_quote = *(++pos);
+          }
+
+          if (end_quote == '}') {
+            return syntaxError();
+          }
+
+          readToWsOrPunctuator(ch);
+          endPos = pos;
+        }
+
         commentWhitespace(true);
         ch = readExportAs(startPos, endPos);
         // ,
@@ -373,7 +400,7 @@ void tryParseExportStatement () {
         if (ch == '}')
           break;
         if (pos == startPos)
-          return syntaxError(); 
+          return syntaxError();
         if (pos > end)
           return syntaxError();
       }
@@ -604,6 +631,14 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
+char16_t readToWsOrPunctuatorOrQuote (char16_t ch) {
+  do {
+    if (isBrOrWs(ch) || isPunctuator(ch) || isQuote(ch))
+      return ch;
+  } while (ch = *(++pos));
+  return ch;
+}
+
 // Note: non-asii BR and whitespace checks omitted for perf / footprint
 // if there is a significant user need this can be reconsidered
 bool isBr (char16_t c) {
@@ -620,6 +655,10 @@ bool isBrOrWs (char16_t c) {
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
   return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
+}
+
+bool isQuote (char16_t ch) {
+  return ch == '\'' || ch == '"';
 }
 
 bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
