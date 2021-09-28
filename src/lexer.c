@@ -392,9 +392,9 @@ void tryParseExportStatement () {
         commentWhitespace(true);
         ch = readExportAs(startPos, endPos);
 
-        if (isQuote(ch)) {
-          continue ;
-        }
+        if (has_error) return syntaxError();
+        else if (isQuote(ch)) continue ;
+
         // ,
         if (ch == ',') {
           pos++;
@@ -434,16 +434,19 @@ void tryParseExportStatement () {
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
 
-  bool quoteBeforeAs = false;
-  // export { "identifer" as }
-  // export { "@notid" as }
-  // export { "spa ce" as }
-  // export { " space" as }
-  // export { "space " as }
-  // export { "not~id" as }
-  // export { "%notid" as }
+  bool startWithQuote = false;
+  bool withAs = false;
+  // export { "identifer" as } from
+  // export { "@notid" as } from
+  // export { "spa ce" as } from
+  // export { " space" as } from
+  // export { "space " as } from
+  // export { "not~id" as } from
+  // export { "%notid" as } from
+  // export { "identifer" } from
+  // export { "%notid" } from
   if (isQuote(ch)) {
-    quoteBeforeAs = true;
+    startWithQuote = true;
     char16_t end_quote;
     while ((end_quote = *(++pos)) != '}') {
       if (end_quote == ch && *(pos - 1) != '\\') {
@@ -458,21 +461,23 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 
     readToWsOrPunctuator(ch);
     endPos = pos;
+    withAs = str_eq2(pos + 1, 'a', 's');
   }
   
   if (ch == 'a') {
+    withAs = true;
     pos += 2;
     ch = commentWhitespace(true);
     startPos = pos;
     ch = readToWsOrPunctuatorOrQuote(ch);
 
-    // export { mod as "identifer" }
-    // export { mod as "@notid" }
-    // export { mod as "spa ce" }
-    // export { mod as " space" }
-    // export { mod as "space " }
-    // export { mod as "not~id" }
-    // export { mod as "%notid" }
+    // export { mod as "identifer" } from
+    // export { mod as "@notid" } from
+    // export { mod as "spa ce" } from
+    // export { mod as " space" } from
+    // export { mod as "space " } from
+    // export { mod as "not~id" } from
+    // export { mod as "%notid" } from
     if (isQuote(ch)) {
       startPos = pos + 1;
       char16_t end_quote;
@@ -495,9 +500,16 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     ch = commentWhitespace(true);
   }
 
-  if (quoteBeforeAs)
+  if (startWithQuote) {
+    if (!withAs) {
+      startPos += 1;
+      endPos -= 1;
+      addExport(startPos, endPos);
+      pos++;
+    }
     return ch;
-    
+  }
+  
   if (pos != startPos)
     addExport(startPos, endPos);
   return ch;
