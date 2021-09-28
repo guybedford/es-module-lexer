@@ -1,6 +1,6 @@
 node_modules
 lib/lexer.wat
-lib/lexer.asm.js
+lib/lexer.js
 dist
 package-lock.json
 yarn.lock
