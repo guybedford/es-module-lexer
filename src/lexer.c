@@ -257,8 +257,7 @@ void tryParseImportStatement () {
         break;
     case '"':
     case '\'':
-    case '{':
-    case '*':
+    case '*': {
       // import statement only permitted at base-level
       if (openTokenDepth != 0) {
         pos--;
@@ -266,13 +265,37 @@ void tryParseImportStatement () {
       }
       while (pos < end) {
         ch = *pos;
-        if (ch == '\'' || ch == '"') {
+        if (isQuote(ch)) {
           readImportString(startPos, ch);
           return;
         }
         pos++;
       }
       syntaxError();
+      break;
+    }
+    
+    case '{': {
+      if (openTokenDepth != 0) {
+        pos--;
+        return;
+      }
+      bool end_curly_bracket = false;
+      while (pos < end) {
+        ch = *pos;
+        if (ch == '}') {
+          end_curly_bracket = true;
+        }
+        if (isQuote(ch) && end_curly_bracket) {
+          readImportString(startPos, ch);
+          return;
+        }
+        pos++;
+      }
+
+      syntaxError();
+      break;
+    }
   }
 }
 

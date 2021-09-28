@@ -562,6 +562,102 @@ function x() {
     assert.strictEqual(exports[1], 'yy');
   });
 
+  test('Import from: non-identifier-string as (doubleQuote)', () => {
+    const source = `
+      import { "~123" as foo0 } from './mod0.js';
+      import { "ab cd" as foo1 } from './mod1.js';
+      import { "not identifier" as foo2 } from './mod2.js';
+      import { "-notidentifier" as foo3 } from './mod3.js';
+      import { "%notidentifier" as foo4 } from './mod4.js';
+      import { "@notidentifier" as foo5 } from './mod5.js';
+      import { " notidentifier" as foo6 } from './mod6.js';
+      import { "notidentifier " as foo7 } from './mod7.js';
+      import { " notidentifier " as foo8 } from './mod8.js';`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(exports.length, 0);
+    assert.strictEqual(imports.length, 9);
+
+    assert.strictEqual(imports[0].n, './mod0.js');
+    assert.strictEqual(imports[1].n, './mod1.js');
+    assert.strictEqual(imports[2].n, './mod2.js');
+    assert.strictEqual(imports[3].n, './mod3.js');
+    assert.strictEqual(imports[4].n, './mod4.js');
+    assert.strictEqual(imports[5].n, './mod5.js');
+    assert.strictEqual(imports[6].n, './mod6.js');
+    assert.strictEqual(imports[7].n, './mod7.js');
+    assert.strictEqual(imports[8].n, './mod8.js');
+  });
+
+  test('Import from: non-identifier-string as (singleQuote)', () => {
+    const source = `
+      import { '~123' as foo0 } from './mod0.js';
+      import { 'ab cd' as foo1 } from './mod1.js';
+      import { 'not identifier' as foo2 } from './mod2.js';
+      import { '-notidentifier' as foo3 } from './mod3.js';
+      import { '%notidentifier' as foo4 } from './mod4.js';
+      import { '@notidentifier' as foo5 } from './mod5.js';
+      import { ' notidentifier' as foo6 } from './mod6.js';
+      import { 'notidentifier ' as foo7 } from './mod7.js';
+      import { ' notidentifier ' as foo8 } from './mod8.js';`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(exports.length, 0);
+    assert.strictEqual(imports.length, 9);
+
+    assert.strictEqual(imports[0].n, './mod0.js');
+    assert.strictEqual(imports[1].n, './mod1.js');
+    assert.strictEqual(imports[2].n, './mod2.js');
+    assert.strictEqual(imports[3].n, './mod3.js');
+    assert.strictEqual(imports[4].n, './mod4.js');
+    assert.strictEqual(imports[5].n, './mod5.js');
+    assert.strictEqual(imports[6].n, './mod6.js');
+    assert.strictEqual(imports[7].n, './mod7.js');
+    assert.strictEqual(imports[8].n, './mod8.js');
+  });
+
+  test('Import from: with-backslash-keywords as (doubleQuote)', () => {
+    const source = String.raw`
+    import { " slash\\ " as foo0 } from './mod0.js';
+    import { " quote\" " as foo1 } from './mod1.js'
+    import { " quote\\\" " as foo2 } from './mod2.js';
+    import { " quote' " as foo3 } from './mod3.js';`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(exports.length, 0);
+    assert.strictEqual(imports.length, 4);
+
+    assert.strictEqual(imports[0].n, './mod0.js');
+    assert.strictEqual(imports[1].n, './mod1.js');
+    assert.strictEqual(imports[2].n, './mod2.js');
+    assert.strictEqual(imports[3].n, './mod3.js');
+  });
+
+  test('Import from: with-backslash-keywords as (singleQuote)', () => {
+    const source = String.raw`
+    import { ' slash\\ ' as foo0 } from './mod0.js';
+    import { ' quote\' ' as foo1 } from './mod1.js'
+    import { ' quote\\\' ' as foo2 } from './mod2.js';
+    import { ' quote\' ' as foo3 } from './mod3.js';`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(exports.length, 0);
+    assert.strictEqual(imports.length, 4);
+
+    assert.strictEqual(imports[0].n, './mod0.js');
+    assert.strictEqual(imports[1].n, './mod1.js');
+    assert.strictEqual(imports[2].n, './mod2.js');
+    assert.strictEqual(imports[3].n, './mod3.js');
+  });
+
+  test('Import from: with-emoji as', () => {
+    const source = `
+      import { "hm🤔" as foo0 } from './mod0.js';
+      import { " 🚀rocket space " as foo1 } from './mod1.js';`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(exports.length, 0);
+    assert.strictEqual(imports.length, 2);
+
+    assert.strictEqual(imports[0].n, './mod0.js');
+    assert.strictEqual(imports[1].n, './mod1.js');
+  });
+
   test('Export From', () => {
     const source = `
       export { x } from './asdf';
