@@ -388,31 +388,13 @@ void tryParseExportStatement () {
         ch = readToWsOrPunctuatorOrQuote(ch);
 
         char16_t* endPos = pos;
-        // export { "identifer" as }
-        // export { "@notid" as }
-        // export { "spa ce" as }
-        // export { " space" as }
-        // export { "space " as }
-        // export { "not~id" as }
-        // export { "%notid" as }
-        if (isQuote(ch)) {
-          char16_t end_quote;
-          while ((end_quote = *(++pos)) != '}') {
-            if (end_quote == ch && *(pos - 1) != '\\') {
-              break;
-            }
-          }
-
-          if (end_quote == '}') {
-            return syntaxError();
-          }
-
-          readToWsOrPunctuator(ch);
-          endPos = pos;
-        }
 
         commentWhitespace(true);
         ch = readExportAs(startPos, endPos);
+
+        if (isQuote(ch)) {
+          continue ;
+        }
         // ,
         if (ch == ',') {
           pos++;
@@ -451,14 +433,71 @@ void tryParseExportStatement () {
 
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
+
+  bool quoteBeforeAs = false;
+  // export { "identifer" as }
+  // export { "@notid" as }
+  // export { "spa ce" as }
+  // export { " space" as }
+  // export { "space " as }
+  // export { "not~id" as }
+  // export { "%notid" as }
+  if (isQuote(ch)) {
+    quoteBeforeAs = true;
+    char16_t end_quote;
+    while ((end_quote = *(++pos)) != '}') {
+      if (end_quote == ch && *(pos - 1) != '\\') {
+        break;
+      }
+    }
+
+    if (end_quote == '}') {
+      syntaxError();
+      return ch;
+    }
+
+    readToWsOrPunctuator(ch);
+    endPos = pos;
+  }
+  
   if (ch == 'a') {
     pos += 2;
     ch = commentWhitespace(true);
     startPos = pos;
-    readToWsOrPunctuator(ch);
-    endPos = pos;
+    ch = readToWsOrPunctuatorOrQuote(ch);
+
+    // export { mod as "identifer" }
+    // export { mod as "@notid" }
+    // export { mod as "spa ce" }
+    // export { mod as " space" }
+    // export { mod as "space " }
+    // export { mod as "not~id" }
+    // export { mod as "%notid" }
+    if (isQuote(ch)) {
+      startPos = pos + 1;
+      char16_t end_quote;
+      while ((end_quote = *(++pos)) != '}') {
+        if (end_quote == ch && *(pos - 1) != '\\') {
+          break;
+        }
+      }
+
+      if (end_quote == '}') {
+        syntaxError();
+        return ch;
+      }
+      readToWsOrPunctuator(ch);
+      endPos = pos - 1;
+    } else {
+      endPos = pos;
+    }
+
     ch = commentWhitespace(true);
   }
+
+  if (quoteBeforeAs)
+    return ch;
+    
   if (pos != startPos)
     addExport(startPos, endPos);
   return ch;
