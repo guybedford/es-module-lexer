@@ -199,7 +199,7 @@ void tryParseImportStatement () {
   pos += 6;
 
   char16_t ch = commentWhitespace(true);
-  
+
   switch (ch) {
     // dynamic import
     case '(':
@@ -250,7 +250,7 @@ void tryParseImportStatement () {
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
         addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
-    
+
     default:
       // no space after "import" -> not an import keyword
       if (pos == startPos + 6)
@@ -274,7 +274,7 @@ void tryParseImportStatement () {
       syntaxError();
       break;
     }
-    
+
     case '{': {
       if (openTokenDepth != 0) {
         pos--;
@@ -385,15 +385,44 @@ void tryParseExportStatement () {
       while (true) {
         char16_t* startPos = pos;
 
-        ch = readToWsOrPunctuatorOrQuote(ch);
+        bool startWithQuote = isQuote(ch);
+        if (!startWithQuote)
+          ch = readToWsOrPunctuator(ch);
 
         char16_t* endPos = pos;
 
-        commentWhitespace(true);
-        ch = readExportAs(startPos, endPos);
+        ch = commentWhitespace(true);
 
-        if (has_error) return syntaxError();
-        else if (isQuote(ch)) continue ;
+        // export { "identifer" as } from
+        // export { "@notid" as } from
+        // export { "spa ce" as } from
+        // export { " space" as } from
+        // export { "space " as } from
+        // export { "not~id" as } from
+        // export { "%notid" as } from
+        // export { "identifer" } from
+        // export { "%notid" } from
+        if (startWithQuote) {
+          char16_t *posQuoteStart = pos;
+
+          if (!scanExportAsQuotes(ch)) {
+            return syntaxError();
+          }
+
+          char16_t *posQuoteEnd = pos;
+          readToWsOrPunctuator(ch);
+          ch = commentWhitespace(true);
+
+          if (str_eq2(pos, 'a', 's')) {
+            startPos = pos;
+            endPos = pos;
+          } else {
+            startPos = posQuoteStart + 1;
+            endPos = posQuoteEnd;
+          }
+        }
+
+        ch = readExportAs(startPos, endPos);
 
         // ,
         if (ch == ',') {
@@ -402,15 +431,16 @@ void tryParseExportStatement () {
         }
         if (ch == '}')
           break;
-        if (pos == startPos)
+        if (pos == startPos) {
           return syntaxError();
+        }
         if (pos > end)
           return syntaxError();
       }
       pos++;
       ch = commentWhitespace(true);
     break;
-    
+
     // export *
     // export * as X
     case '*':
@@ -434,43 +464,15 @@ void tryParseExportStatement () {
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
 
-  bool startWithQuote = false;
-  bool withAs = false;
-  // export { "identifer" as } from
-  // export { "@notid" as } from
-  // export { "spa ce" as } from
-  // export { " space" as } from
-  // export { "space " as } from
-  // export { "not~id" as } from
-  // export { "%notid" as } from
-  // export { "identifer" } from
-  // export { "%notid" } from
-  if (isQuote(ch)) {
-    startWithQuote = true;
-    char16_t end_quote;
-    while ((end_quote = *(++pos)) != '}') {
-      if (end_quote == ch && *(pos - 1) != '\\') {
-        break;
-      }
-    }
-
-    if (end_quote == '}') {
-      syntaxError();
-      return ch;
-    }
-
-    readToWsOrPunctuator(ch);
-    endPos = pos;
-    withAs = str_eq2(pos + 1, 'a', 's');
-  }
-  
   if (ch == 'a') {
-    withAs = true;
     pos += 2;
     ch = commentWhitespace(true);
     startPos = pos;
-    ch = readToWsOrPunctuatorOrQuote(ch);
 
+    if (!isQuote(ch)) {
+      ch = readToWsOrPunctuator(ch);
+      endPos = pos;
+    }
     // export { mod as "identifer" } from
     // export { mod as "@notid" } from
     // export { mod as "spa ce" } from
@@ -478,41 +480,38 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     // export { mod as "space " } from
     // export { mod as "not~id" } from
     // export { mod as "%notid" } from
-    if (isQuote(ch)) {
+    else {
       startPos = pos + 1;
-      char16_t end_quote;
-      while ((end_quote = *(++pos)) != '}') {
-        if (end_quote == ch && *(pos - 1) != '\\') {
-          break;
-        }
-      }
 
-      if (end_quote == '}') {
+      if (!scanExportAsQuotes(ch)) {
         syntaxError();
         return ch;
       }
       readToWsOrPunctuator(ch);
       endPos = pos - 1;
-    } else {
-      endPos = pos;
     }
 
     ch = commentWhitespace(true);
   }
 
-  if (startWithQuote) {
-    if (!withAs) {
-      startPos += 1;
-      endPos -= 1;
-      addExport(startPos, endPos);
-      pos++;
-    }
-    return ch;
-  }
-  
   if (pos != startPos)
     addExport(startPos, endPos);
   return ch;
+}
+
+bool scanExportAsQuotes(char16_t quote) {
+  char16_t end_quote;
+  while ((end_quote = *(++pos)) != '}') {
+    if (end_quote == quote && *(pos - 1) != '\\') {
+      break;
+    }
+  }
+
+  if (end_quote == '}') {
+    return false;
+  }
+
+  return true;
 }
 
 void readImportString (const char16_t* ss, char16_t ch) {
@@ -703,14 +702,6 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
-char16_t readToWsOrPunctuatorOrQuote (char16_t ch) {
-  do {
-    if (isBrOrWs(ch) || isPunctuator(ch) || isQuote(ch))
-      return ch;
-  } while (ch = *(++pos));
-  return ch;
-}
-
 // Note: non-asii BR and whitespace checks omitted for perf / footprint
 // if there is a significant user need this can be reconsidered
 bool isBr (char16_t c) {
@@ -858,7 +849,7 @@ bool isExpressionKeyword (char16_t* pos) {
           // throw
           return readPrecedingKeyword3(pos - 2, 't', 'h', 'r');
         default:
-          return false; 
+          return false;
       }
   }
   return false;

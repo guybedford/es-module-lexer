@@ -199,6 +199,8 @@ bool parse (uint32_t point);
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
+bool scanExportAsQuotes(char16_t quote);
+
 void readImportString (const char16_t* ss, char16_t ch);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
@@ -210,7 +212,6 @@ void lineComment ();
 void stringLiteral (char16_t quote);
 
 char16_t readToWsOrPunctuator (char16_t ch);
-char16_t readToWsOrPunctuatorOrQuote (char16_t ch);
 
 bool isQuote (char16_t ch);
 
