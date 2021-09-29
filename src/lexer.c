@@ -444,9 +444,8 @@ void tryParseExportStatement () {
         }
         if (ch == '}')
           break;
-        if (pos == startPos) {
+        if (pos == startPos)
           return syntaxError();
-        }
         if (pos > end)
           return syntaxError();
       }
