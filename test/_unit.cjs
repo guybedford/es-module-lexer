@@ -658,6 +658,26 @@ function x() {
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
     });
+
+    test('double-quotes-and-curly-bracket', () => {
+      const source = `
+        import { asdf as "b} from 'wrong'" } from 'mod0';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 1);
+  
+      assert.strictEqual(imports[0].n, 'mod0');
+    });
+
+    test('single-quotes-and-curly-bracket', () => {
+      const source = `
+        import { asdf as 'b} from "wrong"' } from 'mod0';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 1);
+  
+      assert.strictEqual(imports[0].n, 'mod0');
+    });
   });
 
   suite('Export From', () => {
@@ -1026,6 +1046,86 @@ function x() {
       assert.strictEqual(exports[1], String.raw` quote\' `);
       assert.strictEqual(exports[2], String.raw` quote\\\' `);
       assert.strictEqual(exports[3], String.raw` quote\' `);
+    });
+
+    test('curly-brace (doubleQuote)', () => {
+      const source = `
+        export { " right-curlybrace} " } from './mod0.js';
+        export { " {left-curlybrace " } from './mod1.js';
+        export { " {curlybrackets} " } from './mod2.js';
+        export { ' right-curlybrace} ' } from './mod0.js';
+        export { ' {left-curlybrace ' } from './mod1.js';
+        export { ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('* as curly-brace (doubleQuote)', () => {
+      const source = `
+        export { foo as " right-curlybrace} " } from './mod0.js';
+        export { foo as " {left-curlybrace " } from './mod1.js';
+        export { foo as " {curlybrackets} " } from './mod2.js';
+        export { foo as ' right-curlybrace} ' } from './mod0.js';
+        export { foo as ' {left-curlybrace ' } from './mod1.js';
+        export { foo as ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('curly-brace as curly-brace (doubleQuote)', () => {
+      const source = `
+        export { " right-curlybrace} " as " right-curlybrace} " } from './mod0.js';
+        export { " {left-curlybrace " as " {left-curlybrace " } from './mod1.js';
+        export { " {curlybrackets} " as " {curlybrackets} " } from './mod2.js';
+        export { ' right-curlybrace} ' as ' right-curlybrace} ' } from './mod0.js';
+        export { ' {left-curlybrace ' as ' {left-curlybrace ' } from './mod1.js';
+        export { ' {curlybrackets} ' as ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('complex', () => {
+      const source = `
+        export {
+          foo,
+          foo1 as foo2,
+          " {left-curlybrace ",
+          " {curly-brackets}" as "@notidentifier",
+          "?" as "identifier",
+        } from './mod0.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 1);
+
+      assert.strictEqual(exports.length, 5);
+      assert.strictEqual(exports[0], 'foo');
+      assert.strictEqual(exports[1], 'foo2');
+      assert.strictEqual(exports[2], ' {left-curlybrace ');
+      assert.strictEqual(exports[3], '@notidentifier');
+      assert.strictEqual(exports[4], 'identifier');
     });
   });
 

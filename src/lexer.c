@@ -276,20 +276,33 @@ void tryParseImportStatement () {
     }
 
     case '{': {
+      // import statement only permitted at base-level
       if (openTokenDepth != 0) {
         pos--;
         return;
       }
-      bool end_curly_bracket = false;
+      char16_t firstQuote;
+      bool curlyBraceClosed = false;
+      bool quoteClosed = true;
+      
       while (pos < end) {
         ch = *pos;
-        if (ch == '}') {
-          end_curly_bracket = true;
+        if (isQuote(ch)) {
+          if (curlyBraceClosed) {
+            readImportString(startPos, ch);
+            return;
+          }
+
+          if (!firstQuote) {
+            firstQuote = ch;
+            quoteClosed = false;
+          } else if (ch == firstQuote) {
+            quoteClosed = true;
+          }
+        } else if (ch == '}') {
+          curlyBraceClosed = quoteClosed;
         }
-        if (isQuote(ch) && end_curly_bracket) {
-          readImportString(startPos, ch);
-          return;
-        }
+        
         pos++;
       }
 
@@ -500,18 +513,15 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 }
 
 bool scanExportAsQuotes(char16_t quote) {
-  char16_t end_quote;
-  while ((end_quote = *(++pos)) != '}') {
-    if (end_quote == quote && *(pos - 1) != '\\') {
-      break;
+  char16_t ch;
+  while (++pos < end) {
+    ch = *pos;
+    if (ch == quote && *(pos - 1) != '\\') {
+      return true;
     }
   }
 
-  if (end_quote == '}') {
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
 void readImportString (const char16_t* ss, char16_t ch) {
