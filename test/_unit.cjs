@@ -1108,7 +1108,7 @@ function x() {
       assert.strictEqual(exports[5], ' {curlybrackets} ');
     });
 
-    test('complex', () => {
+    test('complex & edge cases', () => {
       const source = `
         export {
           foo,
@@ -1116,16 +1116,20 @@ function x() {
           " {left-curlybrace ",
           " {curly-brackets}" as "@notidentifier",
           "?" as "identifier",
-        } from './mod0.js';`;
+        } from './mod0.js';
+        export { "p as 'z' from 'asdf'" as "z'" } from 'asdf';
+        export { "z'" as "p as 'z' from 'asdf'" } from 'asdf';`;
       const [imports, exports] = parse(source);
-      assert.strictEqual(imports.length, 1);
+      assert.strictEqual(imports.length, 3);
 
-      assert.strictEqual(exports.length, 5);
+      assert.strictEqual(exports.length, 7);
       assert.strictEqual(exports[0], 'foo');
       assert.strictEqual(exports[1], 'foo2');
       assert.strictEqual(exports[2], ' {left-curlybrace ');
       assert.strictEqual(exports[3], '@notidentifier');
       assert.strictEqual(exports[4], 'identifier');
+      assert.strictEqual(exports[5], "z'");
+      assert.strictEqual(exports[6], "p as 'z' from 'asdf'");
     });
   });
 
