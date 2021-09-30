@@ -281,32 +281,32 @@ void tryParseImportStatement () {
         pos--;
         return;
       }
-      char16_t firstQuote;
-      bool curlyBraceClosed = false;
-      bool quoteClosed = true;
       
       while (pos < end) {
         ch = *pos;
         if (isQuote(ch)) {
-          if (curlyBraceClosed) {
-            readImportString(startPos, ch);
-            return;
-          }
-
-          if (!firstQuote) {
-            firstQuote = ch;
-            quoteClosed = false;
-          } else if (ch == firstQuote) {
-            quoteClosed = true;
-          }
+          stringLiteral(ch);
         } else if (ch == '}') {
-          curlyBraceClosed = quoteClosed;
+          pos++;
+          break ;
         }
         
         pos++;
       }
 
-      syntaxError();
+      ch = commentWhitespace(true);
+      if (!str_eq4(pos, 'f', 'r', 'o', 'm')) {
+        syntaxError();
+        break ;
+      }
+
+      pos += 4;
+      ch = commentWhitespace(true);
+
+      if (isQuote(ch)) {
+        readImportString(startPos, ch);
+      }
+      
       break;
     }
   }
