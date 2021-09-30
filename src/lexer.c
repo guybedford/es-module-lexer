@@ -418,9 +418,7 @@ void tryParseExportStatement () {
         if (startWithQuote) {
           char16_t *posQuoteStart = pos;
 
-          if (!scanExportAsQuotes(ch)) {
-            return syntaxError();
-          }
+          stringLiteral(ch);
 
           char16_t *posQuoteEnd = pos;
           readToWsOrPunctuator(ch);
@@ -494,11 +492,8 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     // export { mod as "%notid" } from
     else {
       startPos = pos + 1;
-
-      if (!scanExportAsQuotes(ch)) {
-        syntaxError();
-        return ch;
-      }
+      
+      stringLiteral(ch);
       readToWsOrPunctuator(ch);
       endPos = pos - 1;
     }
@@ -509,18 +504,6 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   if (pos != startPos)
     addExport(startPos, endPos);
   return ch;
-}
-
-bool scanExportAsQuotes(char16_t quote) {
-  char16_t ch;
-  while (++pos < end) {
-    ch = *pos;
-    if (ch == quote && *(pos - 1) != '\\') {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 void readImportString (const char16_t* ss, char16_t ch) {
