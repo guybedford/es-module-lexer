@@ -288,7 +288,7 @@ void tryParseImportStatement () {
           stringLiteral(ch);
         } else if (ch == '}') {
           pos++;
-          break ;
+          break;
         }
 
         pos++;
@@ -297,15 +297,17 @@ void tryParseImportStatement () {
       ch = commentWhitespace(true);
       if (!str_eq4(pos, 'f', 'r', 'o', 'm')) {
         syntaxError();
-        break ;
+        break;
       }
 
       pos += 4;
       ch = commentWhitespace(true);
 
-      if (isQuote(ch)) {
-        readImportString(startPos, ch);
+      if (!isQuote(ch)) {
+        return syntaxError();
       }
+
+      readImportString(startPos, ch);
 
       break;
     }
