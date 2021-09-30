@@ -475,9 +475,9 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   if (ch == 'a') {
     pos += 2;
     ch = commentWhitespace(true);
-    startPos = pos;
 
     if (!isQuote(ch)) {
+      startPos = pos;
       ch = readToWsOrPunctuator(ch);
       endPos = pos;
     }
