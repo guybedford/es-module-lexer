@@ -404,7 +404,7 @@ void tryParseExportStatement () {
         if (!isQuote(ch)) {
           ch = readToWsOrPunctuator(ch);
           endPos = pos;
-          ch = commentWhitespace(true);
+          commentWhitespace(true);
         }
         // export { "identifer" as } from
         // export { "@notid" as } from
@@ -419,9 +419,9 @@ void tryParseExportStatement () {
           char16_t *posQuoteStart = pos;
 
           stringLiteral(ch);
+          pos++;
 
           char16_t *posQuoteEnd = pos;
-          readToWsOrPunctuator(ch);
           ch = commentWhitespace(true);
 
           if (str_eq2(pos, 'a', 's')) {
@@ -429,7 +429,7 @@ void tryParseExportStatement () {
             endPos = pos;
           } else {
             startPos = posQuoteStart + 1;
-            endPos = posQuoteEnd;
+            endPos = posQuoteEnd - 1;
           }
         }
 
@@ -494,8 +494,8 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
       startPos = pos + 1;
 
       stringLiteral(ch);
-      readToWsOrPunctuator(ch);
-      endPos = pos - 1;
+      endPos = pos;
+      pos++;
     }
 
     ch = commentWhitespace(true);
