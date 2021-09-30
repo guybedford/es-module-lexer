@@ -281,7 +281,7 @@ void tryParseImportStatement () {
         pos--;
         return;
       }
-      
+
       while (pos < end) {
         ch = *pos;
         if (isQuote(ch)) {
@@ -290,7 +290,7 @@ void tryParseImportStatement () {
           pos++;
           break ;
         }
-        
+
         pos++;
       }
 
@@ -306,7 +306,7 @@ void tryParseImportStatement () {
       if (isQuote(ch)) {
         readImportString(startPos, ch);
       }
-      
+
       break;
     }
   }
@@ -397,15 +397,13 @@ void tryParseExportStatement () {
       ch = commentWhitespace(true);
       while (true) {
         char16_t* startPos = pos;
+        char16_t* endPos;
 
-        bool startWithQuote = isQuote(ch);
-        if (!startWithQuote)
+        if (!isQuote(ch)) {
           ch = readToWsOrPunctuator(ch);
-
-        char16_t* endPos = pos;
-
-        ch = commentWhitespace(true);
-
+          endPos = pos;
+          ch = commentWhitespace(true);
+        }
         // export { "identifer" as } from
         // export { "@notid" as } from
         // export { "spa ce" as } from
@@ -415,7 +413,7 @@ void tryParseExportStatement () {
         // export { "%notid" as } from
         // export { "identifer" } from
         // export { "%notid" } from
-        if (startWithQuote) {
+        else {
           char16_t *posQuoteStart = pos;
 
           stringLiteral(ch);
@@ -492,7 +490,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     // export { mod as "%notid" } from
     else {
       startPos = pos + 1;
-      
+
       stringLiteral(ch);
       readToWsOrPunctuator(ch);
       endPos = pos - 1;
