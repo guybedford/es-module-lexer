@@ -2,9 +2,10 @@ let asm, asmBuffer, allocSize = 4194304, addr;
 
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
-let source;
-export function parse (_source, name = '@') {
+let source, name;
+export function parse (_source, _name = '@') {
   source = _source;
+  name = _name;
   if (source.length > allocSize || !asm) {
     while (source.length > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize * 4);
@@ -17,8 +18,10 @@ export function parse (_source, name = '@') {
 
   (isLE ? copyLE : copyBE)(source, new Uint16Array(asmBuffer, addr, len));
 
-  if (!asm.p())
-    throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, asm.e()).split('\n').length}:${asm.e() - source.lastIndexOf('\n', asm.e() - 1)}`), { idx: asm.e() });
+  if (!asm.p()) {
+    acornPos = asm.e();
+    syntaxError();
+  }
 
   const imports = [], exports = [];
   while (asm.ri()) {
@@ -28,7 +31,10 @@ export function parse (_source, name = '@') {
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
     imports.push({ n, s, e, ss, se, d, a });
   }
-  while (asm.re()) exports.push(source.slice(asm.es(), asm.ee()));
+  while (asm.re()) {
+    const start = asm.es(), ch = source.charCodeAt(start);
+    exports.push((ch === 34 || ch === 39) ? readString(start + 1, ch) : source.slice(asm.es(), asm.ee()));
+  }
 
   return [imports, exports, !!asm.f()];
 }
@@ -191,6 +197,10 @@ function readCodePointToString () {
 
 function isBr (c) {
   return c === 13/*\r*/ || c === 10/*\n*/;
+}
+
+function syntaxError () {
+  throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
 }
 
 // function asmInit () { ... } from lib/lexer.asm.js is concatenated at the end here
