@@ -236,7 +236,7 @@ To build download the WASI SDK from https://github.com/WebAssembly/wasi-sdk/rele
 
 The Makefile assumes the existence of "wasi-sdk-11.0" and "wabt" (optional) as sibling folders to this project.
 
-The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build-wasm` to create `dist/lexer.js`.
+The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build:wasm` to create `dist/lexer.js`.
 
 On Windows it may be preferable to use the Linux subsystem.
 
