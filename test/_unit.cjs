@@ -856,9 +856,9 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\" `);
-      assert.strictEqual(exports[2], String.raw` quote\\\" `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
       assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
@@ -872,10 +872,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\' `);
-      assert.strictEqual(exports[2], String.raw` quote\\\' `);
-      assert.strictEqual(exports[3], String.raw` quote\' `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
     test('variable as non-identifier-string (doubleQuote)', () => {
@@ -940,9 +940,9 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\" `);
-      assert.strictEqual(exports[2], String.raw` quote\\\" `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
       assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
@@ -957,10 +957,10 @@ function x() {
 
       assert.strictEqual(exports.length, 4);
 
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\' `);
-      assert.strictEqual(exports[2], String.raw` quote\\\' `);
-      assert.strictEqual(exports[3], String.raw` quote\' `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
     test('non-identifier-string as non-identifier-string (doubleQuote)', () => {
@@ -1025,9 +1025,9 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\" `);
-      assert.strictEqual(exports[2], String.raw` quote\\\" `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
       assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
@@ -1042,10 +1042,10 @@ function x() {
 
       assert.strictEqual(exports.length, 4);
 
-      assert.strictEqual(exports[0], String.raw` slash\\ `);
-      assert.strictEqual(exports[1], String.raw` quote\' `);
-      assert.strictEqual(exports[2], String.raw` quote\\\' `);
-      assert.strictEqual(exports[3], String.raw` quote\' `);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
     });
 
     test('curly-brace (doubleQuote)', () => {

@@ -25,7 +25,16 @@ export function parse (source, name = '@') {
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
     imports.push({ n, s, e, ss, se, d, a });
   }
-  while (wasm.re()) exports.push(source.slice(wasm.es(), wasm.ee()));
+  while (wasm.re()) {
+    const s = wasm.es(), e = wasm.ee();
+    const ch = source[s];
+    
+    if (ch === '"' || ch === '\'') {
+      exports.push(decode(source.slice(s, e)));
+    } else {
+      exports.push(source.slice(s, e));
+    }
+  }
 
   function decode (str) {
     try {

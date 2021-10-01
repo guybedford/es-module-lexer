@@ -399,12 +399,9 @@ void tryParseExportStatement () {
       ch = commentWhitespace(true);
       while (true) {
         char16_t* startPos = pos;
-        char16_t* endPos;
 
         if (!isQuote(ch)) {
           ch = readToWsOrPunctuator(ch);
-          endPos = pos;
-          commentWhitespace(true);
         }
         // export { "identifer" as } from
         // export { "@notid" as } from
@@ -416,22 +413,12 @@ void tryParseExportStatement () {
         // export { "identifer" } from
         // export { "%notid" } from
         else {
-          char16_t *posQuoteStart = pos;
-
           stringLiteral(ch);
           pos++;
-
-          char16_t *posQuoteEnd = pos;
-          ch = commentWhitespace(true);
-
-          if (str_eq2(pos, 'a', 's')) {
-            startPos = pos;
-            endPos = pos;
-          } else {
-            startPos = posQuoteStart + 1;
-            endPos = posQuoteEnd - 1;
-          }
         }
+
+        char16_t* endPos = pos;
+        commentWhitespace(true);
 
         ch = readExportAs(startPos, endPos);
 
@@ -477,11 +464,10 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   if (ch == 'a') {
     pos += 2;
     ch = commentWhitespace(true);
+    startPos = pos;
 
     if (!isQuote(ch)) {
-      startPos = pos;
       ch = readToWsOrPunctuator(ch);
-      endPos = pos;
     }
     // export { mod as "identifer" } from
     // export { mod as "@notid" } from
@@ -491,12 +477,11 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     // export { mod as "not~id" } from
     // export { mod as "%notid" } from
     else {
-      startPos = pos + 1;
-
       stringLiteral(ch);
-      endPos = pos;
       pos++;
     }
+
+    endPos = pos;
 
     ch = commentWhitespace(true);
   }
