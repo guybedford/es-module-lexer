@@ -419,9 +419,7 @@ void tryParseExportStatement () {
 
         char16_t* endPos = pos;
         commentWhitespace(true);
-
         ch = readExportAs(startPos, endPos);
-
         // ,
         if (ch == ',') {
           pos++;
