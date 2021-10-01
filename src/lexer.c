@@ -139,10 +139,10 @@ bool parse () {
         }
         break;
       case '\'':
-        singleQuoteString();
+        stringLiteral(ch);
         break;
       case '"':
-        doubleQuoteString();
+        stringLiteral(ch);
         break;
       case '/': {
         char16_t next_ch = *(pos + 1);
@@ -199,7 +199,7 @@ void tryParseImportStatement () {
   pos += 6;
 
   char16_t ch = commentWhitespace(true);
-  
+
   switch (ch) {
     // dynamic import
     case '(':
@@ -213,10 +213,10 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace(true);
       if (ch == '\'') {
-        singleQuoteString();
+        stringLiteral(ch);
       }
       else if (ch == '"') {
-        doubleQuoteString();
+        stringLiteral(ch);
       }
       else {
         pos--;
@@ -250,15 +250,14 @@ void tryParseImportStatement () {
       if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
         addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
-    
+
     default:
       // no space after "import" -> not an import keyword
       if (pos == startPos + 6)
         break;
     case '"':
     case '\'':
-    case '{':
-    case '*':
+    case '*': {
       // import statement only permitted at base-level
       if (openTokenDepth != 0) {
         pos--;
@@ -266,13 +265,52 @@ void tryParseImportStatement () {
       }
       while (pos < end) {
         ch = *pos;
-        if (ch == '\'' || ch == '"') {
+        if (isQuote(ch)) {
           readImportString(startPos, ch);
           return;
         }
         pos++;
       }
       syntaxError();
+      break;
+    }
+
+    case '{': {
+      // import statement only permitted at base-level
+      if (openTokenDepth != 0) {
+        pos--;
+        return;
+      }
+
+      while (pos < end) {
+        ch = *pos;
+        if (isQuote(ch)) {
+          stringLiteral(ch);
+        } else if (ch == '}') {
+          pos++;
+          break;
+        }
+
+        pos++;
+      }
+
+      ch = commentWhitespace(true);
+      if (!str_eq4(pos, 'f', 'r', 'o', 'm')) {
+        syntaxError();
+        break;
+      }
+
+      pos += 4;
+      ch = commentWhitespace(true);
+
+      if (!isQuote(ch)) {
+        return syntaxError();
+      }
+
+      readImportString(startPos, ch);
+
+      break;
+    }
   }
 }
 
@@ -361,7 +399,24 @@ void tryParseExportStatement () {
       ch = commentWhitespace(true);
       while (true) {
         char16_t* startPos = pos;
-        readToWsOrPunctuator(ch);
+
+        if (!isQuote(ch)) {
+          ch = readToWsOrPunctuator(ch);
+        }
+        // export { "identifer" as } from
+        // export { "@notid" as } from
+        // export { "spa ce" as } from
+        // export { " space" as } from
+        // export { "space " as } from
+        // export { "not~id" as } from
+        // export { "%notid" as } from
+        // export { "identifer" } from
+        // export { "%notid" } from
+        else {
+          stringLiteral(ch);
+          pos++;
+        }
+
         char16_t* endPos = pos;
         commentWhitespace(true);
         ch = readExportAs(startPos, endPos);
@@ -373,14 +428,14 @@ void tryParseExportStatement () {
         if (ch == '}')
           break;
         if (pos == startPos)
-          return syntaxError(); 
+          return syntaxError();
         if (pos > end)
           return syntaxError();
       }
       pos++;
       ch = commentWhitespace(true);
     break;
-    
+
     // export *
     // export * as X
     case '*':
@@ -403,14 +458,32 @@ void tryParseExportStatement () {
 
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
+
   if (ch == 'a') {
     pos += 2;
     ch = commentWhitespace(true);
     startPos = pos;
-    readToWsOrPunctuator(ch);
+
+    if (!isQuote(ch)) {
+      ch = readToWsOrPunctuator(ch);
+    }
+    // export { mod as "identifer" } from
+    // export { mod as "@notid" } from
+    // export { mod as "spa ce" } from
+    // export { mod as " space" } from
+    // export { mod as "space " } from
+    // export { mod as "not~id" } from
+    // export { mod as "%notid" } from
+    else {
+      stringLiteral(ch);
+      pos++;
+    }
+
     endPos = pos;
+
     ch = commentWhitespace(true);
   }
+
   if (pos != startPos)
     addExport(startPos, endPos);
   return ch;
@@ -419,10 +492,10 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
 void readImportString (const char16_t* ss, char16_t ch) {
   const char16_t* startPos = pos + 1;
   if (ch == '\'') {
-    singleQuoteString();
+    stringLiteral(ch);
   }
   else if (ch == '"') {
-    doubleQuoteString();
+    stringLiteral(ch);
   }
   else {
     syntaxError();
@@ -447,12 +520,12 @@ void readImportString (const char16_t* ss, char16_t ch) {
     pos++;
     ch = commentWhitespace(true);
     if (ch == '\'') {
-      singleQuoteString();
+      stringLiteral(ch);
       pos++;
       ch = commentWhitespace(true);
     }
     else if (ch == '"') {
-      doubleQuoteString();
+      stringLiteral(ch);
       pos++;
       ch = commentWhitespace(true);
     }
@@ -466,10 +539,10 @@ void readImportString (const char16_t* ss, char16_t ch) {
     pos++;
     ch = commentWhitespace(true);
     if (ch == '\'') {
-      singleQuoteString();
+      stringLiteral(ch);
     }
     else if (ch == '"') {
-      doubleQuoteString();
+      stringLiteral(ch);
     }
     else {
       pos = assertIndex;
@@ -551,26 +624,10 @@ void lineComment () {
   }
 }
 
-void singleQuoteString () {
+void stringLiteral (char16_t quote) {
   while (pos++ < end) {
     char16_t ch = *pos;
-    if (ch == '\'')
-      return;
-    if (ch == '\\') {
-      ch = *++pos;
-      if (ch == '\r' && *(pos + 1) == '\n')
-        pos++;
-    }
-    else if (isBr(ch))
-      break;
-  }
-  syntaxError();
-}
-
-void doubleQuoteString () {
-  while (pos++ < end) {
-    char16_t ch = *pos;
-    if (ch == '"')
+    if (ch == quote)
       return;
     if (ch == '\\') {
       ch = *++pos;
@@ -636,6 +693,10 @@ bool isBrOrWs (char16_t c) {
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
   return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
+}
+
+bool isQuote (char16_t ch) {
+  return ch == '\'' || ch == '"';
 }
 
 bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
@@ -763,7 +824,7 @@ bool isExpressionKeyword (char16_t* pos) {
           // throw
           return readPrecedingKeyword3(pos - 2, 't', 'h', 'r');
         default:
-          return false; 
+          return false;
       }
   }
   return false;

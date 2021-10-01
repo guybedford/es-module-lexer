@@ -203,14 +203,15 @@ void readImportString (const char16_t* ss, char16_t ch);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t commentWhitespace (bool br);
-void singleQuoteString ();
-void doubleQuoteString ();
 void regularExpression ();
 void templateString ();
 void blockComment (bool br);
 void lineComment ();
+void stringLiteral (char16_t quote);
 
 char16_t readToWsOrPunctuator (char16_t ch);
+
+bool isQuote (char16_t ch);
 
 bool isBr (char16_t c);
 bool isWsNotBr (char16_t c);

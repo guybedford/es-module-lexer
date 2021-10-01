@@ -562,6 +562,577 @@ function x() {
     assert.strictEqual(exports[1], 'yy');
   });
 
+  suite('Import From', () => {
+    test('non-identifier-string as (doubleQuote)', () => {
+      const source = `
+        import { "~123" as foo0 } from './mod0.js';
+        import { "ab cd" as foo1 } from './mod1.js';
+        import { "not identifier" as foo2 } from './mod2.js';
+        import { "-notidentifier" as foo3 } from './mod3.js';
+        import { "%notidentifier" as foo4 } from './mod4.js';
+        import { "@notidentifier" as foo5 } from './mod5.js';
+        import { " notidentifier" as foo6 } from './mod6.js';
+        import { "notidentifier " as foo7 } from './mod7.js';
+        import { " notidentifier " as foo8 } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 9);
+  
+      assert.strictEqual(imports[0].n, './mod0.js');
+      assert.strictEqual(imports[1].n, './mod1.js');
+      assert.strictEqual(imports[2].n, './mod2.js');
+      assert.strictEqual(imports[3].n, './mod3.js');
+      assert.strictEqual(imports[4].n, './mod4.js');
+      assert.strictEqual(imports[5].n, './mod5.js');
+      assert.strictEqual(imports[6].n, './mod6.js');
+      assert.strictEqual(imports[7].n, './mod7.js');
+      assert.strictEqual(imports[8].n, './mod8.js');
+    });
+  
+    test('non-identifier-string as (singleQuote)', () => {
+      const source = `
+        import { '~123' as foo0 } from './mod0.js';
+        import { 'ab cd' as foo1 } from './mod1.js';
+        import { 'not identifier' as foo2 } from './mod2.js';
+        import { '-notidentifier' as foo3 } from './mod3.js';
+        import { '%notidentifier' as foo4 } from './mod4.js';
+        import { '@notidentifier' as foo5 } from './mod5.js';
+        import { ' notidentifier' as foo6 } from './mod6.js';
+        import { 'notidentifier ' as foo7 } from './mod7.js';
+        import { ' notidentifier ' as foo8 } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 9);
+  
+      assert.strictEqual(imports[0].n, './mod0.js');
+      assert.strictEqual(imports[1].n, './mod1.js');
+      assert.strictEqual(imports[2].n, './mod2.js');
+      assert.strictEqual(imports[3].n, './mod3.js');
+      assert.strictEqual(imports[4].n, './mod4.js');
+      assert.strictEqual(imports[5].n, './mod5.js');
+      assert.strictEqual(imports[6].n, './mod6.js');
+      assert.strictEqual(imports[7].n, './mod7.js');
+      assert.strictEqual(imports[8].n, './mod8.js');
+    });
+  
+    test('with-backslash-keywords as (doubleQuote)', () => {
+      const source = String.raw`
+      import { " slash\\ " as foo0 } from './mod0.js';
+      import { " quote\" " as foo1 } from './mod1.js'
+      import { " quote\\\" " as foo2 } from './mod2.js';
+      import { " quote' " as foo3 } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 4);
+  
+      assert.strictEqual(imports[0].n, './mod0.js');
+      assert.strictEqual(imports[1].n, './mod1.js');
+      assert.strictEqual(imports[2].n, './mod2.js');
+      assert.strictEqual(imports[3].n, './mod3.js');
+    });
+  
+    test('with-backslash-keywords as (singleQuote)', () => {
+      const source = String.raw`
+      import { ' slash\\ ' as foo0 } from './mod0.js';
+      import { ' quote\' ' as foo1 } from './mod1.js'
+      import { ' quote\\\' ' as foo2 } from './mod2.js';
+      import { ' quote\' ' as foo3 } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 4);
+  
+      assert.strictEqual(imports[0].n, './mod0.js');
+      assert.strictEqual(imports[1].n, './mod1.js');
+      assert.strictEqual(imports[2].n, './mod2.js');
+      assert.strictEqual(imports[3].n, './mod3.js');
+    });
+  
+    test('with-emoji as', () => {
+      const source = `
+        import { "hm🤔" as foo0 } from './mod0.js';
+        import { " 🚀rocket space " as foo1 } from './mod1.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 2);
+  
+      assert.strictEqual(imports[0].n, './mod0.js');
+      assert.strictEqual(imports[1].n, './mod1.js');
+    });
+
+    test('double-quotes-and-curly-bracket', () => {
+      const source = `
+        import { asdf as "b} from 'wrong'" } from 'mod0';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 1);
+  
+      assert.strictEqual(imports[0].n, 'mod0');
+    });
+
+    test('single-quotes-and-curly-bracket', () => {
+      const source = `
+        import { asdf as 'b} from "wrong"' } from 'mod0';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(exports.length, 0);
+      assert.strictEqual(imports.length, 1);
+  
+      assert.strictEqual(imports[0].n, 'mod0');
+    });
+  });
+
+  suite('Export From', () => {
+    test('Ideneifier only', () => {
+      const source = `
+        export { x } from './asdf';
+        export { x1, x2 } from './g';
+        export { foo, x2 as bar, zoo } from './g2';
+      `;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 3);
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], 'x');
+      assert.strictEqual(exports[1], 'x1');
+      assert.strictEqual(exports[2], 'x2');
+      assert.strictEqual(exports[3], 'foo');
+      assert.strictEqual(exports[4], 'bar');
+      assert.strictEqual(exports[5], 'zoo');
+    });
+  
+    test('non-identifier-string as variable (doubleQuote)', () => {
+      const source = `
+        export { "~123" as foo0 } from './mod0.js';
+        export { "ab cd" as foo1 } from './mod1.js';
+        export { "not identifier" as foo2 } from './mod2.js';
+        export { "-notidentifier" as foo3 } from './mod3.js';
+        export { "%notidentifier" as foo4 } from './mod4.js';
+        export { "@notidentifier" as foo5 } from './mod5.js';
+        export { " notidentifier" as foo6 } from './mod6.js';
+        export { "notidentifier " as foo7 } from './mod7.js';
+        export { " notidentifier " as foo8 } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+  
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], 'foo0');
+      assert.strictEqual(exports[1], 'foo1');
+      assert.strictEqual(exports[2], 'foo2');
+      assert.strictEqual(exports[3], 'foo3');
+      assert.strictEqual(exports[4], 'foo4');
+      assert.strictEqual(exports[5], 'foo5');
+      assert.strictEqual(exports[6], 'foo6');
+      assert.strictEqual(exports[7], 'foo7');
+      assert.strictEqual(exports[8], 'foo8');
+    });
+
+    test('non-identifier-string as variable (singleQuote)', () => {
+      const source = `
+        export { '~123' as foo0 } from './mod0.js';
+        export { 'ab cd' as foo1 } from './mod1.js';
+        export { 'not identifier' as foo2 } from './mod2.js';
+        export { '-notidentifier' as foo3 } from './mod3.js';
+        export { '%notidentifier' as foo4 } from './mod4.js';
+        export { '@notidentifier' as foo5 } from './mod5.js';
+        export { ' notidentifier' as foo6 } from './mod6.js';
+        export { 'notidentifier ' as foo7 } from './mod7.js';
+        export { ' notidentifier ' as foo8 } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], 'foo0');
+      assert.strictEqual(exports[1], 'foo1');
+      assert.strictEqual(exports[2], 'foo2');
+      assert.strictEqual(exports[3], 'foo3');
+      assert.strictEqual(exports[4], 'foo4');
+      assert.strictEqual(exports[5], 'foo5');
+      assert.strictEqual(exports[6], 'foo6');
+      assert.strictEqual(exports[7], 'foo7');
+      assert.strictEqual(exports[8], 'foo8');
+    });
+
+    test('with-backslash-keywords as variable (doubleQuote)', () => {
+      const source = String.raw`
+        export { " slash\\ " as foo0 } from './mod0.js';
+        export { " quote\" " as foo1 } from './mod1.js'
+        export { " quote\\\" " as foo2 } from './mod2.js';
+        export { " quote' " as foo3 } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], 'foo0');
+      assert.strictEqual(exports[1], 'foo1');
+      assert.strictEqual(exports[2], 'foo2');
+      assert.strictEqual(exports[3], 'foo3');
+    });
+
+    test('with-backslash-keywords as variable (singleQuote)', () => {
+      const source = String.raw`
+        export { ' slash\\ ' as foo0 } from './mod0.js';
+        export { ' quote\' ' as foo1 } from './mod1.js'
+        export { ' quote\\\' ' as foo2 } from './mod2.js';
+        export { ' quote\' ' as foo3 } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], 'foo0');
+      assert.strictEqual(exports[1], 'foo1');
+      assert.strictEqual(exports[2], 'foo2');
+      assert.strictEqual(exports[3], 'foo3');
+    });
+
+    test('with-emoji as', () => {
+      const source = `
+        export { "hm🤔" as foo0 } from './mod0.js';
+        export { " 🚀rocket space " as foo1 } from './mod1.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 2);
+
+      assert.strictEqual(exports.length, 2);
+      assert.strictEqual(exports[0], 'foo0');
+      assert.strictEqual(exports[1], 'foo1');
+    });
+
+    test('non-identifier-string (doubleQuote)', () => {
+      const source = `
+        export { "~123" } from './mod0.js';
+        export { "ab cd" } from './mod1.js';
+        export { "not identifier" } from './mod2.js';
+        export { "-notidentifier" } from './mod3.js';
+        export { "%notidentifier" } from './mod4.js';
+        export { "@notidentifier" } from './mod5.js';
+        export { " notidentifier" } from './mod6.js';
+        export { "notidentifier " } from './mod7.js';
+        export { " notidentifier " } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('non-identifier-string (singleQuote)', () => {
+      const source = `
+        export { '~123' } from './mod0.js';
+        export { 'ab cd' } from './mod1.js';
+        export { 'not identifier' } from './mod2.js';
+        export { '-notidentifier' } from './mod3.js';
+        export { '%notidentifier' } from './mod4.js';
+        export { '@notidentifier' } from './mod5.js';
+        export { ' notidentifier' } from './mod6.js';
+        export { 'notidentifier ' } from './mod7.js';
+        export { ' notidentifier ' } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('with-backslash-keywords (doubleQuote)', () => {
+      const source = String.raw`
+        export { " slash\\ " } from './mod0.js';
+        export { " quote\" " } from './mod1.js'
+        export { " quote\\\" " } from './mod2.js';
+        export { " quote' " } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('with-backslash-keywords (singleQuote)', () => {
+      const source = String.raw`
+        export { ' slash\\ ' } from './mod0.js';
+        export { ' quote\' ' } from './mod1.js'
+        export { ' quote\\\' ' } from './mod2.js';
+        export { ' quote\' ' } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('variable as non-identifier-string (doubleQuote)', () => {
+      const source = `
+        export { foo0 as "~123" } from './mod0.js';
+        export { foo1 as "ab cd" } from './mod1.js';
+        export { foo2 as "not identifier" } from './mod2.js';
+        export { foo3 as "-notidentifier" } from './mod3.js';
+        export { foo4 as "%notidentifier" } from './mod4.js';
+        export { foo5 as "@notidentifier" } from './mod5.js';
+        export { foo6 as " notidentifier" } from './mod6.js';
+        export { foo7 as "notidentifier " } from './mod7.js';
+        export { foo8 as " notidentifier " } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('variable as non-identifier-string (singleQuote)', () => {
+      const source = `
+        export { foo0 as '~123' } from './mod0.js';
+        export { foo1 as 'ab cd' } from './mod1.js';
+        export { foo2 as 'not identifier' } from './mod2.js';
+        export { foo3 as '-notidentifier' } from './mod3.js';
+        export { foo4 as '%notidentifier' } from './mod4.js';
+        export { foo5 as '@notidentifier' } from './mod5.js';
+        export { foo6 as ' notidentifier' } from './mod6.js';
+        export { foo7 as 'notidentifier ' } from './mod7.js';
+        export { foo8 as ' notidentifier ' } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('variable as with-backslash-keywords (doubleQuote)', () => {
+      const source = String.raw`
+      export { foo0 as " slash\\ " } from './mod0.js';
+      export { foo1 as " quote\" " } from './mod1.js'
+      export { foo2 as " quote\\\" " } from './mod2.js';
+      export { foo3 as " quote' " } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('variable as with-backslash-keywords (singleQuote)', () => {
+      const source = String.raw`
+      export { foo0 as ' slash\\ ' } from './mod0.js';
+      export { foo1 as ' quote\' ' } from './mod1.js'
+      export { foo2 as ' quote\\\' ' } from './mod2.js';
+      export { foo3 as ' quote\' ' } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('non-identifier-string as non-identifier-string (doubleQuote)', () => {
+      const source = `
+        export { "~123" as "~123" } from './mod0.js';
+        export { "ab cd" as "ab cd" } from './mod1.js';
+        export { "not identifier" as "not identifier" } from './mod2.js';
+        export { "-notidentifier" as "-notidentifier" } from './mod3.js';
+        export { "%notidentifier" as "%notidentifier" } from './mod4.js';
+        export { "@notidentifier" as "@notidentifier" } from './mod5.js';
+        export { " notidentifier" as " notidentifier" } from './mod6.js';
+        export { "notidentifier " as "notidentifier " } from './mod7.js';
+        export { " notidentifier " as " notidentifier " } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('non-identifier-string as non-identifier-string (singleQuote)', () => {
+      const source = `
+        export { '~123' as '~123' } from './mod0.js';
+        export { 'ab cd' as 'ab cd' } from './mod1.js';
+        export { 'not identifier' as 'not identifier' } from './mod2.js';
+        export { '-notidentifier' as '-notidentifier' } from './mod3.js';
+        export { '%notidentifier' as '%notidentifier' } from './mod4.js';
+        export { '@notidentifier' as '@notidentifier' } from './mod5.js';
+        export { ' notidentifier' as ' notidentifier' } from './mod6.js';
+        export { 'notidentifier ' as 'notidentifier ' } from './mod7.js';
+        export { ' notidentifier ' as ' notidentifier ' } from './mod8.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 9);
+
+      assert.strictEqual(exports.length, 9);
+      assert.strictEqual(exports[0], '~123');
+      assert.strictEqual(exports[1], 'ab cd');
+      assert.strictEqual(exports[2], 'not identifier');
+      assert.strictEqual(exports[3], '-notidentifier');
+      assert.strictEqual(exports[4], '%notidentifier');
+      assert.strictEqual(exports[5], '@notidentifier');
+      assert.strictEqual(exports[6], ' notidentifier');
+      assert.strictEqual(exports[7], 'notidentifier ');
+      assert.strictEqual(exports[8], ' notidentifier ');
+    });
+
+    test('with-backslash-keywords as with-backslash-keywords (doubleQuote)', () => {
+      const source = String.raw`
+      export { " slash\\ " as " slash\\ " } from './mod0.js';
+      export { " quote\"" as " quote\" " } from './mod1.js'
+      export { " quote\\\" " as " quote\\\" " } from './mod2.js';
+      export { " quote' " as " quote' " } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote" `);
+      assert.strictEqual(exports[2], String.raw` quote\" `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('with-backslash-keywords as with-backslash-keywords (singleQuote)', () => {
+      const source = String.raw`
+      export { ' slash\\ ' as ' slash\\ ' } from './mod0.js';
+      export { ' quote\'' as ' quote\' ' } from './mod1.js'
+      export { ' quote\\\' ' as ' quote\\\' ' } from './mod2.js';
+      export { ' quote\' ' as ' quote\' ' } from './mod3.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 4);
+
+      assert.strictEqual(exports.length, 4);
+
+      assert.strictEqual(exports[0], String.raw` slash\ `);
+      assert.strictEqual(exports[1], String.raw` quote' `);
+      assert.strictEqual(exports[2], String.raw` quote\' `);
+      assert.strictEqual(exports[3], String.raw` quote' `);
+    });
+
+    test('curly-brace (doubleQuote)', () => {
+      const source = `
+        export { " right-curlybrace} " } from './mod0.js';
+        export { " {left-curlybrace " } from './mod1.js';
+        export { " {curlybrackets} " } from './mod2.js';
+        export { ' right-curlybrace} ' } from './mod0.js';
+        export { ' {left-curlybrace ' } from './mod1.js';
+        export { ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('* as curly-brace (doubleQuote)', () => {
+      const source = `
+        export { foo as " right-curlybrace} " } from './mod0.js';
+        export { foo as " {left-curlybrace " } from './mod1.js';
+        export { foo as " {curlybrackets} " } from './mod2.js';
+        export { foo as ' right-curlybrace} ' } from './mod0.js';
+        export { foo as ' {left-curlybrace ' } from './mod1.js';
+        export { foo as ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('curly-brace as curly-brace (doubleQuote)', () => {
+      const source = `
+        export { " right-curlybrace} " as " right-curlybrace} " } from './mod0.js';
+        export { " {left-curlybrace " as " {left-curlybrace " } from './mod1.js';
+        export { " {curlybrackets} " as " {curlybrackets} " } from './mod2.js';
+        export { ' right-curlybrace} ' as ' right-curlybrace} ' } from './mod0.js';
+        export { ' {left-curlybrace ' as ' {left-curlybrace ' } from './mod1.js';
+        export { ' {curlybrackets} ' as ' {curlybrackets} ' } from './mod2.js';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 6);
+
+      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(exports[0], ' right-curlybrace} ');
+      assert.strictEqual(exports[1], ' {left-curlybrace ');
+      assert.strictEqual(exports[2], ' {curlybrackets} ');
+      assert.strictEqual(exports[3], ' right-curlybrace} ');
+      assert.strictEqual(exports[4], ' {left-curlybrace ');
+      assert.strictEqual(exports[5], ' {curlybrackets} ');
+    });
+
+    test('complex & edge cases', () => {
+      const source = `
+        export {
+          foo,
+          foo1 as foo2,
+          " {left-curlybrace ",
+          " {curly-brackets}" as "@notidentifier",
+          "?" as "identifier",
+        } from './mod0.js';
+        export { "p as 'z' from 'asdf'" as "z'" } from 'asdf';
+        export { "z'" as "p as 'z' from 'asdf'" } from 'asdf';`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 3);
+
+      assert.strictEqual(exports.length, 7);
+      assert.strictEqual(exports[0], 'foo');
+      assert.strictEqual(exports[1], 'foo2');
+      assert.strictEqual(exports[2], ' {left-curlybrace ');
+      assert.strictEqual(exports[3], '@notidentifier');
+      assert.strictEqual(exports[4], 'identifier');
+      assert.strictEqual(exports[5], "z'");
+      assert.strictEqual(exports[6], "p as 'z' from 'asdf'");
+    });
+  });
+
   test('Facade', () => {
     const [,, facade] = parse(`
       export * from 'external';
