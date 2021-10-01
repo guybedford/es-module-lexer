@@ -1,3 +1,10 @@
+0.9.2
+* String literal imports and exports support (https://github.com/guybedford/es-module-lexer/pull/89, @richardo2016)
+* Fix type to note facade return (https://github.com/guybedford/es-module-lexer/pull/90, @richardo2016)
+
+0.9.1
+* Fix asm.js memory management (https://github.com/guybedford/es-module-lexer/pull/88)
+
 0.9.0
 * JS Build using asm.js (https://github.com/guybedford/es-module-lexer/pull/86)
 
