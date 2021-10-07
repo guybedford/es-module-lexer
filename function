@@ -1,0 +1,1 @@
+- Module[asm] - asmInit (global, env, buffer) { ... }

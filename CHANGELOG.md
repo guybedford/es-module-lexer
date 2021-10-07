@@ -1,3 +1,6 @@
+0.9.3
+* Fix comment handling in exports identifier positions (https://github.com/guybedford/es-module-lexer/pull/93)
+
 0.9.2
 * String literal imports and exports support (https://github.com/guybedford/es-module-lexer/pull/89, @richardo2016)
 * Fix type to note facade return (https://github.com/guybedford/es-module-lexer/pull/90, @richardo2016)
