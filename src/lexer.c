@@ -283,7 +283,8 @@ void tryParseImportStatement () {
       }
 
       while (pos < end) {
-        ch = *pos;
+        ch = commentWhitespace(true);
+
         if (isQuote(ch)) {
           stringLiteral(ch);
         } else if (ch == '}') {

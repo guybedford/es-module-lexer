@@ -573,10 +573,12 @@ function x() {
         import { "@notidentifier" as foo5 } from './mod5.js';
         import { " notidentifier" as foo6 } from './mod6.js';
         import { "notidentifier " as foo7 } from './mod7.js';
-        import { " notidentifier " as foo8 } from './mod8.js';`;
+        import { " notidentifier " as foo8 } from './mod8.js';
+        import { /** @type{HTMLElement} */ LionCombobox } from './src/LionCombobox.js';
+        `;
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
-      assert.strictEqual(imports.length, 9);
+      assert.strictEqual(imports.length, 10);
   
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
@@ -686,10 +688,11 @@ function x() {
         export { x } from './asdf';
         export { x1, x2 } from './g';
         export { foo, x2 as bar, zoo } from './g2';
+        export { /** @type{HTMLElement} */ LionCombobox } from './src/LionCombobox.js';
       `;
       const [imports, exports] = parse(source);
-      assert.strictEqual(imports.length, 3);
-      assert.strictEqual(exports.length, 6);
+      assert.strictEqual(imports.length, 4);
+      assert.strictEqual(exports.length, 7);
       assert.strictEqual(exports[0], 'x');
       assert.strictEqual(exports[1], 'x1');
       assert.strictEqual(exports[2], 'x2');
