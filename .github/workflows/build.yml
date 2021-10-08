@@ -114,45 +114,53 @@ jobs:
           # test
           npm run test:wasm;
 
-      - name: Install Emscripten
-        id: emcc_steup
+      - name: Benchmark Wasm
         shell: bash
         env:
           PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
         run: |
           cd $PROJ_ROOT;
-          cd ../;
-          git clone https://github.com/emscripten-core/emsdk.git;
-          cd ./emsdk;
-          ./emsdk install $EMCC_VERSION;
-          ./emsdk activate $EMCC_VERSION;
-          EMCC_REPO=$(pwd);
-          echo "::set-output name=EMCC_REPO::$EMCC_REPO"
+          npm run bench:wasm;
 
-          cd $PROJ_ROOT;
-          source $EMCC_REPO/emsdk_env.sh;
-          # check if emcc valid
-          emcc -v
+      # - name: Install Emscripten
+      #   id: emcc_steup
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     cd ../;
+      #     git clone https://github.com/emscripten-core/emsdk.git;
+      #     cd ./emsdk;
+      #     ./emsdk install $EMCC_VERSION;
+      #     ./emsdk activate $EMCC_VERSION;
+      #     EMCC_REPO=$(pwd);
+      #     echo "::set-output name=EMCC_REPO::$EMCC_REPO"
 
-      - name: Benchmark
-        continue-on-error: false
-        shell: bash
-        env:
-          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
-        run: |
-          cd $PROJ_ROOT;
-          npm run bench;
+      #     cd $PROJ_ROOT;
+      #     source $EMCC_REPO/emsdk_env.sh;
+      #     # check if emcc valid
+      #     emcc -v
 
-      - name: Compile to Asm.js & Test Asm.js (Experimental)
-        continue-on-error: true
-        shell: bash
-        env:
-          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
-          EMCC_REPO: ${{ steps.emcc_steup.outputs.EMCC_REPO }}
+      # - name: Compile to Asm.js & Test Asm.js (Experimental)
+      #   continue-on-error: true
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #     EMCC_REPO: ${{ steps.emcc_steup.outputs.EMCC_REPO }}
 
-        run: |
-          cd $PROJ_ROOT;
-          source $EMCC_REPO/emsdk_env.sh;
-          make lib/lexer.asm.js && npm run build:asm;
-          # test
-          npm run build:cjs && npm run test:js;
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     source $EMCC_REPO/emsdk_env.sh;
+      #     make lib/lexer.asm.js && npm run build:asm;
+      #     # test
+      #     npm run test:js;
+
+      # - name: Benchmark Asm.js
+      #   continue-on-error: true
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     npm run bench:js;
