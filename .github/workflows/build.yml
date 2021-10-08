@@ -1,0 +1,166 @@
+name: Test es-module-lexer
+
+on:
+  push:
+    # Sequence of patterns matched against refs/heads
+    branches:
+      - 'feat/**'
+      - 'fix/**'
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+
+env:
+  WASI_VERSION: 12
+  WASI_VERSION_FULL: "12.0"
+  WABT_VERSION: "1.0.24"
+  EMCC_VERSION: "1.40.1-fastcomp"
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, windows-2016, macos-10.15]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: Prepare
+        id: preparation
+        shell: bash
+        run: |
+          export PWD=$(pwd);
+          echo "::set-output name=PROJ_ROOT::$PWD";
+          npm install;
+
+      - name: Install wasi-sdk
+        shell: bash
+        if: runner.os != 'Windows'
+        env:
+          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+        run: |
+          cd $PROJ_ROOT;
+          cd ../;
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export WASI_OS="linux";
+          fi
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export WASI_OS="macos";
+          fi
+
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-${WASI_OS}.tar.gz -O
+          # check if package downloaded
+          ls -la
+          tar xvf wasi-sdk-${WASI_VERSION_FULL}-${WASI_OS}.tar.gz
+
+          # print clang version
+          ./wasi-sdk-${WASI_VERSION_FULL}/bin/clang --version
+
+      - name: Install wabt
+        shell: bash
+        env:
+          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+        run: |
+          cd $PROJ_ROOT;
+          cd ../;
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export WABT_OS="ubuntu";
+          fi
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export WABT_OS="macos";
+          fi
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export WABT_OS="windows";
+          fi
+
+          curl -sL https://github.com/WebAssembly/wabt/releases/download/${WABT_VERSION}/wabt-${WABT_VERSION}-${WABT_OS}.tar.gz -O
+          # check if package downloaded
+          ls -la
+          tar xvf wabt-${WABT_VERSION}-${WABT_OS}.tar.gz
+
+          # check if wabt binaries installed
+          ls -la ./wabt-${WABT_VERSION}/bin/
+      
+      - name: Add make.exe on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+        run: |
+          # install make.exe
+          cd "C:/Program Files/Git/mingw64/"
+          if [ ! -e make.zip ]; then
+              curl -sL -o "make.zip" https://netix.dl.sourceforge.net/project/ezwinports/make-4.3-without-guile-w32-bin.zip
+          fi
+          unzip -n "make.zip"
+
+          cd $PROJ_ROOT;
+          # test if make valid
+          which make;
+
+      - name: Compile to Wasm & Test Wasm
+        shell: bash
+        env:
+          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+        run: |
+          cd $PROJ_ROOT;
+          make lib/lexer.wasm && npm run build:wasm;
+          # test
+          npm run test:wasm;
+
+      - name: Benchmark Wasm
+        shell: bash
+        env:
+          PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+        run: |
+          cd $PROJ_ROOT;
+          npm run bench:wasm;
+
+      # - name: Install Emscripten
+      #   id: emcc_steup
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     cd ../;
+      #     git clone https://github.com/emscripten-core/emsdk.git;
+      #     cd ./emsdk;
+      #     ./emsdk install $EMCC_VERSION;
+      #     ./emsdk activate $EMCC_VERSION;
+      #     EMCC_REPO=$(pwd);
+      #     echo "::set-output name=EMCC_REPO::$EMCC_REPO"
+
+      #     cd $PROJ_ROOT;
+      #     source $EMCC_REPO/emsdk_env.sh;
+      #     # check if emcc valid
+      #     emcc -v
+
+      # - name: Compile to Asm.js & Test Asm.js (Experimental)
+      #   continue-on-error: true
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #     EMCC_REPO: ${{ steps.emcc_steup.outputs.EMCC_REPO }}
+
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     source $EMCC_REPO/emsdk_env.sh;
+      #     make lib/lexer.asm.js && npm run build:asm;
+      #     # test
+      #     npm run test:js;
+
+      # - name: Benchmark Asm.js
+      #   continue-on-error: true
+      #   shell: bash
+      #   env:
+      #     PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
+      #   run: |
+      #     cd $PROJ_ROOT;
+      #     npm run bench:js;

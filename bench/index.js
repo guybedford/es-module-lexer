@@ -27,26 +27,30 @@ Promise.resolve().then(async () => {
 		return Math.round(Number(end - start) / 1e6);
 	}
 
-	console.log('--- JS Build ---');
-	console.log('Module load time');
-	{
-		const start = process.hrtime.bigint();
-		var { parse } = await import('../dist/lexer.asm.js');
-		console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+	if (!process.env.BENCH || process.env.BENCH === 'js') {
+		console.log('--- JS Build ---');
+		console.log('Module load time');
+		{
+			const start = process.hrtime.bigint();
+			var { parse } = await import('../dist/lexer.asm.js');
+			console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+		}
+	
+		doRun();
 	}
-
-	doRun();
-
-	console.log('--- Wasm Build ---');
-	console.log('Module load time');
-	{
-		const start = process.hrtime.bigint();
-		var { parse, init } = await import('../dist/lexer.js');
-		await init;
-		console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+	
+	if (!process.env.BENCH || process.env.BENCH === 'wasm') {
+		console.log('--- Wasm Build ---');
+		console.log('Module load time');
+		{
+			const start = process.hrtime.bigint();
+			var { parse, init } = await import('../dist/lexer.js');
+			await init;
+			console.log(`> ${c.bold.green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+		}
+	
+		doRun();
 	}
-
-	doRun();
 
 	function doRun () {
 		console.log('Cold Run, All Samples');
