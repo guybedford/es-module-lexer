@@ -112,6 +112,7 @@ jobs:
           PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
         run: |
           cd $PROJ_ROOT;
+          rm lib/lexer.wasm;
           make lib/lexer.wasm && npm run build:wasm;
           # test
           npm run test:wasm;
