@@ -1,6 +1,6 @@
 # ES Module Lexer
 
-[![Build Status][travis-image]][travis-url]
+[![Build Status][actions-image]][actions-url]
 
 A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
@@ -232,13 +232,15 @@ test/samples/*.js (3123 KiB)
 
 ### Building
 
-To build download the WASI SDK from https://github.com/WebAssembly/wasi-sdk/releases.
+To build download the WASI SDK 12.0 from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-12.
 
-The Makefile assumes the existence of "wasi-sdk-11.0" and "wabt" (optional) as sibling folders to this project.
+- [Linux](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz)
+- [Windows (MinGW)](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-mingw.tar.gz)
+- [macOS](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-macos.tar.gz)
+
+The Makefile assumes the existence of "wasi-sdk-12.0" and "wabt" (optional) as sibling folders to this project.
 
 The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build:wasm` to create `dist/lexer.js`.
-
-On Windows it may be preferable to use the Linux subsystem.
 
 After the Web Assembly build, the CJS build can be triggered via `npm run build`.
 
@@ -246,6 +248,6 @@ After the Web Assembly build, the CJS build can be triggered via `npm run build`
 
 MIT
 
-[travis-url]: https://travis-ci.org/guybedford/es-module-lexer
-[travis-image]: https://travis-ci.org/guybedford/es-module-lexer.svg?branch=master
+[actions-image]: https://github.com/guybedford/es-module-lexer/actions/workflows/build.yml/badge.svg
+[actions-url]: https://github.com/guybedford/es-module-lexer/actions/workflows/build.yml
 

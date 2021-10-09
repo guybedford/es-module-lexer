@@ -41,7 +41,6 @@ jobs:
 
       - name: Install wasi-sdk
         shell: bash
-        if: runner.os != 'Windows'
         env:
           PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
         run: |
@@ -52,6 +51,9 @@ jobs:
           fi
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             export WASI_OS="macos";
+          fi
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export WASI_OS="mingw";
           fi
 
           curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-${WASI_OS}.tar.gz -O
@@ -110,6 +112,7 @@ jobs:
           PROJ_ROOT: ${{ steps.preparation.outputs.PROJ_ROOT }}
         run: |
           cd $PROJ_ROOT;
+          rm lib/lexer.wasm;
           make lib/lexer.wasm && npm run build:wasm;
           # test
           npm run test:wasm;
