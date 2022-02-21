@@ -51,7 +51,7 @@ jobs:
           cd ./emsdk
           ./emsdk install $EMCC_VERSION
           ./emsdk activate $EMCC_VERSION
-          ./emsdk/fastcomp/emscripten/emcc -v
+          ./fastcomp/emscripten/emcc -v
 
       - name: npm Install
         run: npm install
