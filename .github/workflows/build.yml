@@ -61,7 +61,7 @@ jobs:
 
       - name: Compile to Wasm & Test Wasm
         env:
-          WASI_PATH: ./wasi-sdk-${{WASI_VERSION_FULL}}
+          WASI_PATH: './wasi-sdk-${{ env.WASI_VERSION_FULL }}'
           EMSCRIPTEN_BIN: 'emcc'
         run: chomp test
 
