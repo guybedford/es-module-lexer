@@ -7,6 +7,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
+EMSCRIPTEN_BIN = 'emcc'
 
 [[task]]
 name = 'build'
@@ -91,7 +92,7 @@ run = """
 	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
 
-	emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
+	${{ EMSCRIPTEN_BIN }} ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_f','_setSource']" \
 	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=15312 -s --separate-asm
 

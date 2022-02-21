@@ -50,9 +50,8 @@ jobs:
           git clone https://github.com/emscripten-core/emsdk.git
           cd ./emsdk
           ./emsdk install $EMCC_VERSION
-          ./emsdk activate $EMCC_VERSION --permanent
           ./emsdk activate $EMCC_VERSION
-          emcc -v
+          ./emsdk/fastcomp/emscripten/emcc -v
 
       - name: npm Install
         run: npm install
@@ -63,7 +62,8 @@ jobs:
       - name: Compile to Wasm & Test Wasm
         env:
           WASI_PATH: './wasi-sdk-${{ env.WASI_VERSION_FULL }}'
-          EMSCRIPTEN_BIN: 'emcc'
+          EMSDK_PATH: './emsdk'
+          EMSCRIPTEN_BIN: './emsdk/fastcomp/emscripten/emcc'
         run: chomp test
 
       - name: Benchmark Wasm
