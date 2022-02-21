@@ -51,6 +51,7 @@ jobs:
           cd ./emsdk
           ./emsdk install $EMCC_VERSION
           ./emsdk activate $EMCC_VERSION --permanent
+          ./emsdk activate $EMCC_VERSION
           emcc -v
 
       - name: npm Install
