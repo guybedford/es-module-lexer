@@ -9,7 +9,6 @@ on:
 env:
   WASI_VERSION: 12
   WASI_VERSION_FULL: "12.0"
-  WABT_VERSION: "1.0.24"
   EMCC_VERSION: "1.40.1-fastcomp"
 
 jobs:
