@@ -8,7 +8,6 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
 EMSCRIPTEN_BIN = '../emsdk/fastcomp/emscripten/emcc'
-EMSDK_PYTHON = '../emsdk/python/*'
 
 [[task]]
 name = 'build'
@@ -80,7 +79,7 @@ run = """
 [[task]]
 target = 'lib/lexer.emcc.asm.js'
 deps = ['src/lexer.h', 'src/lexer.c']
-env = { PYTHONHOME = '${{ EMSDK_PYTHON }}' }
+env = { PYTHONHOME = '' }
 run = """
 	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
