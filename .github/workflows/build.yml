@@ -18,7 +18,7 @@ jobs:
     continue-on-error: true
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-2016, macos-10.15]
+        os: [ubuntu-18.04, windows-2016]
 
     steps:
       - name: Check out Git repository
