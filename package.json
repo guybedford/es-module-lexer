@@ -14,18 +14,8 @@
     "./js": "./dist/lexer.asm.js"
   },
   "scripts": {
-    "test:js": "mocha -b -u tdd test/*.cjs",
-    "test:wasm": "cross-env WASM=1 mocha -b -u tdd test/*.cjs",
-    "test": "npm run test:js && npm run test:wasm",
-    "build": "npm run build:wasm && npm run build:asm && npm run build:cjs",
-    "build:cjs": "babel dist/lexer.js | terser -c -m -o dist/lexer.cjs",
-    "build:wasm": "node build.js",
-    "build:asm": "cat src/lexer.asm.js lib/lexer.asm.js | terser --module -c -m -o dist/lexer.asm.js",
-    "bench": "node --expose-gc bench/index.js",
-    "bench:wasm": "cross-env BENCH=wasm node --expose-gc bench/index.js",
-    "bench:js": "cross-env BENCH=js node --expose-gc bench/index.js",
-    "prepublishOnly": "npm run build",
-    "footprint": "npm run build && echo Wasm: && cat dist/lexer.js | brotli | wc -c && echo Asm.js: && cat dist/lexer.asm.js | brotli | wc -c"
+    "build": "chomp build",
+    "test": "chomp test"
   },
   "author": "Guy Bedford",
   "license": "MIT",
@@ -33,7 +23,6 @@
     "@babel/cli": "^7.5.5",
     "@babel/core": "^7.5.5",
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
-    "cross-env": "^7.0.3",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
     "terser": "^4.1.4"
@@ -51,5 +40,10 @@
   "bugs": {
     "url": "https://github.com/guybedford/es-module-lexer/issues"
   },
-  "homepage": "https://github.com/guybedford/es-module-lexer#readme"
+  "homepage": "https://github.com/guybedford/es-module-lexer#readme",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "keywords": []
 }
