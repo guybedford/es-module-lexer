@@ -49,15 +49,15 @@ jobs:
         run: |
           git clone https://github.com/emscripten-core/emsdk.git
           cd ./emsdk
-          ./emsdk install $EMCC_VERSION
-          ./emsdk activate $EMCC_VERSION
+          ./emsdk install ${{ EMCC_VERSION }}
+          ./emsdk activate ${{ EMCC_VERSION }}
           ./fastcomp/emscripten/emcc -v
 
       - name: npm Install
         run: npm install
 
       - name: Install Chomp
-        run: cargo install chomp
+        run: cargo install chompbuild
 
       - name: Compile to Wasm & Test Wasm
         env:
