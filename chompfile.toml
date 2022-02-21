@@ -7,7 +7,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
-EMSCRIPTEN_BIN = 'emcc'
+EMSCRIPTEN_BIN = '../emsdk/fastcomp/emscripten/emcc'
 
 [[task]]
 name = 'build'
@@ -32,10 +32,8 @@ run = 'node --expose-gc bench/index.js'
 
 [[task]]
 target = 'dist/lexer.asm.js'
-deps = ['src/lexer.asm.js', 'lib/lexer.asm.js']
-run = '''
-  echo $(cat src/lexer.asm.js)$(cat lib/lexer.asm.js) | terser -c -m -o dist/lexer.asm.js
-'''
+deps = ['lib/lexer.asm.js']
+run = 'terser lib/lexer.asm.js -c -m -o dist/lexer.asm.js'
 
 [[task]]
 target = 'dist/lexer.cjs'
@@ -101,17 +99,19 @@ run = """
 
 [[task]]
 target = 'lib/lexer.asm.js'
-dep = 'lib/lexer.emcc.asm.js'
+deps = ['lib/lexer.emcc.asm.js', 'src/lexer.asm.js']
 engine = 'node'
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
 
-	let source = readFileSync(process.env.DEP, 'utf8').trim();
+	const wrapper_start = readFileSync('src/lexer.asm.js', 'utf8');
+	let source = readFileSync('lib/lexer.emcc.asm.js', 'utf8').trim();
 
 	// wrapper
 	const header = 'Module["asm"]=(/** @suppress {uselessCode} */ function(';
 	if (!source.startsWith(header))
 		throw new Error('Unexpected source header');
+	
 	source = 'function asmInit(' + source.slice(header.length);
 	if (!source.endsWith(')'))
 		throw new Error('Unexpected source end');
@@ -160,7 +160,7 @@ run = '''
 		source = replaced;
 	}
 
-	writeFileSync(process.env.TARGET, source);
+	writeFileSync(process.env.TARGET, wrapper_start + source);
 '''
 
 [[task]]
