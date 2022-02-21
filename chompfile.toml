@@ -87,7 +87,7 @@ echo \\0331b[1mhi\\0331b[0m
 [[task]]
 target = 'lib/lexer.emcc.asm.js'
 deps = ['src/lexer.h', 'src/lexer.c']
-env = { PYTHONHOME = '${{ EMSDK_PATH }}/python/3.7.4-pywin32_64bit' }
+env = { PYTHONHOME = '${{ EMSDK_PYTHON }}/..' }
 run = """
 	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
