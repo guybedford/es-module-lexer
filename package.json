@@ -33,7 +33,6 @@
     "@babel/cli": "^7.5.5",
     "@babel/core": "^7.5.5",
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
-    "cross-env": "^7.0.3",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
     "terser": "^4.1.4"
@@ -51,5 +50,10 @@
   "bugs": {
     "url": "https://github.com/guybedford/es-module-lexer/issues"
   },
-  "homepage": "https://github.com/guybedford/es-module-lexer#readme"
+  "homepage": "https://github.com/guybedford/es-module-lexer#readme",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "keywords": []
 }
