@@ -49,8 +49,8 @@ jobs:
         run: |
           git clone https://github.com/emscripten-core/emsdk.git
           cd ./emsdk
-          ./emsdk install ${{ EMCC_VERSION }}
-          ./emsdk activate ${{ EMCC_VERSION }}
+          ./emsdk install ${{ env.EMCC_VERSION }}
+          ./emsdk activate ${{ env.EMCC_VERSION }}
           ./fastcomp/emscripten/emcc -v
 
       - name: npm Install
