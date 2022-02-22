@@ -1,3 +1,9 @@
+0.10.0
+* feat: support ci on actions. by @richardo2016 in https://github.com/guybedford/es-module-lexer/pull/94
+* Truly rebuild wasm every time on CI, better instructions for Windows by @richardo2016 in https://github.com/guybedford/es-module-lexer/pull/95
+* build: Chomp build by @guybedford in https://github.com/guybedford/es-module-lexer/pull/101
+* Feat: Dynamic import refinements & fixes, optimization by @guybedford in https://github.com/guybedford/es-module-lexer/pull/102
+
 0.9.3
 * Fix comment handling in exports identifier positions (https://github.com/guybedford/es-module-lexer/pull/93)
 
