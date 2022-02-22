@@ -1,11 +1,7 @@
 version = 0.1
-
 default-task = "test"
 
-extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
-
-[env]
-OPT = 'z'
+extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
 
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
@@ -34,38 +30,12 @@ run = 'node --expose-gc bench/index.js'
 
 [[task]]
 target = 'dist/lexer.asm.js'
-deps = ['lib/lexer.asm.js']
-engine = 'node'
-run = '''
-	import { readFileSync, writeFileSync } from 'fs';
-	import terser from 'terser';
-
-	const jsSource = readFileSync('lib/lexer.asm.js', 'utf8');
-	const pjson = JSON.parse(readFileSync('package.json', 'utf8'));
-	const min = process.env.OPT === 'z';
-	let minified = min && terser.minify(jsSource, {
-		module: true,
-		compress: {
-			ecma: 6,
-			unsafe: true,
-		},
-		output: {
-			preamble: `/* es-module-lexer ${pjson.version} */`
-		}
-	}).code;
-
-	if (minified) {
-		const replacements = [
-			[/Int\d+Array:(Int\d+Array)/g, '$1'],
-			[/Uint\d+Array:(Uint\d+Array)/g, '$1']
-		];
-		for (const [from, to] of replacements) {
-			minified = minified.replace(from, to);
-		}
-	}
-
-	writeFileSync('dist/lexer.asm.js', minified ? minified : jsSource);
-'''
+dep = 'lib/lexer.asm.js'
+template = 'terser'
+[task.template-options]
+module = true
+compress = { ecma = 6, unsafe = true }
+output = { preamble = '/* es-module-lexer #PJSON_VERSION */' }
 
 [[task]]
 target = 'dist/lexer.cjs'
@@ -74,7 +44,7 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 
 [[task]]
 target = 'dist/lexer.js'
-deps = ['lib/lexer.wasm', 'src/lexer.js', 'package.json']
+deps = ['src/lexer.js', 'lib/lexer.wasm']
 engine = 'node'
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
@@ -87,7 +57,7 @@ run = '''
 	const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));
 
 	const min = process.env.OPT === 'z';
-	const minified = min && terser.minify(jsSourceProcessed, {
+	const minified = tmin && erser.minify(jsSourceProcessed, {
 		module: true,
 		output: {
 			preamble: `/* es-module-lexer ${pjson.version} */`
@@ -116,7 +86,7 @@ run = """
 	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
 
-	${{ EMSDK_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -O${{OPT}} --closure 1 \
+	${{ EMSDK_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_f','_setSource']" \
 	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
 
