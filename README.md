@@ -240,17 +240,33 @@ test/samples/*.js (3123 KiB)
 
 ### Building
 
-To build download the WASI SDK 12.0 from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-12.
+This project uses [Chomp](https://chompbuild.com) for building.
+
+With Chomp installed, download the WASI SDK 12.0 from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-12.
 
 - [Linux](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz)
 - [Windows (MinGW)](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-mingw.tar.gz)
 - [macOS](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-macos.tar.gz)
 
-The Makefile assumes the existence of "wasi-sdk-12.0" and "wabt" (optional) as sibling folders to this project.
+Locate the WASI-SDK as a sibling folder, or customize the path via the `WASI_PATH` environment variable.
 
-The build through the Makefile is then run via `make lib/lexer.wasm`, which can also be triggered via `npm run build:wasm` to create `dist/lexer.js`.
+Emscripten emsdk is also assumed to be a sibling folder or via the `EMSDK_PATH` environment variable.
 
-After the Web Assembly build, the CJS build can be triggered via `npm run build`.
+Example setup:
+
+```
+git clone https://github.com:guybedford/es-module-lexer
+git clone https://github.com/emscripten-core/emsdk
+wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz
+gunzip wasi-sdk-12.0-linux.tar.gz
+tar -xf wasi-sdk-12.0-linux.tar
+mv wasi-sdk-12.0-linux.tar wasi-sdk-12.0
+cargo install chompbuild
+cd es-module-lexer
+chomp test
+```
+
+For the `asm.js` build, git clone `emsdk` from  is assumed to be a sibling folder as well.
 
 ### License
 
