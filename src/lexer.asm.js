@@ -23,7 +23,7 @@ export function parse (_source, _name = '@') {
     while (source.length > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize * 4);
     copy(words, new Uint16Array(asmBuffer, 16, words.length));
-    asm = asmInit({ Int8Array, Int16Array, Int32Array, Uint8Array, Uint16Array }, {}, asmBuffer);
+    asm = asmInit(typeof self !== 'undefined' ? self : global, {}, asmBuffer);
     addr = asm.sta(allocSize * 2);
   }
   const len = source.length + 1;
