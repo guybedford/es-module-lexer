@@ -9,8 +9,6 @@ const char16_t* STANDARD_IMPORT = (char16_t*)0x1;
 const char16_t* IMPORT_META = (char16_t*)0x2;
 const char16_t __empty_char = '\0';
 const char16_t* EMPTY_CHAR = &__empty_char;
-// tracked depth of template and brackets
-const uint32_t STACK_DEPTH = 2048;
 const char16_t* source = (void*)&__heap_base;
 
 void setSource (void* ptr) {
@@ -43,7 +41,6 @@ Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
-Import* cur_dynamic_import = NULL;
 void* analysis_base;
 void* analysis_head;
 
@@ -58,6 +55,8 @@ char16_t* pos;
 char16_t* end;
 uint16_t* templateStack;
 char16_t** openTokenPosStack;
+uint16_t dynamicImportStackDepth;
+Import** dynamicImportStack;
 bool nextBraceIsClass;
 
 // Memory Structure:
@@ -100,9 +99,8 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
     import->statement_end = end;
   else if (dynamic == STANDARD_IMPORT)
     import->statement_end = end + 1;
-  // TODO: end tracking for dynamic import
   else 
-    import->statement_end = source;
+    import->statement_end = 0;
   import->start = start;
   import->end = end;
   import->assert_index = 0;
@@ -135,7 +133,7 @@ uint32_t is () {
 }
 // getImportEnd
 uint32_t ie () {
-  return import_read_head->end - source;
+  return import_read_head->end == 0 ? -1 : import_read_head->end - source;
 }
 // getImportStatementStart
 uint32_t ss () {
@@ -143,7 +141,7 @@ uint32_t ss () {
 }
 // getImportStatementEnd
 uint32_t se () {
-  return import_read_head->statement_end - source;
+  return import_read_head->statement_end == 0 ? -1 : import_read_head->statement_end - source;
 }
 // getAssertIndex
 uint32_t ai () {
@@ -219,19 +217,8 @@ bool isBrOrWs (char16_t c);
 bool isBrOrWsOrPunctuator (char16_t c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
 
-bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2);
-bool str_eq3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3);
-bool str_eq4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4);
-bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5);
-bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6);
-bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7);
-
-bool readPrecedingKeyword2(char16_t* pos, char16_t c1, char16_t c2);
-bool readPrecedingKeyword3(char16_t* pos, char16_t c1, char16_t c2, char16_t c3);
-bool readPrecedingKeyword4(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4);
-bool readPrecedingKeyword5(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5);
-bool readPrecedingKeyword6(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6);
-bool readPrecedingKeyword7(char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7);
+bool readPrecedingKeyword1(char16_t* pos, char16_t c1);
+bool readPrecedingKeywordn(char16_t* pos, const char16_t* compare, size_t n);
 
 bool keywordStart (char16_t* pos);
 bool isExpressionKeyword (char16_t* pos);

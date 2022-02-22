@@ -4,6 +4,9 @@ default-task = "test"
 
 extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 
+[env]
+OPT = 'z'
+
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
@@ -33,7 +36,37 @@ run = 'node --expose-gc bench/index.js'
 [[task]]
 target = 'dist/lexer.asm.js'
 deps = ['lib/lexer.asm.js']
-run = 'terser lib/lexer.asm.js -c -m -o dist/lexer.asm.js'
+engine = 'node'
+run = '''
+	import { readFileSync, writeFileSync } from 'fs';
+	import terser from 'terser';
+
+	const jsSource = readFileSync('lib/lexer.asm.js', 'utf8');
+	const pjson = JSON.parse(readFileSync('package.json', 'utf8'));
+	const min = process.env.OPT === 'z';
+	let minified = min && terser.minify(jsSource, {
+		module: true,
+		compress: {
+			ecma: 6,
+			unsafe: true,
+		},
+		output: {
+			preamble: `/* es-module-lexer ${pjson.version} */`
+		}
+	}).code;
+
+	if (minified) {
+		const replacements = [
+			[/Int\d+Array:(Int\d+Array)/g, '$1'],
+			[/Uint\d+Array:(Uint\d+Array)/g, '$1']
+		];
+		for (const [from, to] of replacements) {
+			minified = minified.replace(from, to);
+		}
+	}
+
+	writeFileSync('dist/lexer.asm.js', minified ? minified : jsSource);
+'''
 
 [[task]]
 target = 'dist/lexer.cjs'
@@ -44,25 +77,25 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 target = 'dist/lexer.js'
 deps = ['lib/lexer.wasm', 'src/lexer.js', 'package.json']
 engine = 'node'
-env = { MINIFY = '1' }
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
 	import terser from 'terser';
 
 	const wasmBuffer = readFileSync('lib/lexer.wasm');
-	const jsSource = readFileSync('src/lexer.js').toString();
-	const pjson = JSON.parse(readFileSync('package.json').toString());
+	const jsSource = readFileSync('src/lexer.js', 'utf8');
+	const pjson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 	const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));
 
-	const minified = process.env.MINIFY && terser.minify(jsSourceProcessed, {
+	const min = process.env.OPT === 'z';
+	const minified = min && terser.minify(jsSourceProcessed, {
 		module: true,
 		output: {
 			preamble: `/* es-module-lexer ${pjson.version} */`
 		}
-	});
+	}).code;
 
-	writeFileSync('dist/lexer.js', minified ? minified.code : jsSourceProcessed);
+	writeFileSync('dist/lexer.js', minified ? minified : jsSourceProcessed);
 '''
 
 [[task]]
@@ -83,14 +116,12 @@ env = { PYTHONHOME = '' }
 run = """
 	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
-	
-	echo "PYTHON HOME: $PYTHONHOME"
 
-	${{ EMSCRIPTEN_BIN }} ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
+	${{ EMSCRIPTEN_BIN }} ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -O${{OPT}} --closure 1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_f','_setSource']" \
-	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=15312 -s --separate-asm
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
 
-	rm lib/lexer.emcc.js
+	# rm lib/lexer.emcc.js
 """
 
 [[task]]
@@ -103,56 +134,41 @@ run = '''
 	const wrapper_start = readFileSync('src/lexer.asm.js', 'utf8');
 	let source = readFileSync('lib/lexer.emcc.asm.js', 'utf8').trim();
 
-	// wrapper
-	const header = 'Module["asm"]=(/** @suppress {uselessCode} */ function(';
-	if (!source.startsWith(header))
-		throw new Error('Unexpected source header');
-	
-	source = 'function asmInit(' + source.slice(header.length);
-	if (!source.endsWith(')'))
-		throw new Error('Unexpected source end');
-	source = source.slice(0, -1);
+	const endFuncs = 'EMSCRIPTEN_END_FUNCS';
+	const removeFunc = name => [new RegExp(`function ${name}\\([^]+?}\\s*(function|return\\s?{[^{}]+};?\\s*}\\s*$)`), '$1'];
 
-	// function renaming
-	const fnStart = source.indexOf('EMSCRIPTEN_END_FUNCS');
-	if (fnStart === -1)
-		throw new Error('Expected EMSCRIPTEN_END_FUNCS');
-
-  // "Manual" tree-shaking
 	const replacements = [
-		[/,_/g, ','],
-		['stackAlloc', 'sta'],
-		['setSource', 'ses'],
-		['parse', 'p'],
-		['__errno_location:Ia,', ''],
-		[/function Ia\(.+?}function/, 'function'],
-		['__apply_relocations:Da,', ''],
-		[/function Da\(.+?}function/, 'function'],
-		[',free:A', ''],
-		[/function A\(.+?}function/, 'function'],
-		['malloc:y,memcpy:F,memset:G,', ''],
-		[/function G\(.+?}function/, 'function'],
-		['emscripten_get_sbrk_ptr:Ga,', ''],
-		[/function Ga\(.+?}function/, 'function'],
-		[',stackRestore:Ea,stackSave:Ha', ''],
-		[/function Ea\(.+?}function/, 'function'],
-		[/function Ha\(.+?}function/, 'function'],
+		[/Module\["asm"\]=\s?\(\/\*\* @suppress {uselessCode} \*\/ function\(/, 'function asmInit('],
+		[/\)$/, ''],
+		[/,\s?_(\w+):/g, ',$1:', null, endFuncs],
+		['stackAlloc:', 'sta:', null, endFuncs],
+		['setSource:', 'ses:', null, endFuncs],
+		['parse:', 'p:', null, endFuncs],
+		[/___errno_location:\s?(\w+),/, '', removeFunc, endFuncs],
+		[/_apply_relocations:\s?(\w+),/, '', removeFunc, endFuncs],
+		[/,\s?free:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?malloc:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?memcpy:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?memset:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?emscripten_get_sbrk_ptr:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?stackRestore:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?stackSave:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
+		[/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
+		[/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, ''],
 		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*/, ''],
 		[/\s*\/\/ EMSCRIPTEN_START_FUNCS\s*/, ''],
-		[/function y\(.+?}function/, 'function'],
-		[/function F\(.+?}function/, 'function'],
-		[/function S\(.+?}function/, 'function'],
-		[',f=env.g|0,g=env.h|0,h=0,i=0,j=0,k=0,l=0,m=0,n=0,o=0.0,p=env.a,q=env.b,r=env.c,s=env.d,t=env.e,u=env.f', ''],
-		[',w=16128,x=0.0', ''],
-		[/global/g, 'g'],
-		[/buffer/g, 'f'],
-		[',env,', ',n,'],
 	];
 
-	for (const [from, to] of replacements) {		
-		const replaced = source.replace(from, to);
-		if (source === replaced)
-			throw new Error(`Error on replacement ${from}`);
+	for (const [from, to, add, after] of replacements) {
+		const [matched, match] = source.match(from) || [];
+		if (!matched) {
+			console.log(source.slice(0, 1000));
+			throw new Error(`Match not found for ${from} -> ${to}${after ? `, after ${after}` : ''}`);
+		}
+		const afterIndex = after ? source.indexOf(after) : 0;
+		const replaced = source.slice(0, afterIndex) + source.slice(afterIndex).replace(from, to);
+		if (add) replacements.push(add(match));
 		source = replaced;
 	}
 

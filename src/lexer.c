@@ -1,19 +1,43 @@
 #include "lexer.h"
 #include <stdio.h>
+#include <string.h>
 
-const bool DEBUG = true;
+// NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION
+static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
+static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
+static const char16_t LASS[] = { 'l', 'a', 's', 's' };
+static const char16_t FROM[] = { 'f', 'r', 'o', 'm' };
+static const char16_t ETA[] = { 'e', 't', 'a' };
+static const char16_t SSERT[] = { 's', 's', 'e', 'r', 't' };
+static const char16_t VO[] = { 'v', 'o' };
+static const char16_t YIE[] = { 'y', 'i', 'e' };
+static const char16_t DELE[] = { 'd', 'e', 'l', 'e' };
+static const char16_t INSTAN[] = { 'i', 'n', 's', 't', 'a', 'n' };
+static const char16_t TY[] = { 't', 'y' };
+static const char16_t RETUR[] = { 'r', 'e', 't', 'u', 'r' };
+static const char16_t DEBUGGE[] = { 'd', 'e', 'b', 'u', 'g', 'g', 'e' };
+static const char16_t AWAI[] = { 'a', 'w', 'a', 'i' };
+static const char16_t THR[] = { 't', 'h', 'r' };
+static const char16_t WHILE[] = { 'w', 'h', 'i', 'l', 'e' };
+static const char16_t FOR[] = { 'f', 'o', 'r' };
+static const char16_t IF[] = { 'i', 'f' };
+static const char16_t CATC[] = { 'c', 'a', 't', 'c' };
+static const char16_t FINALL[] = { 'f', 'i', 'n', 'a', 'l', 'l' };
+static const char16_t ELS[] = { 'e', 'l', 's' };
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  uint16_t templateStack_[STACK_DEPTH];
-  char16_t* openTokenPosStack_[STACK_DEPTH];
-  bool openClassPosStack[STACK_DEPTH];
+  uint16_t templateStack_[512];
+  char16_t* openTokenPosStack_[2048];
+  bool openClassPosStack[256];
+  Import* dynamicImportStack_[512];
 
   facade = true;
   templateStackDepth = 0;
+  dynamicImportStackDepth = 0;
   openTokenDepth = 0;
   templateDepth = 65535;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
@@ -22,6 +46,7 @@ bool parse () {
   has_error = false;
   templateStack = &templateStack_[0];
   openTokenPosStack = &openTokenPosStack_[0];
+  dynamicImportStack = &dynamicImportStack_[0];
   nextBraceIsClass = false;
 
   pos = (char16_t*)(source - 1);
@@ -37,7 +62,7 @@ bool parse () {
 
     switch (ch) {
       case 'e':
-        if (openTokenDepth == 0 && keywordStart(pos) && str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't')) {
+        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0) {
           tryParseExportStatement();
           // export might have been a non-pure declaration
           if (!facade) {
@@ -47,7 +72,7 @@ bool parse () {
         }
         break;
       case 'i':
-        if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
+        if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
           tryParseImportStatement();
         break;
       case ';':
@@ -86,15 +111,15 @@ bool parse () {
 
     switch (ch) {
       case 'e':
-        if (openTokenDepth == 0 && keywordStart(pos) && str_eq5(pos + 1, 'x', 'p', 'o', 'r', 't'))
+        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0)
           tryParseExportStatement();
         break;
       case 'i':
-        if (keywordStart(pos) && str_eq5(pos + 1, 'm', 'p', 'o', 'r', 't'))
+        if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
           tryParseImportStatement();
         break;
       case 'c':
-        if (keywordStart(pos) && str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWs(*(pos + 5)))
+        if (keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5)))
           nextBraceIsClass = true;
         break;
       case '(':
@@ -104,11 +129,12 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (cur_dynamic_import && cur_dynamic_import->dynamic == openTokenPosStack[openTokenDepth]) {
+        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenPosStack[openTokenDepth]) {
+          Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->end == 0)
             cur_dynamic_import->end = pos;
-          cur_dynamic_import->statement_end = pos;
-          cur_dynamic_import = NULL;
+          cur_dynamic_import->statement_end = pos + 1;
+          dynamicImportStackDepth--;
         }
         break;
       case '{':
@@ -203,15 +229,16 @@ void tryParseImportStatement () {
   switch (ch) {
     // dynamic import
     case '(':
-      openTokenPosStack[openTokenDepth++] = startPos;
+      openTokenPosStack[openTokenDepth++] = pos;
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
-      addImport(startPos, pos + 1, 0, startPos);
-      cur_dynamic_import = import_write_head;
+      char16_t* dynamicPos = pos;
       // try parse a string, to record a safe dynamic import string
       pos++;
       ch = commentWhitespace(true);
+      addImport(startPos, pos, 0, dynamicPos);
+      dynamicImportStack[dynamicImportStackDepth++] = import_write_head;
       if (ch == '\'') {
         stringLiteral(ch);
       }
@@ -223,20 +250,22 @@ void tryParseImportStatement () {
         return;
       }
       pos++;
+      char16_t* endPos = pos;
       ch = commentWhitespace(true);
       if (ch == ',') {
-        import_write_head->end = pos;
         pos++;
         ch = commentWhitespace(true);
+        import_write_head->end = endPos;
         import_write_head->assert_index = pos;
         import_write_head->safe = true;
         pos--;
       }
       else if (ch == ')') {
         openTokenDepth--;
-        import_write_head->end = pos;
-        import_write_head->statement_end = pos;
+        import_write_head->end = endPos;
+        import_write_head->statement_end = pos + 1;
         import_write_head->safe = true;
+        dynamicImportStackDepth--;
       }
       else {
         pos--;
@@ -247,7 +276,7 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace(true);
       // import.meta indicated by d == -2
-      if (ch == 'm' && str_eq3(pos + 1, 'e', 't', 'a') && *lastTokenPos != '.')
+      if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && *lastTokenPos != '.')
         addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
 
@@ -296,7 +325,7 @@ void tryParseImportStatement () {
       }
 
       ch = commentWhitespace(true);
-      if (!str_eq4(pos, 'f', 'r', 'o', 'm')) {
+      if (memcmp(pos, &FROM[0], 4 * 2) != 0) {
         syntaxError();
         break;
       }
@@ -352,7 +381,7 @@ void tryParseExportStatement () {
       return;
 
     case 'c':
-      if (str_eq4(pos + 1, 'l', 'a', 's', 's') && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+      if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
         pos += 5;
         ch = commentWhitespace(true);
         const char16_t* startPos = pos;
@@ -448,7 +477,7 @@ void tryParseExportStatement () {
   }
 
   // from ...
-  if (ch == 'f' && str_eq3(pos + 1, 'r', 'o', 'm')) {
+  if (ch == 'f' && memcmp(pos + 1, &FROM[1], 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true));
   }
@@ -505,7 +534,7 @@ void readImportString (const char16_t* ss, char16_t ch) {
   addImport(ss, startPos, pos, STANDARD_IMPORT);
   pos++;
   ch = commentWhitespace(false);
-  if (ch != 'a' || !str_eq5(pos + 1, 's', 's', 'e', 'r', 't')) {
+  if (ch != 'a' || memcmp(pos + 1, &SSERT[0], 5 * 2) != 0) {
     pos--;
     return;
   }
@@ -700,30 +729,6 @@ bool isQuote (char16_t ch) {
   return ch == '\'' || ch == '"';
 }
 
-bool str_eq2 (char16_t* pos, char16_t c1, char16_t c2) {
-  return *(pos + 1) == c2 && *pos == c1;
-}
-
-bool str_eq3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3) {
-  return *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
-}
-
-bool str_eq4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4) {
-  return *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
-}
-
-bool str_eq5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5) {
-  return *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
-}
-
-bool str_eq6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6) {
-  return *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
-}
-
-bool str_eq7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
-  return *(pos + 6) == c7 && *(pos + 5) == c6 && *(pos + 4) == c5 && *(pos + 3) == c4 && *(pos + 2) == c3 && *(pos + 1) == c2 && *pos == c1;
-}
-
 bool keywordStart (char16_t* pos) {
   return pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1));
 }
@@ -732,29 +737,10 @@ bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
   if (pos < source) return false;
   return *pos == c1 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
 }
-bool readPrecedingKeyword2 (char16_t* pos, char16_t c1, char16_t c2) {
-  if (pos - 1 < source) return false;
-  return str_eq2(pos - 1, c1, c2) && (pos - 1 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 2)));
-}
-bool readPrecedingKeyword3 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3) {
-  if (pos - 2 < source) return false;
-  return str_eq3(pos - 2, c1, c2, c3) && (pos - 2 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 3)));
-}
-bool readPrecedingKeyword4 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4) {
-  if (pos - 3 < source) return false;
-  return str_eq4(pos - 3, c1, c2, c3, c4) && (pos - 3 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 4)));
-}
-bool readPrecedingKeyword5 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5) {
-  if (pos - 4 < source) return false;
-  return str_eq5(pos - 4, c1, c2, c3, c4, c5) && (pos - 4 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 5)));
-}
-bool readPrecedingKeyword6 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6) {
-  if (pos - 5 < source) return false;
-  return str_eq6(pos - 5, c1, c2, c3, c4, c5, c6) && (pos - 5 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 6)));
-}
-bool readPrecedingKeyword7 (char16_t* pos, char16_t c1, char16_t c2, char16_t c3, char16_t c4, char16_t c5, char16_t c6, char16_t c7) {
-  if (pos - 6 < source) return false;
-  return str_eq7(pos - 6, c1, c2, c3, c4, c5, c6, c7) && (pos - 6 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 7)));
+
+bool readPrecedingKeywordn (char16_t* pos, const char16_t* compare, size_t n) {
+  if (pos - n + 1 < source) return false;
+  return memcmp(pos - n + 1, compare, n * 2) == 0 && (pos - n + 1 == source || isBrOrWsOrPunctuatorNotDot(*(pos - n)));
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,
@@ -765,10 +751,10 @@ bool isExpressionKeyword (char16_t* pos) {
       switch (*(pos - 1)) {
         case 'i':
           // void
-          return readPrecedingKeyword2(pos - 2, 'v', 'o');
+          return readPrecedingKeywordn(pos - 2, &VO[0], 2);
         case 'l':
           // yield
-          return readPrecedingKeyword3(pos - 2, 'y', 'i', 'e');
+          return readPrecedingKeywordn(pos - 2, &YIE[0], 3);
         default:
           return false;
       }
@@ -787,7 +773,7 @@ bool isExpressionKeyword (char16_t* pos) {
           }
         case 't':
           // delete
-          return readPrecedingKeyword4(pos - 2, 'd', 'e', 'l', 'e');
+          return readPrecedingKeywordn(pos - 2, &DELE[0], 4);
         default:
           return false;
       }
@@ -797,25 +783,25 @@ bool isExpressionKeyword (char16_t* pos) {
       switch (*(pos - 3)) {
         case 'c':
           // instanceof
-          return readPrecedingKeyword6(pos - 4, 'i', 'n', 's', 't', 'a', 'n');
+          return readPrecedingKeywordn(pos - 4, &INSTAN[0], 6);
         case 'p':
           // typeof
-          return readPrecedingKeyword2(pos - 4, 't', 'y');
+          return readPrecedingKeywordn(pos - 4, &TY[0], 2);
         default:
           return false;
       }
     case 'n':
       // in, return
-      return readPrecedingKeyword1(pos - 1, 'i') || readPrecedingKeyword5(pos - 1, 'r', 'e', 't', 'u', 'r');
+      return readPrecedingKeyword1(pos - 1, 'i') || readPrecedingKeywordn(pos - 1, &RETUR[0], 5);
     case 'o':
       // do
       return readPrecedingKeyword1(pos - 1, 'd');
     case 'r':
       // debugger
-      return readPrecedingKeyword7(pos - 1, 'd', 'e', 'b', 'u', 'g', 'g', 'e');
+      return readPrecedingKeywordn(pos - 1, &DEBUGGE[0], 7);
     case 't':
       // await
-      return readPrecedingKeyword4(pos - 1, 'a', 'w', 'a', 'i');
+      return readPrecedingKeywordn(pos - 1, &AWAI[0], 4);
     case 'w':
       switch (*(pos - 1)) {
         case 'e':
@@ -823,7 +809,7 @@ bool isExpressionKeyword (char16_t* pos) {
           return readPrecedingKeyword1(pos - 2, 'n');
         case 'o':
           // throw
-          return readPrecedingKeyword3(pos - 2, 't', 'h', 'r');
+          return readPrecedingKeywordn(pos - 2, &THR[0], 3);
         default:
           return false;
       }
@@ -832,9 +818,9 @@ bool isExpressionKeyword (char16_t* pos) {
 }
 
 bool isParenKeyword (char16_t* curPos) {
-  return readPrecedingKeyword5(curPos, 'w', 'h', 'i', 'l', 'e') ||
-      readPrecedingKeyword3(curPos, 'f', 'o', 'r') ||
-      readPrecedingKeyword2(curPos, 'i', 'f');
+  return readPrecedingKeywordn(curPos, &WHILE[0], 5) ||
+      readPrecedingKeywordn(curPos, &FOR[0], 3) ||
+      readPrecedingKeywordn(curPos, &IF[0], 2);
 }
 
 bool isPunctuator (char16_t ch) {
@@ -863,11 +849,11 @@ bool isExpressionTerminator (char16_t* curPos) {
     case ')':
       return true;
     case 'h':
-      return readPrecedingKeyword4(curPos - 1, 'c', 'a', 't', 'c');
+      return readPrecedingKeywordn(curPos - 1, &CATC[0], 4);
     case 'y':
-      return readPrecedingKeyword6(curPos - 1, 'f', 'i', 'n', 'a', 'l', 'l');
+      return readPrecedingKeywordn(curPos - 1, &FINALL[0], 6);
     case 'e':
-      return readPrecedingKeyword3(curPos - 1, 'e', 'l', 's');
+      return readPrecedingKeywordn(curPos - 1, &ELS[0], 3);
   }
   return false;
 }
