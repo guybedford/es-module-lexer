@@ -16,10 +16,30 @@ const init = (async () => {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Multiline dynamic import on windows', () => {
+    const source = `import(\n"./statehash\\u1011.js"\r)`;
+    const [imports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, './statehashထ.js');
+    assert.strictEqual(source.slice(imports[0].s, imports[0].e), '"./statehash\\u1011.js"');
+  });
+
+  test('Basic nested dynamic import support', () => {
+    const source = `await import (await import  ('foo'))`;
+    const [imports] = parse(source);
+    assert.strictEqual(imports.length, 2);
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].d), 'import ');
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].se), 'import (await import  (\'foo\'))');
+    assert.strictEqual(source.slice(imports[0].s, imports[0].e), 'await import  (\'foo\')');
+    assert.strictEqual(source.slice(imports[1].ss, imports[1].d), 'import  ');
+    assert.strictEqual(source.slice(imports[1].ss, imports[1].se), 'import  (\'foo\')');
+    assert.strictEqual(source.slice(imports[1].s, imports[1].e), '\'foo\'');
+  });
+
   test('Import assertions', () => {
     const source = `
       import json from "./foo.json" assert { type: "json" };
-      import("foo.json", { assert: { type: "json" } });
+      import("foo.json" , { assert: { type: "json" } });
 
       import test from './asdf'
       assert { not: 'an assertion!' }
@@ -30,7 +50,7 @@ suite('Invalid syntax', () => {
     assert.strictEqual(imports[0].n, './foo.json');
     assert.strictEqual(source.substring(imports[0].s, imports[0].e), './foo.json');
     assert.strictEqual(source.substring(imports[0].a, imports[0].se), '{ type: "json" }');
-    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ assert: { type: "json" } }');
+    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ assert: { type: "json" } })');
     assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
     assert.strictEqual(imports[1].n, 'foo.json');
     assert.strictEqual(imports[2].n, './asdf');
@@ -382,19 +402,19 @@ suite('Lexer', () => {
     const [imports, exports] = parse(source);
     assert.strictEqual(imports.length, 3);
     var { s, e, ss, se, d } = imports[0];
-    assert.strictEqual(ss, d);
-    assert.strictEqual(se, e);
-    assert.strictEqual(source.substr(d, 6), 'import');
+    assert.strictEqual(ss + 6, d);
+    assert.strictEqual(se, e + 1);
+    assert.strictEqual(source.slice(d, se), '(is1)');
     assert.strictEqual(source.slice(s, e), 'is1');
 
     var { s, e, ss, se, d } = imports[1];
-    assert.strictEqual(ss, d);
-    assert.strictEqual(se, e);
+    assert.strictEqual(ss + 6, d);
+    assert.strictEqual(se, e + 1);
     assert.strictEqual(source.slice(s, e), 'is2');
 
     var { s, e, ss, se, d } = imports[2];
-    assert.strictEqual(ss, d);
-    assert.strictEqual(se, e);
+    assert.strictEqual(ss + 6, d);
+    assert.strictEqual(se, e + 1);
     assert.strictEqual(source.slice(s, e), 'some_url');
   });
 
@@ -460,13 +480,13 @@ function x() {
     const [imports, exports] = parse(source);
     assert.strictEqual(imports.length, 2);
     assert.notEqual(imports[0].d, -1);
-    assert.strictEqual(imports[0].ss, imports[0].d);
-    assert.strictEqual(imports[0].se, 0);
-    assert.strictEqual(source.slice(imports[0].d, imports[0].s), 'import(');
+    assert.strictEqual(imports[0].ss + 6, imports[0].d);
+    assert.strictEqual(imports[0].se, imports[0].e + 1);
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].s), 'import(');
     assert.notEqual(imports[1].d, -1);
-    assert.strictEqual(imports[1].ss, imports[1].d);
-    assert.strictEqual(imports[1].se, imports[1].e);
-    assert.strictEqual(source.slice(imports[1].d, imports[1].s), 'import(');
+    assert.strictEqual(imports[1].ss + 6, imports[1].d);
+    assert.strictEqual(imports[1].se, imports[1].e + 1);
+    assert.strictEqual(source.slice(imports[1].ss, imports[1].d), 'import');
     assert.strictEqual(exports.length, 1);
     assert.strictEqual(exports[0], 'a');
   });

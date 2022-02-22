@@ -1,4 +1,4 @@
-let asm, asmBuffer, allocSize = 4194304, addr;
+let asm, asmBuffer, allocSize = 131072, addr;
 
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
@@ -200,6 +200,7 @@ function isBr (c) {
 }
 
 function syntaxError () {
+  console.log(acornPos);
   throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
 }
 
