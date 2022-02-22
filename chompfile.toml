@@ -6,6 +6,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
+WABT_PATH = '../wabt'
 
 [[task]]
 name = 'build'
@@ -56,8 +57,7 @@ run = '''
 
 	const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));
 
-	const min = process.env.OPT === 'z';
-	const minified = tmin && erser.minify(jsSourceProcessed, {
+	const minified = terser.minify(jsSourceProcessed, {
 		module: true,
 		output: {
 			preamble: `/* es-module-lexer ${pjson.version} */`
@@ -162,7 +162,7 @@ run = 'mocha -b -u tdd test/*.cjs'
 [[task]]
 target = 'lib/lexer.wat'
 dep = 'lib/lexer.wasm'
-run = '../wabt/bin/wasm2wat lib/lexer.wasm -o lib/lexer.wat'
+run = '${{ WABT_PATH }}/bin/wasm2wat lib/lexer.wasm -o lib/lexer.wat'
 
 [[task]]
 name = 'footprint'

@@ -65,5 +65,8 @@ jobs:
           EMSCRIPTEN_BIN: './emsdk/fastcomp/emscripten/emcc'
         run: chomp test
 
+      - name: Footprint
+        run: chomp footprint
+
       - name: Benchmark Wasm
         run: chomp bench
