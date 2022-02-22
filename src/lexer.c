@@ -2,15 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 
-const bool DEBUG = true;
-
+// NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
 static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
 static const char16_t FROM[] = { 'f', 'r', 'o', 'm' };
 static const char16_t ETA[] = { 'e', 't', 'a' };
 static const char16_t SSERT[] = { 's', 's', 'e', 'r', 't' };
-
 static const char16_t VO[] = { 'v', 'o' };
 static const char16_t YIE[] = { 'y', 'i', 'e' };
 static const char16_t DELE[] = { 'd', 'e', 'l', 'e' };
@@ -23,7 +21,6 @@ static const char16_t THR[] = { 't', 'h', 'r' };
 static const char16_t WHILE[] = { 'w', 'h', 'i', 'l', 'e' };
 static const char16_t FOR[] = { 'f', 'o', 'r' };
 static const char16_t IF[] = { 'i', 'f' };
-
 static const char16_t CATC[] = { 'c', 'a', 't', 'c' };
 static const char16_t FINALL[] = { 'f', 'i', 'n', 'a', 'l', 'l' };
 static const char16_t ELS[] = { 'e', 'l', 's' };

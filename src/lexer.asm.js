@@ -1,6 +1,19 @@
 let asm, asmBuffer, allocSize = 131072, addr;
 
-const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (src, outBuf16) {
+  const len = src.length;
+  let i = 0;
+  while (i < len)
+    outBuf16[i] = src.charCodeAt(i++);
+} : function (src, outBuf16) {
+  const len = src.length;
+  let i = 0;
+  while (i < len) {
+    const ch = src.charCodeAt(i);
+    outBuf16[i++] = (ch & 0xff) << 8 | ch >>> 8;
+  }
+};
+const words = 'xportmportlassetafromssertvoyiedeleinstantyreturdebuggeawaithrwhileforifcatcfinallels';
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -9,6 +22,7 @@ export function parse (_source, _name = '@') {
   if (source.length > allocSize || !asm) {
     while (source.length > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize * 4);
+    copy(words, new Uint16Array(asmBuffer, 16, words.length));
     asm = asmInit({ Int8Array, Int16Array, Int32Array, Uint8Array, Uint16Array }, {}, asmBuffer);
     addr = asm.sta(allocSize * 2);
   }
@@ -16,7 +30,7 @@ export function parse (_source, _name = '@') {
   asm.ses(addr);
   asm.sa(len - 1);
 
-  (isLE ? copyLE : copyBE)(source, new Uint16Array(asmBuffer, addr, len));
+  copy(source, new Uint16Array(asmBuffer, addr, len));
 
   if (!asm.p()) {
     acornPos = asm.e();
@@ -37,22 +51,6 @@ export function parse (_source, _name = '@') {
   }
 
   return [imports, exports, !!asm.f()];
-}
-
-function copyBE (src, outBuf16) {
-  const len = src.length;
-  let i = 0;
-  while (i < len) {
-    const ch = src.charCodeAt(i);
-    outBuf16[i++] = (ch & 0xff) << 8 | ch >>> 8;
-  }
-}
-
-function copyLE (src, outBuf16) {
-  const len = src.length;
-  let i = 0;
-  while (i < len)
-    outBuf16[i] = src.charCodeAt(i++);
 }
 
 /*
@@ -200,7 +198,6 @@ function isBr (c) {
 }
 
 function syntaxError () {
-  console.log(acornPos);
   throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
 }
 

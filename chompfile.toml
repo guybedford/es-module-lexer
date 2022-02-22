@@ -121,7 +121,7 @@ run = """
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_f','_setSource']" \
 	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
 
-	rm lib/lexer.emcc.js
+	# rm lib/lexer.emcc.js
 """
 
 [[task]]
@@ -197,5 +197,5 @@ run = '../wabt/bin/wasm2wat lib/lexer.wasm -o lib/lexer.wat'
 
 [[task]]
 name = 'footprint'
-deps = ['dist/lexer.js', 'dist/lexer.asm.js', 'lexer.asm.js']
+deps = ['dist/lexer.js', 'dist/lexer.asm.js']
 template = 'footprint'
