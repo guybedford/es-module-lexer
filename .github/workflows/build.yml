@@ -17,7 +17,7 @@ jobs:
     continue-on-error: true
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-2016]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Check out Git repository
@@ -55,8 +55,8 @@ jobs:
       - name: npm Install
         run: npm install
 
-      - name: Install Chomp
-        run: cargo install chompbuild
+      - name: Setup Chomp
+        uses: guybedford/chomp-action@v1
 
       - name: Compile to Wasm & Test Wasm
         env:
