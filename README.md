@@ -12,6 +12,8 @@ For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in
 
 _Comprehensively handles the JS language grammar while remaining small and fast. - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
+> [Built](https://github.com/guybedford/es-module-lexer/blob/main/chompfile.toml) with [Chomp](https://chompbuild.com/)
+
 ### Usage
 
 ```
