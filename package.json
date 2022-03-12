@@ -14,8 +14,8 @@
     "./js": "./dist/lexer.asm.js"
   },
   "scripts": {
-    "build": "chomp build",
-    "test": "chomp test"
+    "build": "cargo install chompbuild ; chomp build",
+    "test": "cargo install chompbuild ; chomp test"
   },
   "author": "Guy Bedford",
   "license": "MIT",
