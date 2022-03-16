@@ -2,9 +2,9 @@ name: Build & Test
 
 on:
   push:
-    branches: [main]
+    branches: main
   pull_request:
-    branches: [main]
+    branches: main
 
 env:
   WASI_VERSION: 12

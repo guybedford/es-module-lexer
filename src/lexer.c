@@ -212,7 +212,7 @@ bool parse () {
     lastTokenPos = pos;
   }
 
-  if (templateDepth != 65535 || openTokenDepth || has_error)
+  if (templateDepth != 65535 || openTokenDepth || has_error || dynamicImportStackDepth)
     return false;
 
   // succeess
