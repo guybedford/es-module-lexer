@@ -1,3 +1,6 @@
+0.10.1
+* fix: asm.js memory limit issue, https://github.com/guybedford/es-module-lexer/pull/107
+
 0.10.0
 * feat: support ci on actions. by @richardo2016 in https://github.com/guybedford/es-module-lexer/pull/94
 * Truly rebuild wasm every time on CI, better instructions for Windows by @richardo2016 in https://github.com/guybedford/es-module-lexer/pull/95
