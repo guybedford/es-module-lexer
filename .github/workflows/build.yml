@@ -58,6 +58,9 @@ jobs:
       - name: Setup Chomp
         uses: guybedford/chomp-action@v1
 
+      - name: Check Chomp
+        run: ls && ls ../
+
       - name: Compile to Wasm & Test Wasm
         env:
           WASI_PATH: './wasi-sdk-${{ env.WASI_VERSION_FULL }}'
