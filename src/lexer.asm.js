@@ -19,12 +19,14 @@ let source, name;
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
-  if (source.length > allocSize || !asm) {
-    while (source.length > allocSize) allocSize *= 2;
-    asmBuffer = new ArrayBuffer(allocSize * 4);
+  if (source.length * 8 > allocSize || !asm) {
+    while (source.length * 8 > allocSize) allocSize *= 2;
+    asmBuffer = new ArrayBuffer(allocSize);
     copy(words, new Uint16Array(asmBuffer, 16, words.length));
     asm = asmInit(typeof self !== 'undefined' ? self : global, {}, asmBuffer);
-    addr = asm.sta(allocSize * 2);
+    // maximum 4 bytes per string code point
+    // + analysis space, remaining space is stack space
+    addr = asm.sta(source.length * 5);
   }
   const len = source.length + 1;
   asm.ses(addr);
