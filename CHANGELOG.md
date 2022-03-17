@@ -1,3 +1,6 @@
+0.10.3
+* fix: asm.js memory allocations further refinements, https://github.com/guybedford/es-module-lexer/pull/109
+
 0.10.2
 * fix: asm.js memory allocations, https://github.com/guybedford/es-module-lexer/pull/108
 
