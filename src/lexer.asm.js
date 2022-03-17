@@ -1,4 +1,4 @@
-let asm, asmBuffer, allocSize = 131072, addr;
+let asm, asmBuffer, allocSize = 2<<18, addr;
 
 const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (src, outBuf16) {
   const len = src.length;
@@ -19,15 +19,16 @@ let source, name;
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
-  if (source.length * 2 > allocSize || !asm) {
-    while (source.length * 2 > allocSize) allocSize *= 2;
-    asmBuffer = new ArrayBuffer(allocSize * 4);
+  const memBound = source.length * 2 + (2 << 17);
+  if (memBound > allocSize || !asm) {
+    while (memBound > allocSize) allocSize *= 2;
+    asmBuffer = new ArrayBuffer(allocSize);
     copy(words, new Uint16Array(asmBuffer, 16, words.length));
     asm = asmInit(typeof self !== 'undefined' ? self : global, {}, asmBuffer);
-    // maximum 4 bytes per string code point
-    // + analysis space (8 bytes per import), remaining (len * 3) space is stack space
-    // note: could bound stack space by known stack size limits instead of scaling
-    addr = asm.sta(source.length * 5);
+    // 2 bytes per string code point
+    // + analysis space (~4000 imports @ 8 bytes per import)
+    // remaining space is stack space
+    addr = asm.su(source.length * 2 + (2 << 15));
   }
   const len = source.length + 1;
   asm.ses(addr);
