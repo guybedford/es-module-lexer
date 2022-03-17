@@ -110,7 +110,6 @@ run = '''
 		[/Module\["asm"\]=\s?\(\/\*\* @suppress {uselessCode} \*\/ function\(/, 'function asmInit('],
 		[/\)$/, ''],
 		[/,\s?_(\w+):/g, ',$1:', null, endFuncs],
-		['stackAlloc:', 'sta:', null, endFuncs],
 		['setSource:', 'ses:', null, endFuncs],
 		['parse:', 'p:', null, endFuncs],
 		[/___errno_location:\s?(\w+),/, '', removeFunc, endFuncs],
@@ -119,13 +118,20 @@ run = '''
 		[/,\s?malloc:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s?memcpy:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s?memset:\s?(\w+)/, '', removeFunc, endFuncs],
+		[/,\s?stackAlloc:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s?emscripten_get_sbrk_ptr:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s?stackRestore:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s?stackSave:\s?(\w+)/, '', removeFunc, endFuncs],
 		[/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
 		[/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
 		[/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, ''],
-		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*/, ''],
+		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*return\{/, `  function su(a) {
+		a = a | 0;
+		v = a + 992 + 15 & -16;
+		return 992;
+	}
+	return {
+		su,`],
 		[/\s*\/\/ EMSCRIPTEN_START_FUNCS\s*/, ''],
 	];
 
