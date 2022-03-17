@@ -26,9 +26,9 @@ export function parse (_source, _name = '@') {
     copy(words, new Uint16Array(asmBuffer, 16, words.length));
     asm = asmInit(typeof self !== 'undefined' ? self : global, {}, asmBuffer);
     // 2 bytes per string code point
-    // + analysis space (~4000 imports @ 8 bytes per import)
+    // + analysis space
     // remaining space is stack space
-    addr = asm.su(source.length * 2 + (2 << 15));
+    addr = asm.su(source.length * 2 + (2 << 16));
   }
   const len = source.length + 1;
   asm.ses(addr);
