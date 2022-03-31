@@ -25,7 +25,7 @@
     "@babel/plugin-transform-modules-commonjs": "^7.5.0",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
-    "terser": "^4.1.4"
+    "terser": "^5.12.1"
   },
   "files": [
     "dist",

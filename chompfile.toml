@@ -45,11 +45,11 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 
 [[task]]
 target = 'dist/lexer.js'
-deps = ['src/lexer.js', 'lib/lexer.wasm']
+deps = ['src/lexer.js', 'lib/lexer.wasm', 'package.json']
 engine = 'node'
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
-	import terser from 'terser';
+	import { minify } from 'terser';
 
 	const wasmBuffer = readFileSync('lib/lexer.wasm');
 	const jsSource = readFileSync('src/lexer.js', 'utf8');
@@ -57,12 +57,12 @@ run = '''
 
 	const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));
 
-	const minified = terser.minify(jsSourceProcessed, {
+	const { code: minified } = await minify(jsSourceProcessed, {
 		module: true,
 		output: {
 			preamble: `/* es-module-lexer ${pjson.version} */`
 		}
-	}).code;
+	});
 
 	writeFileSync('dist/lexer.js', minified ? minified : jsSourceProcessed);
 '''
