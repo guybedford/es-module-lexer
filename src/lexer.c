@@ -30,22 +30,17 @@ bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  uint16_t templateStack_[512];
-  char16_t* openTokenPosStack_[2048];
-  bool openClassPosStack[256];
+  OpenToken openTokenStack_[1024];
   Import* dynamicImportStack_[512];
 
   facade = true;
-  templateStackDepth = 0;
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
-  templateDepth = 65535;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
   parse_error = 0;
   has_error = false;
-  templateStack = &templateStack_[0];
-  openTokenPosStack = &openTokenPosStack_[0];
+  openTokenStack = &openTokenStack_[0];
   dynamicImportStack = &dynamicImportStack_[0];
   nextBraceIsClass = false;
 
@@ -123,13 +118,14 @@ bool parse () {
           nextBraceIsClass = true;
         break;
       case '(':
-        openTokenPosStack[openTokenDepth++] = lastTokenPos;
+        openTokenStack[openTokenDepth].token = AnyParen;
+        openTokenStack[openTokenDepth++].pos = lastTokenPos;
         break;
       case ')':
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenPosStack[openTokenDepth]) {
+        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenStack[openTokenDepth].pos) {
           Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->end == 0)
             cur_dynamic_import->end = pos;
@@ -148,20 +144,15 @@ bool parse () {
           else
             first_import = NULL;
         }
-        openClassPosStack[openTokenDepth] = nextBraceIsClass;
+        openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
+        openTokenStack[openTokenDepth++].pos = lastTokenPos;
         nextBraceIsClass = false;
-        openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
       case '}':
         if (openTokenDepth == 0)
           return syntaxError(), false;
-        if (openTokenDepth-- == templateDepth) {
-          templateDepth = templateStack[--templateStackDepth];
+        if (openTokenStack[--openTokenDepth].token == TemplateBrace) {
           templateString();
-        }
-        else {
-          if (templateDepth != 65535 && openTokenDepth < templateDepth)
-            return syntaxError(), false;
         }
         break;
       case '\'':
@@ -191,8 +182,8 @@ bool parse () {
           if (isExpressionPunctuator(lastToken) &&
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
-              lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
-              lastToken == '}' && (isExpressionTerminator(openTokenPosStack[openTokenDepth]) || openClassPosStack[openTokenDepth]) ||
+              lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+              lastToken == '}' && isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||
               !lastToken) {
@@ -206,13 +197,15 @@ bool parse () {
         break;
       }
       case '`':
+        openTokenStack[openTokenDepth].pos = lastTokenPos;
+        openTokenStack[openTokenDepth++].token = Template;
         templateString();
         break;
     }
     lastTokenPos = pos;
   }
 
-  if (templateDepth != 65535 || openTokenDepth || has_error || dynamicImportStackDepth)
+  if (openTokenDepth || has_error || dynamicImportStackDepth)
     return false;
 
   // succeess
@@ -229,7 +222,8 @@ void tryParseImportStatement () {
   switch (ch) {
     // dynamic import
     case '(':
-      openTokenPosStack[openTokenDepth++] = pos;
+      openTokenStack[openTokenDepth].token = ImportParen;
+      openTokenStack[openTokenDepth++].pos = pos;
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
@@ -630,12 +624,15 @@ void templateString () {
     char16_t ch = *pos;
     if (ch == '$' && *(pos + 1) == '{') {
       pos++;
-      templateStack[templateStackDepth++] = templateDepth;
-      templateDepth = ++openTokenDepth;
+      openTokenStack[openTokenDepth].token = TemplateBrace;
+      openTokenStack[openTokenDepth++].pos = pos;
       return;
     }
-    if (ch == '`')
+    if (ch == '`') {
+      if (openTokenStack[--openTokenDepth].token != Template)
+        syntaxError();
       return;
+    }
     if (ch == '\\')
       pos++;
   }
