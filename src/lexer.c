@@ -351,125 +351,127 @@ void tryParseExportStatement () {
   if (pos == curPos && !isPunctuator(ch))
     return;
 
-  switch (ch) {
-    // export default ...
-    case 'd':
-      addExport(pos, pos + 7, NULL, NULL);
-      return;
+  if (ch == '{') {
+    pos++;
+    ch = commentWhitespace(true);
+    while (true) {
+      char16_t* startPos = pos;
 
-    // export async? function*? name () {
-    case 'a':
-      pos += 5;
+      if (!isQuote(ch)) {
+        ch = readToWsOrPunctuator(ch);
+      }
+      // export { "identifer" as } from
+      // export { "@notid" as } from
+      // export { "spa ce" as } from
+      // export { " space" as } from
+      // export { "space " as } from
+      // export { "not~id" as } from
+      // export { "%notid" as } from
+      // export { "identifer" } from
+      // export { "%notid" } from
+      else {
+        stringLiteral(ch);
+        pos++;
+      }
+
+      char16_t* endPos = pos;
       commentWhitespace(true);
-    // fallthrough
-    case 'f':
-      pos += 8;
-      ch = commentWhitespace(true);
-      if (ch == '*') {
+      ch = readExportAs(startPos, endPos);
+      // ,
+      if (ch == ',') {
         pos++;
         ch = commentWhitespace(true);
       }
-      const char16_t* startPos = pos;
-      ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos, startPos, pos);
-      pos--;
-      return;
+      if (ch == '}')
+        break;
+      if (pos == startPos)
+        return syntaxError();
+      if (pos > end)
+        return syntaxError();
+    }
+    pos++;
+    ch = commentWhitespace(true);
+  }
+  // export *
+  // export * as X
+  else if (ch == '*') {
+    pos++;
+    commentWhitespace(true);
+    ch = readExportAs(pos, pos);
+    ch = commentWhitespace(true);
+  }
+  else {
+    facade = false;
+    switch (ch) {
+      // export default ...
+      case 'd':
+        addExport(pos, pos + 7, NULL, NULL);
+        return;
 
-    // export class name ...
-    case 'c':
-      if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+      // export async? function*? name () {
+      case 'a':
         pos += 5;
+        commentWhitespace(true);
+      // fallthrough
+      case 'f':
+        pos += 8;
         ch = commentWhitespace(true);
+        if (ch == '*') {
+          pos++;
+          ch = commentWhitespace(true);
+        }
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
         addExport(startPos, pos, startPos, pos);
         pos--;
         return;
-      }
-      pos += 2;
-    // fallthrough
 
-    // export var/let/const name = ...(, name = ...)+
-    case 'v':
-    case 'l':
-      // destructured initializations not currently supported (skipped for { or [)
-      // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-      pos += 2;
-      facade = false;
-      do {
-        pos++;
-        ch = commentWhitespace(true);
-        const char16_t* startPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        // dont yet handle [ { destructurings
-        if (ch == '{' || ch == '[') {
-          pos--;
-          return;
-        }
-        if (pos == startPos)
-          return;
-        addExport(startPos, pos, startPos, pos);
-        ch = commentWhitespace(true);
-        if (ch == '=') {
-          pos--;
-          return;
-        }
-      } while (ch == ',');
-      pos--;
-      return;
-
-
-    // export {...}
-    case '{':
-      pos++;
-      ch = commentWhitespace(true);
-      while (true) {
-        char16_t* startPos = pos;
-
-        if (!isQuote(ch)) {
+      // export class name ...
+      case 'c':
+        if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+          pos += 5;
+          ch = commentWhitespace(true);
+          const char16_t* startPos = pos;
           ch = readToWsOrPunctuator(ch);
+          addExport(startPos, pos, startPos, pos);
+          pos--;
+          return;
         }
-        // export { "identifer" as } from
-        // export { "@notid" as } from
-        // export { "spa ce" as } from
-        // export { " space" as } from
-        // export { "space " as } from
-        // export { "not~id" as } from
-        // export { "%notid" as } from
-        // export { "identifer" } from
-        // export { "%notid" } from
-        else {
-          stringLiteral(ch);
-          pos++;
-        }
+        pos += 2;
+      // fallthrough
 
-        char16_t* endPos = pos;
-        commentWhitespace(true);
-        ch = readExportAs(startPos, endPos);
-        // ,
-        if (ch == ',') {
+      // export var/let/const name = ...(, name = ...)+
+      case 'v':
+      case 'l':
+        // destructured initializations not currently supported (skipped for { or [)
+        // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
+        pos += 2;
+        facade = false;
+        do {
           pos++;
           ch = commentWhitespace(true);
-        }
-        if (ch == '}')
-          break;
-        if (pos == startPos)
-          return syntaxError();
-        if (pos > end)
-          return syntaxError();
-      }
-      pos++;
-      ch = commentWhitespace(true);
-    break;
+          const char16_t* startPos = pos;
+          ch = readToWsOrPunctuator(ch);
+          // dont yet handle [ { destructurings
+          if (ch == '{' || ch == '[') {
+            pos--;
+            return;
+          }
+          if (pos == startPos)
+            return;
+          addExport(startPos, pos, startPos, pos);
+          ch = commentWhitespace(true);
+          if (ch == '=') {
+            pos--;
+            return;
+          }
+        } while (ch == ',');
+        pos--;
+        return;
 
-    // export *
-    // export * as X
-    case '*':
-      pos++;
-      commentWhitespace(true);
-      ch = readExportAs(pos, pos);
-      ch = commentWhitespace(true);
-    break;
+      default:
+        return;
+    }
   }
 
   // from ...
