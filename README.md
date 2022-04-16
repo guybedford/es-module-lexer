@@ -204,15 +204,15 @@ Module load time
 > 5ms
 Cold Run, All Samples
 test/samples/*.js (3123 KiB)
-> 20ms
+> 18ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (739 KiB)
-> 2.12ms
+> 3ms
 test/samples/angular.min.js (188 KiB)
 > 1ms
 test/samples/d3.js (508 KiB)
-> 3.04ms
+> 3ms
 test/samples/d3.min.js (274 KiB)
 > 2ms
 test/samples/magic-string.js (35 KiB)
@@ -220,13 +220,13 @@ test/samples/magic-string.js (35 KiB)
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (929 KiB)
-> 4.04ms
+> 4.32ms
 test/samples/rollup.min.js (429 KiB)
 > 2.16ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3123 KiB)
-> 14.4ms
+> 14.16ms
 ```
 
 #### JS Build (asm.js)
@@ -236,15 +236,15 @@ Module load time
 > 2ms
 Cold Run, All Samples
 test/samples/*.js (3123 KiB)
-> 35ms
+> 34ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (739 KiB)
 > 3ms
 test/samples/angular.min.js (188 KiB)
-> 1.08ms
+> 1ms
 test/samples/d3.js (508 KiB)
-> 3.04ms
+> 3ms
 test/samples/d3.min.js (274 KiB)
 > 2ms
 test/samples/magic-string.js (35 KiB)
@@ -252,13 +252,13 @@ test/samples/magic-string.js (35 KiB)
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (929 KiB)
-> 5.04ms
+> 5ms
 test/samples/rollup.min.js (429 KiB)
-> 3ms
+> 3.04ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3123 KiB)
-> 17ms
+> 17.12ms
 ```
 
 ### Building
