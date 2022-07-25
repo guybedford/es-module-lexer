@@ -63,6 +63,85 @@ export interface ImportSpecifier {
   readonly a: number;
 }
 
+export interface ExportSpecifier {
+  /**
+   * Exported name
+   *
+   * @example
+   * const source = `export default []`;
+   * const [imports, exports] = parse(source);
+   * exports[0].n;
+   * // Returns "default"
+   *
+   * @example
+   * const source = `export const asdf = 42`;
+   * const [imports, exports] = parse(source);
+   * exports[0].n;
+   * // Returns "asdf"
+   */
+  readonly n: string;
+
+  /**
+   * Local name, or undefined.
+   *
+   * @example
+   * const source = `export default []`;
+   * const [imports, exports] = parse(source);
+   * exports[0].n;
+   * // Returns undefined
+   *
+   * @example
+   * const asdf = 42;
+   * const source = `export { asdf as a }`;
+   * const [imports, exports] = parse(source);
+   * exports[0].n;
+   * // Returns "asdf"
+   */
+  readonly ln: string | undefined;
+
+  /**
+   * Start of exported name
+   *
+   * @example
+   * const source = `export default []`;
+   * const [imports, exports] = parse(source);
+   * source.substring(exports[0].s, exports[0].e);
+   * // Returns "default"
+   *
+   * @example
+   * const source = `export { 42 as asdf }`;
+   * const [imports, exports] = parse(source);
+   * source.substring(exports[0].s, exports[0].e);
+   * // Returns "asdf"
+   */
+  readonly s: number;
+  /**
+   * End of exported name
+   */
+  readonly e: number;
+
+  /**
+   * Start of local name, or -1.
+   *
+   * @example
+   * const asdf = 42;
+   * const source = `export { asdf as a }`;
+   * const [imports, exports] = parse(source);
+   * source.substring(exports[0].ls, exports[0].le);
+   * // Returns "asdf"
+   */
+  readonly ls: number;
+  /**
+   * End of local name, or -1.
+   */
+  readonly le: number;
+
+  /**
+   * Whether this is an ambient export.
+   */
+  readonly a: boolean;
+}
+
 /**
  * Wait for init to resolve before calling `parse`.
  */
@@ -81,6 +160,6 @@ export function parse(
   name?: string
 ): readonly [
   imports: ReadonlyArray<ImportSpecifier>,
-  exports: ReadonlyArray<string>,
+  exports: ReadonlyArray<ExportSpecifier>,
   facade: boolean
 ];
