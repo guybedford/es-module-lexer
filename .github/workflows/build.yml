@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@v2
 
       - uses: actions/setup-java@v3
+        with:
+          java-version: 17
 
       - name: Install wasi-sdk
         shell: bash
