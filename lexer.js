@@ -21,7 +21,14 @@ function addImport (ss, s, e, d) {
 }
 
 function addExport (s, e, ls, le) {
-  exports.push({ s, e, ls, le });
+  exports.push({
+    s,
+    e,
+    ls,
+    le,
+    n: s[0] === '"' ? readString(s, '"') : s[0] === "'" ? readString(s, "'") : source.slice(s, e),
+    ln: ls[0] === '"' ? readString(ls, '"') : ls[0] === "'" ? readString(ls, "'") : source.slice(ls, le)
+  });
 }
 
 function readName (impt) {
@@ -414,6 +421,7 @@ function tryParseExportStatement () {
     // There were no local names.
     for (let i = prevExport; i < exports.length; ++i) {
       exports[i].ls = exports[i].le = -1;
+      exports[i].ln = undefined;
     }
   }
   else {
