@@ -346,6 +346,7 @@ void tryParseImportStatement () {
 
 void tryParseExportStatement () {
   char16_t* sStartPos = pos;
+  Export* prev_export_write_head = export_write_head;
 
   pos += 6;
 
@@ -359,7 +360,7 @@ void tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 'd':
-      addExport(pos, pos + 7);
+      addExport(pos, pos + 7, NULL, NULL);
       return;
 
     // export async? function*? name () {
@@ -376,17 +377,18 @@ void tryParseExportStatement () {
       }
       const char16_t* startPos = pos;
       ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos);
+      addExport(startPos, pos, startPos, pos);
       pos--;
       return;
 
+    // export class name ...
     case 'c':
       if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
         pos += 5;
         ch = commentWhitespace(true);
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        addExport(startPos, pos);
+        addExport(startPos, pos, startPos, pos);
         pos--;
         return;
       }
@@ -412,7 +414,7 @@ void tryParseExportStatement () {
         }
         if (pos == startPos)
           return;
-        addExport(startPos, pos);
+        addExport(startPos, pos, startPos, pos);
         ch = commentWhitespace(true);
         if (ch == '=') {
           pos--;
@@ -480,6 +482,11 @@ void tryParseExportStatement () {
   if (ch == 'f' && memcmp(pos + 1, &FROM[1], 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true));
+
+    // There were no local names.
+    for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
+      exprt->local_start = exprt->local_end = NULL;
+    }
   }
   else {
     pos--;
@@ -488,6 +495,8 @@ void tryParseExportStatement () {
 
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
+  char16_t* localStartPos = startPos == endPos ? NULL : startPos;
+  char16_t* localEndPos = startPos == endPos ? NULL : endPos;
 
   if (ch == 'a') {
     pos += 2;
@@ -515,7 +524,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   }
 
   if (pos != startPos)
-    addExport(startPos, endPos);
+    addExport(startPos, endPos, localStartPos, localEndPos);
   return ch;
 }
 

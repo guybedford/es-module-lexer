@@ -26,8 +26,14 @@ export function parse (source, name = '@') {
     imports.push({ n, s, e, ss, se, d, a });
   }
   while (wasm.re()) {
-    const expt = source.slice(wasm.es(), wasm.ee()), ch = expt[0];
-    exports.push((ch === '"' || ch === "'") ? decode(expt) : expt);
+    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
+    const n = source.slice(s, e), ch = n[0];
+    const ln = ls < 0 ? undefined : source.slice(ls, le), lch = ln ? ln[0] : '';
+    exports.push({
+      s, e, ls, le,
+      n: (ch === '"' || ch === "'") ? decode(n) : n,
+      ln: (lch === '"' || lch === "'") ? decode(ln) : ln,
+    });
   }
 
   function decode (str) {

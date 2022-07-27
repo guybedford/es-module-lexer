@@ -30,6 +30,8 @@ typedef struct Import Import;
 struct Export {
   const char16_t* start;
   const char16_t* end;
+  const char16_t* local_start;
+  const char16_t* local_end;
   struct Export* next;
 };
 typedef struct Export Export;
@@ -109,7 +111,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->next = NULL;
 }
 
-void addExport (const char16_t* start, const char16_t* end) {
+void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)
@@ -119,6 +121,8 @@ void addExport (const char16_t* start, const char16_t* end) {
   export_write_head = export;
   export->start = start;
   export->end = end;
+  export->local_start = local_start;
+  export->local_end = local_end;
   export->next = NULL;
 }
 
@@ -167,6 +171,14 @@ uint32_t es () {
 // getExportEnd
 uint32_t ee () {
   return export_read_head->end - source;
+}
+// getExportLocalStart
+int32_t els () {
+  return export_read_head->local_start ? export_read_head->local_start - source : -1;
+}
+// getExportLocalEnd
+int32_t ele () {
+  return export_read_head->local_end ? export_read_head->local_end - source : -1;
 }
 // readImport
 bool ri () {
