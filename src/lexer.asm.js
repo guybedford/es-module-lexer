@@ -56,7 +56,6 @@ export function parse (_source, _name = '@') {
     const lch = ls >= 0 ? source.charCodeAt(ls) : -1;
     exports.push({
       s, e, ls, le,
-      a: Boolean(asm.ea()),
       n: (ch === 34 || ch === 39) ? readString(s + 1, ch) : source.slice(s, e),
       ln: ls < 0 ? undefined : (lch === 34 || lch === 39) ? readString(ls + 1, lch) : source.slice(ls, le),
     });

@@ -31,7 +31,6 @@ export function parse (source, name = '@') {
     const ln = ls < 0 ? undefined : source.slice(ls, le), lch = ln ? ln[0] : '';
     exports.push({
       s, e, ls, le,
-      a: Boolean(wasm.ea()),
       n: (ch === '"' || ch === "'") ? decode(n) : n,
       ln: (lch === '"' || lch === "'") ? decode(ln) : ln,
     });

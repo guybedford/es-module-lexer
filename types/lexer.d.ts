@@ -135,11 +135,6 @@ export interface ExportSpecifier {
    * End of local name, or -1.
    */
   readonly le: number;
-
-  /**
-   * Whether this is an ambient export.
-   */
-  readonly a: boolean;
 }
 
 /**

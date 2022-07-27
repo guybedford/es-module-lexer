@@ -30,8 +30,13 @@ const { init, parse } = require('es-module-lexer');
   // this is necessary for the Web Assembly boot
   await init;
 
-  const [imports, exports] = parse('export var p = 5');
-  exports[0] === 'p';
+  const source = 'export var p = 5';
+  const [imports, exports] = parse(source);
+  
+  // Returns "p"
+  source.slice(exports[0].s, exports[0].e);
+  // Returns "p"
+  source.slice(exports[0].ls, exports[0].le);
 })();
 ```
 
@@ -50,6 +55,7 @@ import { init, parse } from 'es-module-lexer';
     export function q () {
 
     };
+    export { x as 'external name' } from 'external';
 
     // Comments provided to demonstrate edge cases
     import /*comment!*/ (  'asdf', { assert: { type: 'json' }});
@@ -61,21 +67,36 @@ import { init, parse } from 'es-module-lexer';
   // Returns "modထ"
   imports[0].n
   // Returns "mod\u1011"
-  source.substring(imports[0].s, imports[0].e);
+  source.slice(imports[0].s, imports[0].e);
   // "s" = start
   // "e" = end
 
   // Returns "import { name } from 'mod'"
-  source.substring(imports[0].ss, imports[0].se);
+  source.slice(imports[0].ss, imports[0].se);
   // "ss" = statement start
   // "se" = statement end
 
   // Returns "{ type: 'json' }"
-  source.substring(imports[1].a, imports[1].se);
+  source.slice(imports[1].a, imports[1].se);
   // "a" = assert, -1 for no assertion
 
-  // Returns "p,q"
-  exports.toString();
+  // Returns "external"
+  source.slice(imports[2].s, imports[2].e);
+
+  // Returns "p"
+  source.slice(exports[0].s, exports[0].e);
+  // Returns "p"
+  source.slice(exports[0].ls, exports[0].le);
+  // Returns "q"
+  source.slice(exports[1].s, exports[1].e);
+  // Returns "q"
+  source.slice(exports[1].ls, exports[1].le);
+  // Returns "'external name'"
+  source.slice(exports[2].s, exports[2].e);
+  // Returns -1
+  exports[2].ls;
+  // Returns -1
+  exports[2].le;
 
   // Dynamic imports are indicated by imports[2].d > -1
   // In this case the "d" index is the start of the dynamic import bracket
@@ -85,13 +106,13 @@ import { init, parse } from 'es-module-lexer';
   // Returns "asdf" (only for string literal dynamic imports)
   imports[2].n
   // Returns "import /*comment!*/ (  'asdf', { assert: { type: 'json' } })"
-  source.substring(imports[2].ss, imports[2].se);
+  source.slice(imports[3].ss, imports[3].se);
   // Returns "'asdf'"
-  source.substring(imports[2].s, imports[2].e);
+  source.slice(imports[3].s, imports[3].e);
   // Returns "(  'asdf', { assert: { type: 'json' } })"
-  source.substring(imports[2].d, imports[2].se);
+  source.slice(imports[3].d, imports[3].se);
   // Returns "{ assert: { type: 'json' } }"
-  source.substring(imports[2].a, imports[2].se - 1);
+  source.slice(imports[3].a, imports[3].se - 1);
 
   // For non-string dynamic import expressions:
   // - n will be undefined
@@ -101,11 +122,11 @@ import { init, parse } from 'es-module-lexer';
   // For nested dynamic imports, the se value of the outer import is -1 as end tracking does not
   // currently support nested dynamic immports
 
-  // import.meta is indicated by imports[2].d === -2
+  // import.meta is indicated by imports[3].d === -2
   // Returns true
-  imports[2].d === -2;
+  imports[4].d === -2;
   // Returns "import /*comment!*/.meta"
-  source.substring(imports[2].s, imports[2].e);
+  source.slice(imports[4].s, imports[4].e);
   // ss and se are the same for import meta
 })();
 ```

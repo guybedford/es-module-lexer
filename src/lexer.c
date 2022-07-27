@@ -360,7 +360,7 @@ void tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 'd':
-      addExport(pos, pos + 7, NULL, NULL, false);
+      addExport(pos, pos + 7, NULL, NULL);
       return;
 
     // export async? function*? name () {
@@ -377,7 +377,7 @@ void tryParseExportStatement () {
       }
       const char16_t* startPos = pos;
       ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos, startPos, pos, true);
+      addExport(startPos, pos, startPos, pos);
       pos--;
       return;
 
@@ -388,7 +388,7 @@ void tryParseExportStatement () {
         ch = commentWhitespace(true);
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        addExport(startPos, pos, startPos, pos, true);
+        addExport(startPos, pos, startPos, pos);
         pos--;
         return;
       }
@@ -414,7 +414,7 @@ void tryParseExportStatement () {
         }
         if (pos == startPos)
           return;
-        addExport(startPos, pos, startPos, pos, false);
+        addExport(startPos, pos, startPos, pos);
         ch = commentWhitespace(true);
         if (ch == '=') {
           pos--;
@@ -524,7 +524,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   }
 
   if (pos != startPos)
-    addExport(startPos, endPos, localStartPos, localEndPos, true);
+    addExport(startPos, endPos, localStartPos, localEndPos);
   return ch;
 }
 

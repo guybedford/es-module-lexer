@@ -32,7 +32,6 @@ struct Export {
   const char16_t* end;
   const char16_t* local_start;
   const char16_t* local_end;
-  bool ambient;
   struct Export* next;
 };
 typedef struct Export Export;
@@ -112,7 +111,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->next = NULL;
 }
 
-void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end, bool ambient) {
+void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)
@@ -124,7 +123,6 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->end = end;
   export->local_start = local_start;
   export->local_end = local_end;
-  export->ambient = ambient;
   export->next = NULL;
 }
 
@@ -181,10 +179,6 @@ int32_t els () {
 // getExportLocalEnd
 int32_t ele () {
   return export_read_head->local_end ? export_read_head->local_end - source : -1;
-}
-// getExportIsAmbient
-bool ea () {
-  return export_read_head->ambient;
 }
 // readImport
 bool ri () {

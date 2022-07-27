@@ -20,8 +20,8 @@ function addImport (ss, s, e, d) {
   return impt;
 }
 
-function addExport (s, e, ls, le, a) {
-  exports.push({ s, e, ls, le, a, n: undefined, ln: undefined });
+function addExport (s, e, ls, le) {
+  exports.push({ s, e, ls, le });
 }
 
 function readName (impt) {
@@ -305,7 +305,7 @@ function tryParseExportStatement () {
   switch (ch) {
     // export default ...
     case 100/*d*/:
-      addExport(pos, pos + 7, -1, -1, true);
+      addExport(pos, pos + 7, -1, -1);
       return;
 
     // export async? function*? name () {
@@ -322,7 +322,7 @@ function tryParseExportStatement () {
       }
       const startPos = pos;
       ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos, -1, -1, true);
+      addExport(startPos, pos, startPos, pos);
       pos--;
       return;
 
@@ -333,7 +333,7 @@ function tryParseExportStatement () {
         ch = commentWhitespace(true);
         const startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        addExport(startPos, pos, -1, -1, true);
+        addExport(startPos, pos, startPos, pos);
         pos--;
         return;
       }
@@ -359,7 +359,7 @@ function tryParseExportStatement () {
         }
         if (pos === startPos)
           return;
-        addExport(startPos, pos, -1, -1, false);
+        addExport(startPos, pos, startPos, pos);
         ch = commentWhitespace(true);
         if (ch === 61/*=*/) {
           pos--;
@@ -577,7 +577,7 @@ function readExportAs (startPos, endPos) {
     ch = commentWhitespace(true);
   }
   if (pos !== startPos)
-    addExport(startPos, endPos, ls, le, true);
+    addExport(startPos, endPos, ls, le);
   return ch;
 }
 
