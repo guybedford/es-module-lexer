@@ -87,14 +87,14 @@ export interface ExportSpecifier {
    * @example
    * const source = `export default []`;
    * const [imports, exports] = parse(source);
-   * exports[0].n;
+   * exports[0].ln;
    * // Returns undefined
    *
    * @example
    * const asdf = 42;
    * const source = `export { asdf as a }`;
    * const [imports, exports] = parse(source);
-   * exports[0].n;
+   * exports[0].ln;
    * // Returns "asdf"
    */
   readonly ln: string | undefined;
