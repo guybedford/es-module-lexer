@@ -30,22 +30,17 @@ bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  uint16_t templateStack_[512];
-  char16_t* openTokenPosStack_[2048];
-  bool openClassPosStack[256];
+  OpenToken openTokenStack_[1024];
   Import* dynamicImportStack_[512];
 
   facade = true;
-  templateStackDepth = 0;
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
-  templateDepth = 65535;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
   parse_error = 0;
   has_error = false;
-  templateStack = &templateStack_[0];
-  openTokenPosStack = &openTokenPosStack_[0];
+  openTokenStack = &openTokenStack_[0];
   dynamicImportStack = &dynamicImportStack_[0];
   nextBraceIsClass = false;
 
@@ -123,13 +118,14 @@ bool parse () {
           nextBraceIsClass = true;
         break;
       case '(':
-        openTokenPosStack[openTokenDepth++] = lastTokenPos;
+        openTokenStack[openTokenDepth].token = AnyParen;
+        openTokenStack[openTokenDepth++].pos = lastTokenPos;
         break;
       case ')':
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenPosStack[openTokenDepth]) {
+        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenStack[openTokenDepth].pos) {
           Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->end == 0)
             cur_dynamic_import->end = pos;
@@ -148,20 +144,15 @@ bool parse () {
           else
             first_import = NULL;
         }
-        openClassPosStack[openTokenDepth] = nextBraceIsClass;
+        openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
+        openTokenStack[openTokenDepth++].pos = lastTokenPos;
         nextBraceIsClass = false;
-        openTokenPosStack[openTokenDepth++] = lastTokenPos;
         break;
       case '}':
         if (openTokenDepth == 0)
           return syntaxError(), false;
-        if (openTokenDepth-- == templateDepth) {
-          templateDepth = templateStack[--templateStackDepth];
+        if (openTokenStack[--openTokenDepth].token == TemplateBrace) {
           templateString();
-        }
-        else {
-          if (templateDepth != 65535 && openTokenDepth < templateDepth)
-            return syntaxError(), false;
         }
         break;
       case '\'':
@@ -191,8 +182,8 @@ bool parse () {
           if (isExpressionPunctuator(lastToken) &&
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
-              lastToken == ')' && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
-              lastToken == '}' && (isExpressionTerminator(openTokenPosStack[openTokenDepth]) || openClassPosStack[openTokenDepth]) ||
+              lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+              lastToken == '}' && isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||
               !lastToken) {
@@ -206,13 +197,15 @@ bool parse () {
         break;
       }
       case '`':
+        openTokenStack[openTokenDepth].pos = lastTokenPos;
+        openTokenStack[openTokenDepth++].token = Template;
         templateString();
         break;
     }
     lastTokenPos = pos;
   }
 
-  if (templateDepth != 65535 || openTokenDepth || has_error || dynamicImportStackDepth)
+  if (openTokenDepth || has_error || dynamicImportStackDepth)
     return false;
 
   // succeess
@@ -229,7 +222,8 @@ void tryParseImportStatement () {
   switch (ch) {
     // dynamic import
     case '(':
-      openTokenPosStack[openTokenDepth++] = pos;
+      openTokenStack[openTokenDepth].token = ImportParen;
+      openTokenStack[openTokenDepth++].pos = pos;
       if (*lastTokenPos == '.')
         return;
       // dynamic import indicated by positive d
@@ -357,125 +351,125 @@ void tryParseExportStatement () {
   if (pos == curPos && !isPunctuator(ch))
     return;
 
-  switch (ch) {
-    // export default ...
-    case 'd':
-      addExport(pos, pos + 7, NULL, NULL);
-      return;
+  if (ch == '{') {
+    pos++;
+    ch = commentWhitespace(true);
+    while (true) {
+      char16_t* startPos = pos;
 
-    // export async? function*? name () {
-    case 'a':
-      pos += 5;
+      if (!isQuote(ch)) {
+        ch = readToWsOrPunctuator(ch);
+      }
+      // export { "identifer" as } from
+      // export { "@notid" as } from
+      // export { "spa ce" as } from
+      // export { " space" as } from
+      // export { "space " as } from
+      // export { "not~id" as } from
+      // export { "%notid" as } from
+      // export { "identifer" } from
+      // export { "%notid" } from
+      else {
+        stringLiteral(ch);
+        pos++;
+      }
+
+      char16_t* endPos = pos;
       commentWhitespace(true);
-    // fallthrough
-    case 'f':
-      pos += 8;
-      ch = commentWhitespace(true);
-      if (ch == '*') {
+      ch = readExportAs(startPos, endPos);
+      // ,
+      if (ch == ',') {
         pos++;
         ch = commentWhitespace(true);
       }
-      const char16_t* startPos = pos;
-      ch = readToWsOrPunctuator(ch);
-      addExport(startPos, pos, startPos, pos);
-      pos--;
-      return;
+      if (ch == '}')
+        break;
+      if (pos == startPos)
+        return syntaxError();
+      if (pos > end)
+        return syntaxError();
+    }
+    pos++;
+    ch = commentWhitespace(true);
+  }
+  // export *
+  // export * as X
+  else if (ch == '*') {
+    pos++;
+    commentWhitespace(true);
+    ch = readExportAs(pos, pos);
+    ch = commentWhitespace(true);
+  }
+  else {
+    facade = false;
+    switch (ch) {
+      // export default ...
+      case 'd':
+        addExport(pos, pos + 7, NULL, NULL);
+        return;
 
-    // export class name ...
-    case 'c':
-      if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+      // export async? function*? name () {
+      case 'a':
         pos += 5;
+        commentWhitespace(true);
+      // fallthrough
+      case 'f':
+        pos += 8;
         ch = commentWhitespace(true);
+        if (ch == '*') {
+          pos++;
+          ch = commentWhitespace(true);
+        }
         const char16_t* startPos = pos;
         ch = readToWsOrPunctuator(ch);
         addExport(startPos, pos, startPos, pos);
         pos--;
         return;
-      }
-      pos += 2;
-    // fallthrough
 
-    // export var/let/const name = ...(, name = ...)+
-    case 'v':
-    case 'l':
-      // destructured initializations not currently supported (skipped for { or [)
-      // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-      pos += 2;
-      facade = false;
-      do {
-        pos++;
-        ch = commentWhitespace(true);
-        const char16_t* startPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        // dont yet handle [ { destructurings
-        if (ch == '{' || ch == '[') {
-          pos--;
-          return;
-        }
-        if (pos == startPos)
-          return;
-        addExport(startPos, pos, startPos, pos);
-        ch = commentWhitespace(true);
-        if (ch == '=') {
-          pos--;
-          return;
-        }
-      } while (ch == ',');
-      pos--;
-      return;
-
-
-    // export {...}
-    case '{':
-      pos++;
-      ch = commentWhitespace(true);
-      while (true) {
-        char16_t* startPos = pos;
-
-        if (!isQuote(ch)) {
+      // export class name ...
+      case 'c':
+        if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+          pos += 5;
+          ch = commentWhitespace(true);
+          const char16_t* startPos = pos;
           ch = readToWsOrPunctuator(ch);
+          addExport(startPos, pos, startPos, pos);
+          pos--;
+          return;
         }
-        // export { "identifer" as } from
-        // export { "@notid" as } from
-        // export { "spa ce" as } from
-        // export { " space" as } from
-        // export { "space " as } from
-        // export { "not~id" as } from
-        // export { "%notid" as } from
-        // export { "identifer" } from
-        // export { "%notid" } from
-        else {
-          stringLiteral(ch);
-          pos++;
-        }
+        pos += 2;
+      // fallthrough
 
-        char16_t* endPos = pos;
-        commentWhitespace(true);
-        ch = readExportAs(startPos, endPos);
-        // ,
-        if (ch == ',') {
+      // export var/let/const name = ...(, name = ...)+
+      case 'v':
+      case 'l':
+        // destructured initializations not currently supported (skipped for { or [)
+        // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
+        pos += 2;
+        facade = false;
+        do {
           pos++;
           ch = commentWhitespace(true);
-        }
-        if (ch == '}')
-          break;
-        if (pos == startPos)
-          return syntaxError();
-        if (pos > end)
-          return syntaxError();
-      }
-      pos++;
-      ch = commentWhitespace(true);
-    break;
+          const char16_t* startPos = pos;
+          ch = readToWsOrPunctuator(ch);
+          // dont yet handle [ { destructurings
+          if (ch == '{' || ch == '[') {
+            break;
+          }
+          if (pos == startPos)
+            return;
+          addExport(startPos, pos, startPos, pos);
+          ch = commentWhitespace(true);
+          if (ch == '=') {
+            break;
+          }
+        } while (ch == ',');
+        pos--;
+        return;
 
-    // export *
-    // export * as X
-    case '*':
-      pos++;
-      commentWhitespace(true);
-      ch = readExportAs(pos, pos);
-      ch = commentWhitespace(true);
-    break;
+      default:
+        return;
+    }
   }
 
   // from ...
@@ -630,12 +624,15 @@ void templateString () {
     char16_t ch = *pos;
     if (ch == '$' && *(pos + 1) == '{') {
       pos++;
-      templateStack[templateStackDepth++] = templateDepth;
-      templateDepth = ++openTokenDepth;
+      openTokenStack[openTokenDepth].token = TemplateBrace;
+      openTokenStack[openTokenDepth++].pos = pos;
       return;
     }
-    if (ch == '`')
+    if (ch == '`') {
+      if (openTokenStack[--openTokenDepth].token != Template)
+        syntaxError();
       return;
+    }
     if (ch == '\\')
       pos++;
   }

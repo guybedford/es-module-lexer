@@ -1222,7 +1222,7 @@ function x() {
 
   test('Facade side effect', () => {
     const [,, facade] = parse(`console.log('any non esm syntax')`);
-    facade === false;
+    assert.strictEqual(facade, false);
   });
 });
 

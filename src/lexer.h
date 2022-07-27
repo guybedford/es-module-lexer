@@ -27,6 +27,23 @@ struct Import {
 };
 typedef struct Import Import;
 
+// Paren = odd, Brace = even
+enum OpenTokenState {
+  AnyParen = 1, // (
+  AnyBrace = 2, // {
+  Template = 3, // `
+  TemplateBrace = 4, // ${
+  ImportParen = 5, // import(),
+  ClassBrace = 6,
+  AsyncParen = 7, // async()
+};
+
+struct OpenToken {
+  enum OpenTokenState token;
+  char16_t* pos;
+};
+typedef struct OpenToken OpenToken;
+
 struct Export {
   const char16_t* start;
   const char16_t* end;
@@ -48,15 +65,11 @@ void* analysis_head;
 
 bool facade;
 bool lastSlashWasDivision;
-uint16_t templateStackDepth;
 uint16_t openTokenDepth;
-uint16_t templateDepth;
-uint16_t braceDepth;
 char16_t* lastTokenPos;
 char16_t* pos;
 char16_t* end;
-uint16_t* templateStack;
-char16_t** openTokenPosStack;
+OpenToken* openTokenStack;
 uint16_t dynamicImportStackDepth;
 Import** dynamicImportStack;
 bool nextBraceIsClass;
