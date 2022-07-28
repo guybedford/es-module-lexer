@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION
+// NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION (via lexer.emcc.js base64 decoding)
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
 static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
@@ -24,6 +24,8 @@ static const char16_t IF[] = { 'i', 'f' };
 static const char16_t CATC[] = { 'c', 'a', 't', 'c' };
 static const char16_t FINALL[] = { 'f', 'i', 'n', 'a', 'l', 'l' };
 static const char16_t ELS[] = { 'e', 'l', 's' };
+static const char16_t BREA[] = { 'b', 'r', 'e', 'a' };
+static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
@@ -191,6 +193,16 @@ bool parse () {
             lastSlashWasDivision = false;
           }
           else {
+            // Final check - if the last token was "break x" or "continue x"
+            while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
+            if (isWsNotBr(*lastTokenPos)) {
+              while (lastTokenPos > source && isWsNotBr(*(--lastTokenPos)));
+              if (isBreakOrContinue(lastTokenPos)) {
+                regularExpression();
+                lastSlashWasDivision = false;
+                break;
+              }
+            }
             lastSlashWasDivision = true;
           }
         }
@@ -780,6 +792,9 @@ bool isExpressionKeyword (char16_t* pos) {
         case 't':
           // delete
           return readPrecedingKeywordn(pos - 2, &DELE[0], 4);
+        case 'u':
+          // continue
+          return readPrecedingKeywordn(pos - 2, &CONTIN[0], 6);
         default:
           return false;
       }
@@ -796,6 +811,9 @@ bool isExpressionKeyword (char16_t* pos) {
         default:
           return false;
       }
+    case 'k':
+      // break
+      return readPrecedingKeywordn(pos - 1, &BREA[0], 4);
     case 'n':
       // in, return
       return readPrecedingKeyword1(pos - 1, 'i') || readPrecedingKeywordn(pos - 1, &RETUR[0], 5);
@@ -842,6 +860,17 @@ bool isExpressionPunctuator (char16_t ch) {
   return ch == '!' || ch == '%' || ch == '&' ||
     ch > 39 && ch < 47 && ch != 41 || ch > 57 && ch < 64 ||
     ch == '[' || ch == '^' || ch > 122 && ch < 127 && ch != '}';
+}
+
+bool isBreakOrContinue (char16_t* curPos) {
+  switch (*curPos) {
+    case 'k':
+      return readPrecedingKeywordn(curPos - 1, &BREA[0], 4);
+    case 'e':
+      if (*(curPos - 1) == 'u')
+        return readPrecedingKeywordn(curPos - 2, &CONTIN[0], 6);
+  }
+  return false;
 }
 
 bool isExpressionTerminator (char16_t* curPos) {
