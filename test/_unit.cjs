@@ -179,6 +179,23 @@ suite('Lexer', () => {
     `);
   });
 
+  if (!js)
+  test('Regexp keyword prefixes', () => {
+    const [imports] = parse(`
+      x: while (true) {
+        if (foo) break
+        /import("a")/.test(bar) || baz()
+        if (foo) continue
+        /import("b")/.test(bar) || baz()
+        if (foo) break x
+        /import("c")/.test(bar) || baz()
+        if (foo) continue x
+        /import("d")/.test(bar) || baz()
+      }
+    `);
+    assert.strictEqual(imports.length, 0);
+  });
+
   test('Regexp division', () => {
     parse(`\nconst x = num / /'/.exec(l)[0].slice(1, -1)//'"`);
   });

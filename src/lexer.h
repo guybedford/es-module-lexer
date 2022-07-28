@@ -245,6 +245,8 @@ bool isBrOrWsOrPunctuatorNotDot (char16_t c);
 bool readPrecedingKeyword1(char16_t* pos, char16_t c1);
 bool readPrecedingKeywordn(char16_t* pos, const char16_t* compare, size_t n);
 
+bool isBreakOrContinue (char16_t* curPos);
+
 bool keywordStart (char16_t* pos);
 bool isExpressionKeyword (char16_t* pos);
 bool isParenKeyword (char16_t* pos);
