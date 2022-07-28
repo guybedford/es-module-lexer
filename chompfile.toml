@@ -1,5 +1,5 @@
 version = 0.1
-default-task = "test"
+default-task = 'build'
 
 extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
 
