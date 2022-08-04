@@ -39,6 +39,11 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Division const after class parse case', () => {
+    const source = `class a{}const Ti=a/yi;`;
+    parse(source);
+  });
+
   if (!js)
   test('Multiline dynamic import on windows', () => {
     const source = `import(\n"./statehash\\u1011.js"\r)`;
