@@ -1,7 +1,7 @@
 version = 0.1
 default-task = 'build'
 
-extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
+extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser', 'chomp@0.1:swc']
 
 [env-default]
 WASI_PATH = '../wasi-sdk-12.0'
@@ -10,7 +10,7 @@ WABT_PATH = '../wabt'
 
 [[task]]
 name = 'build'
-deps = ['dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js']
+deps = ['dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js', 'types/lexer.d.ts']
 
 [[task]]
 name = 'bench'
@@ -42,6 +42,26 @@ output = { preamble = '/* es-module-lexer #PJSON_VERSION */' }
 target = 'dist/lexer.cjs'
 deps = ['dist/lexer.js']
 run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
+
+[[task]]
+name = 'build:swc'
+target = 'src/lexer.js'
+dep = 'src/lexer.ts'
+template = 'swc'
+[task.template-options]
+# TODO This still seems to generate lexer.js.map
+source-maps = false
+
+[[task]]
+# Note swc does not support emitting typings
+# (https://github.com/swc-project/swc/issues/657), so while swc is used to
+# generate the .js file, tsc is still needed to generate the d.ts file.
+name = 'build:types'
+target = 'types/lexer.d.ts'
+dep = 'src/lexer.ts'
+run = '''
+  tsc --strict --declaration --emitDeclarationOnly --outdir types src/lexer.ts
+'''
 
 [[task]]
 target = 'dist/lexer.js'
