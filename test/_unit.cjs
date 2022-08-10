@@ -39,6 +39,10 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test('Class fn ASI', () => {
+    parse(`class a{friendlyName;import}n();`);
+  });
+
   test('Division const after class parse case', () => {
     const source = `class a{}const Ti=a/yi;`;
     parse(source);

@@ -288,8 +288,10 @@ void tryParseImportStatement () {
 
     default:
       // no space after "import" -> not an import keyword
-      if (pos == startPos + 6)
+      if (pos == startPos + 6) {
+        pos--;
         break;
+      }
     case '"':
     case '\'':
     case '*': {
