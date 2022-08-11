@@ -190,7 +190,7 @@ export function parse (source: string, name = '@'): readonly [
     });
   }
 
-  function decode (str: string|undefined) {
+  function decode (str: string | undefined) {
     try {
       return (0, eval)(str as string) // eval(undefined) -> undefined
     }
