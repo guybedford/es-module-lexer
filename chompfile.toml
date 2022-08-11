@@ -51,7 +51,10 @@ dep = 'src/lexer.ts'
 # https://github.com/swc-project/cli/issues/113 means we always get a sourcemap
 # even when we set "source-maps = false", so for now we have ejected the
 # template to its raw "run" command, and added an "rm" step.
-run = 'node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAssertions=true && rm src/lexer.js.map'
+run = '''
+node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAssertions=true
+rm src/lexer.js.map
+'''
 
 [[task]]
 # Note swc does not support emitting typings
