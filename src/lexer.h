@@ -217,7 +217,7 @@ bool f () {
   return facade;
 }
 
-bool parse (uint32_t point);
+bool parse ();
 
 void tryParseImportStatement ();
 void tryParseExportStatement ();
