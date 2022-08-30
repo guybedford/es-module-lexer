@@ -26,6 +26,8 @@ static const char16_t FINALL[] = { 'f', 'i', 'n', 'a', 'l', 'l' };
 static const char16_t ELS[] = { 'e', 'l', 's' };
 static const char16_t BREA[] = { 'b', 'r', 'e', 'a' };
 static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
+static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
+static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
@@ -418,10 +420,45 @@ void tryParseExportStatement () {
     facade = false;
     switch (ch) {
       // export default ...
-      case 'd':
-        addExport(pos, pos + 7, NULL, NULL);
+      case 'd': {
+        const char16_t* startPos = pos;
+        pos += 7;
+        ch = commentWhitespace(true);
+        // export default async? function*? name? (){}
+        if (ch == 'a' && keywordStart(pos) &&  memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
+          pos += 5;
+          ch = commentWhitespace(false);
+        }
+        if (ch == 'f' && keywordStart(pos) && memcmp(pos + 1, &UNCTION[0], 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
+          pos += 8;
+          ch = commentWhitespace(true);
+          if (ch == '*') {
+            pos++;
+            ch = commentWhitespace(true);
+          }
+          if (ch == '(') {
+            addExport(startPos, startPos + 7, NULL, NULL);
+            pos--;
+            return;
+          }
+        }
+        // export default class name? {}
+        if (ch == 'c' && keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
+          pos += 5;
+          ch = commentWhitespace(true);
+          if (ch == '{') {
+            addExport(startPos, startPos + 7, NULL, NULL);
+            pos--;
+            return;
+          }
+        }
+        const char16_t* localStartPos = pos;
+        ch = readToWsOrPunctuator(ch);
+        addExport(startPos, startPos + 7, localStartPos, pos);
+      
+        pos--;
         return;
-
+      }
       // export async? function*? name () {
       case 'a':
         pos += 5;

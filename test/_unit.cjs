@@ -1285,5 +1285,44 @@ function x() {
     const [,, facade] = parse(`console.log('any non esm syntax')`);
     assert.strictEqual(facade, false);
   });
+
+  test('Export default', () => {
+    const source = `
+    export default async function example   () {};
+    export const a = '1';
+    export default a;
+    export default function example1() {};
+    export default function() {};
+    export default class className {/* ... */};
+    export default class {}
+    export default function* generatorFunctionName(){/* ... */};
+    export default function* ()  {};
+    const async = 1
+    export default async
+
+    function x() {}
+
+    const asyncVar = 1
+    export default asyncVar
+
+    function functionName = {};
+    export default functionName;
+  `;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 0);
+    assert.strictEqual(exports.length, 12);
+    assertExportIs(source, exports[0], { n: 'default', ln: 'example'});
+    assertExportIs(source, exports[1], { n: 'a', ln: 'a' });
+    assertExportIs(source, exports[2], { n: 'default', ln: 'a'});
+    assertExportIs(source, exports[3], { n: 'default', ln: 'example1'});
+    assertExportIs(source, exports[4], { n: 'default' });
+    assertExportIs(source, exports[5], { n: 'default', ln: 'className'});
+    assertExportIs(source, exports[6], { n: 'default' });
+    assertExportIs(source, exports[7], { n: 'default', ln: 'generatorFunctionName'});
+    assertExportIs(source, exports[8], { n: 'default' });
+    assertExportIs(source, exports[9], { n: 'default', ln: 'async' });
+    assertExportIs(source, exports[10], { n: 'default', ln: 'asyncVar' });
+    assertExportIs(source, exports[11], { n: 'default', ln: 'functionName' });
+  })
 });
 
