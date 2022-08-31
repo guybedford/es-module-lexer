@@ -280,6 +280,10 @@ Example setup:
 ```
 git clone https://github.com:guybedford/es-module-lexer
 git clone https://github.com/emscripten-core/emsdk
+cd emsdk
+git checkout 1.40.1-fastcomp
+./emsdk install 1.40.1-fastcomp
+cd ..
 wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz
 gunzip wasi-sdk-12.0-linux.tar.gz
 tar -xf wasi-sdk-12.0-linux.tar

@@ -1328,6 +1328,7 @@ function x() {
     export default functionName;
   `;
     const [imports, exports] = parse(source);
+    console.log(exports);
     assert.strictEqual(imports.length, 0);
     assert.strictEqual(exports.length, 12);
     assertExportIs(source, exports[0], { n: 'default', ln: 'example'});
