@@ -438,7 +438,7 @@ void tryParseExportStatement () {
           }
           if (ch == '(') {
             addExport(startPos, startPos + 7, NULL, NULL);
-            pos--;
+            pos = (char16_t*)(startPos + 7);
             return;
           }
         }
@@ -448,15 +448,14 @@ void tryParseExportStatement () {
           ch = commentWhitespace(true);
           if (ch == '{') {
             addExport(startPos, startPos + 7, NULL, NULL);
-            pos--;
+            pos = (char16_t*)(startPos + 7);
             return;
           }
         }
         const char16_t* localStartPos = pos;
         ch = readToWsOrPunctuator(ch);
         addExport(startPos, startPos + 7, localStartPos, pos);
-      
-        pos--;
+        pos = (char16_t*)(startPos + 7);
         return;
       }
       // export async? function*? name () {
