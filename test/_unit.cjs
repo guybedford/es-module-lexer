@@ -39,6 +39,11 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test(`Template string default`, () => {
+    parse(`const css = String.raw;
+           export default css\`:host { solid 1px black }\`;`);
+  })
+
   test('Class fn ASI', () => {
     parse(`class a{friendlyName;import}n();`);
   });
@@ -1323,6 +1328,6 @@ function x() {
     assertExportIs(source, exports[9], { n: 'default', ln: 'async' });
     assertExportIs(source, exports[10], { n: 'default', ln: 'asyncVar' });
     assertExportIs(source, exports[11], { n: 'default', ln: 'functionName' });
-  })
+  });
 });
 
