@@ -39,10 +39,24 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test(`Template string default bracket`, () => {
+    const source = `export default{};`;
+    const [, [expt]] = parse(source);
+    assert.strictEqual(source.slice(expt.s, expt.e), 'default');
+    assert.strictEqual(source.slice(expt.ls, expt.le), '');
+    assert.strictEqual(expt.n, 'default');
+    assert.strictEqual(expt.ln, undefined);
+  });
+
   test(`Template string default`, () => {
-    parse(`const css = String.raw;
-           export default css\`:host { solid 1px black }\`;`);
-  })
+    const source = `const css = String.raw;
+        export default css\`:host { solid 1px black }\`;`;
+    const [, [expt]] = parse(source);
+    assert.strictEqual(source.slice(expt.s, expt.e), 'default');
+    assert.strictEqual(source.slice(expt.ls, expt.le), '');
+    assert.strictEqual(expt.n, 'default');
+    assert.strictEqual(expt.ln, undefined);
+  });
 
   test('Class fn ASI', () => {
     parse(`class a{friendlyName;import}n();`);
@@ -1318,16 +1332,16 @@ function x() {
     assert.strictEqual(exports.length, 12);
     assertExportIs(source, exports[0], { n: 'default', ln: 'example'});
     assertExportIs(source, exports[1], { n: 'a', ln: 'a' });
-    assertExportIs(source, exports[2], { n: 'default', ln: 'a'});
+    assertExportIs(source, exports[2], { n: 'default', ln: undefined });
     assertExportIs(source, exports[3], { n: 'default', ln: 'example1'});
     assertExportIs(source, exports[4], { n: 'default' });
     assertExportIs(source, exports[5], { n: 'default', ln: 'className'});
     assertExportIs(source, exports[6], { n: 'default' });
     assertExportIs(source, exports[7], { n: 'default', ln: 'generatorFunctionName'});
     assertExportIs(source, exports[8], { n: 'default' });
-    assertExportIs(source, exports[9], { n: 'default', ln: 'async' });
-    assertExportIs(source, exports[10], { n: 'default', ln: 'asyncVar' });
-    assertExportIs(source, exports[11], { n: 'default', ln: 'functionName' });
+    assertExportIs(source, exports[9], { n: 'default', ln: undefined });
+    assertExportIs(source, exports[10], { n: 'default', ln: undefined });
+    assertExportIs(source, exports[11], { n: 'default', ln: undefined });
   });
 });
 
