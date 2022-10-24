@@ -58,6 +58,7 @@ suite('Invalid syntax', () => {
     const source = `import(\n"./statehash\\u1011.js"\r)`;
     const [imports] = parse(source);
     assert.strictEqual(imports.length, 1);
+    console.log(imports);
     assert.strictEqual(imports[0].n, './statehashထ.js');
     assert.strictEqual(source.slice(imports[0].s, imports[0].e), '"./statehash\\u1011.js"');
   });
