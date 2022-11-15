@@ -5,7 +5,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '/opt/wasi-sdk'
 WASM_TOOLS = '../wasm-tools/target/debug/wasm-tools'
-WITPACK = '../witpack/src/witpack.js'
+WT = '../witjs/src/wct.js'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
 WIT_COMPONENT = '../wit-bindgen/target/debug/wit-component'
 
@@ -22,7 +22,7 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 targets = ['dist/lexer.js', 'dist/lexer.d.ts']
 deps = ['obj/lexer-component.wasm', 'obj/preamble']
 run = '''
-	${{ WITPACK }} host obj/lexer-component.wasm -o dist --name=lexer --valid-lifting-optimization --optimize --minify -b9000 -q
+	${{ WT }} host obj/lexer-component.wasm -o dist --name=lexer --valid-lifting-optimization --optimize --minify -b9000 -q
 	cat obj/preamble > dist/tmp ; cat dist/lexer.js >> dist/tmp ; mv dist/tmp dist/lexer.js
 '''
 
@@ -30,7 +30,7 @@ run = '''
 target = 'dist/lexer.asm.js'
 dep = 'obj/lexer-component.wasm'
 run = '''
-	${{ WITPACK }} host obj/lexer-component.wasm -o dist --name=lexer.asm --valid-lifting-optimization --optimize --minify --asm -q
+	${{ WT }} host obj/lexer-component.wasm -o dist --name=lexer.asm --valid-lifting-optimization --optimize --minify --asm -q
 	cat obj/preamble.asm > dist/tmp ; cat dist/lexer.asm.js >> dist/tmp ; mv dist/tmp dist/lexer.asm.js
 '''
 
@@ -50,7 +50,7 @@ target = 'obj/lexer-component.wasm'
 stdio = 'stderr-only'
 deps = ['obj/lexer.wasm', 'src/lexer-world.wit']
 run = '''
-  ${{ WIT_COMPONENT }} $DEP --encoding utf16 --interface src/lexer-world.wit -o $TARGET
+  ${{ WIT_COMPONENT }} $DEP --encoding utf16 --world src/lexer-world.wit -o $TARGET
 '''
 
 [[task]]
@@ -67,9 +67,9 @@ run = """
 [[task]]
 targets = ['obj/lexer_world.c', 'obj/lexer_world.h']
 dep = 'src/lexer-world.wit'
-stdio = 'stderr-only'
+# stdio = 'stderr-only'
 run = '''
-	${{ WIT_BINDGEN }} guest c --name lexer_world --string-encoding utf16 --default src/lexer-world.wit --no-helpers --out-dir obj
+	${{ WIT_BINDGEN }} guest c --name lexer_world --string-encoding utf16 src/lexer-world.wit --no-helpers --out-dir obj
 '''
 
 [[task]]
