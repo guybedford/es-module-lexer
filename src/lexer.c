@@ -102,13 +102,13 @@ static char16_t* pos;
 static char16_t* end;
 static OpenToken* open_token_stack;
 static uint16_t dynamic_import_stack_depth;
-static lexer_world_import_t** dynamic_import_stack;
+static lexer_import_t** dynamic_import_stack;
 static bool next_brace_is_class;
 
-static lexer_world_import_t* imports_base;
-static lexer_world_export_t* exports_base;
-static lexer_world_import_t* imports_head;
-static lexer_world_export_t* exports_head;
+static lexer_import_t* imports_base;
+static lexer_export_t* exports_base;
+static lexer_import_t* imports_head;
+static lexer_export_t* exports_head;
 
 static const size_t MAX_IMPORTS = 1024;
 static const size_t MAX_EXPORTS = 8192;
@@ -167,7 +167,7 @@ void add_export (const char16_t* start,
 
 // Error handler
 
-static lexer_world_parse_result_t* ret;
+static lexer_parse_result_t* ret;
 
 // `Parse error (${name || '@'}:${line}:${col})`
 void syntax_error () {
@@ -198,7 +198,7 @@ void syntax_error () {
   len += write_num(&err[len], line);
   err[len++] = ':';
   len += write_num(&err[len], col);
-  lexer_world_parse_result_t result = {
+  lexer_parse_result_t result = {
     .is_err = true,
     .val = {
       .err = {
@@ -213,7 +213,7 @@ void syntax_error () {
 
 // Main
 
-void lexer_world_parse(lexer_world_string_t* input, lexer_world_option_string_t* name_option, lexer_world_parse_result_t* _ret) {
+void lexer_parse(lexer_world_string_t* input, lexer_option_string_t* name_option, lexer_parse_result_t* _ret) {
   source_len = input->len;
   source = input->ptr;
   ret = _ret;
@@ -226,9 +226,9 @@ void lexer_world_parse(lexer_world_string_t* input, lexer_world_option_string_t*
 
   // stack allocations
   OpenToken open_token_stack_[MAX_BRACE_DEPTH];
-  lexer_world_import_t* dynamic_import_stack_[MAX_DYNAMIC_IMPORT_NESTING];
-  lexer_world_import_t imports_[MAX_IMPORTS];
-  lexer_world_export_t exports_[MAX_EXPORTS];
+  lexer_import_t* dynamic_import_stack_[MAX_DYNAMIC_IMPORT_NESTING];
+  lexer_import_t imports_[MAX_IMPORTS];
+  lexer_export_t exports_[MAX_EXPORTS];
 
   // TODO: Exact stack sizing based on the above!
 
@@ -328,7 +328,7 @@ void lexer_world_parse(lexer_world_string_t* input, lexer_world_option_string_t*
           return syntax_error();
         open_token_depth--;
         if (dynamic_import_stack_depth > 0 && source + dynamic_import_stack[dynamic_import_stack_depth - 1]->d == open_token_stack[open_token_depth].pos) {
-          lexer_world_import_t* cur_dynamic_import = dynamic_import_stack[dynamic_import_stack_depth - 1];
+          lexer_import_t* cur_dynamic_import = dynamic_import_stack[dynamic_import_stack_depth - 1];
           if (cur_dynamic_import->e == -1)
             cur_dynamic_import->e = pos - source;
           cur_dynamic_import->se = pos - source + 1;
@@ -419,7 +419,7 @@ void lexer_world_parse(lexer_world_string_t* input, lexer_world_option_string_t*
   if (open_token_depth || dynamic_import_stack_depth)
     return syntax_error();
 
-  lexer_world_parse_result_t result = {
+  lexer_parse_result_t result = {
     .is_err = false,
     .val = {
       .ok = {
@@ -571,7 +571,7 @@ void try_parse_import_statement () {
 
 void try_parse_export_statement () {
   char16_t* s_start_pos = pos;
-  lexer_world_export_t* prev_exports_head = exports_head;
+  lexer_export_t* prev_exports_head = exports_head;
 
   pos += 6;
 
@@ -751,7 +751,7 @@ void try_parse_export_statement () {
     read_import_string(s_start_pos, comment_whitespace(true));
 
     // There were no local names.
-    for (lexer_world_export_t* expt = prev_exports_head == exports_base ? exports_base : prev_exports_head + 1; expt != exports_head; expt++) {
+    for (lexer_export_t* expt = prev_exports_head == exports_base ? exports_base : prev_exports_head + 1; expt != exports_head; expt++) {
       expt->ls = expt->le = -1;
     }
   }
