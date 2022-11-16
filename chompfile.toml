@@ -5,7 +5,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '/opt/wasi-sdk'
 WASM_TOOLS = '../wasm-tools/target/debug/wasm-tools'
-WT = '../witjs/src/wct.js'
+WT = '../wasm-component-tools/src/wct.js'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
 WIT_COMPONENT = '../wit-bindgen/target/debug/wit-component'
 
@@ -65,11 +65,21 @@ run = """
 """
 
 [[task]]
-targets = ['obj/lexer_world.c', 'obj/lexer_world.h']
+targets = ['obj/lexer.c', 'obj/lexer_world.h']
 dep = 'src/lexer-world.wit'
 # stdio = 'stderr-only'
 run = '''
-	${{ WIT_BINDGEN }} guest c --name lexer_world --string-encoding utf16 src/lexer-world.wit --no-helpers --out-dir obj
+	${{ WIT_BINDGEN }} guest c --string-encoding utf16 src/lexer-world.wit --no-helpers --out-dir obj
+	mv obj/lexer.h obj/lexer_world.h
+'''
+
+[[task]]
+target = 'obj/lexer_world.c'
+dep = 'obj/lexer.c'
+engine = 'node'
+run = '''
+	import { readFile, writeFile } from 'fs/promises';
+	await writeFile(process.env.TARGET, (await readFile(process.env.DEP, 'utf8')).replace('lexer.h', 'lexer_world.h'));
 '''
 
 [[task]]

@@ -24,7 +24,7 @@ void* cabi_realloc(void *ptr, size_t orig_size, size_t align, size_t new_size) {
 }
 
 __attribute__((weak, export_name("cabi_post_parse")))
-void __wasm_export_lexer_world_parse_post_return(int32_t arg0) {
+void __wasm_export_lexer_parse_post_return(int32_t arg0) {
   heap_ptr = &__heap_base;
 }
 
@@ -213,7 +213,7 @@ void syntax_error () {
 
 // Main
 
-void lexer_parse(lexer_world_string_t* input, lexer_option_string_t* name_option, lexer_parse_result_t* _ret) {
+void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexer_parse_result_t* _ret) {
   source_len = input->len;
   source = input->ptr;
   ret = _ret;
