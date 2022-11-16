@@ -55,7 +55,7 @@ size_t write_num(char16_t* out, uint32_t num) {
   return len;
 }
 
-static const char16_t PARSE_ERROR_[] = { 'P', 'a', 'r', 's', 'e', ' ', 'e', 'r', 'r', 'o', 'r' };
+static const char16_t PARSE_ERROR_[] = { 'P', 'a', 'r', 's', 'e', ' ', 'e', 'r', 'r', 'o', 'r', ' ' };
 
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
 static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
@@ -173,7 +173,7 @@ static lexer_parse_result_t* ret;
 void syntax_error () {
   has_error = true;
   char16_t* err = cabi_realloc(0, 0, 2, 50);
-  size_t len = LEN(PARSE_ERROR_);
+  size_t len = LEN(PARSE_ERROR_) + 1;
   cpy(err, (char16_t*)PARSE_ERROR_, len);
   if (name_len) {
     cpy(err + len, name, name_len);
