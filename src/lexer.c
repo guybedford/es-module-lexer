@@ -638,7 +638,7 @@ void try_parse_export_statement () {
       case 'd': {
         const char16_t* start_pos = pos;
         pos += 7;
-        ch = commentWhitespace(true);
+        ch = comment_whitespace(true);
         bool localName = false;
         // export default async? function*? name? (){}
         if (ch == 'a' && keyword_start(pos) &&  memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && is_ws_not_br(*(pos + 5))) {
@@ -653,8 +653,8 @@ void try_parse_export_statement () {
             ch = comment_whitespace(true);
           }
           if (ch == '(') {
-            addExport(startPos, startPos + 7, NULL, NULL);
-            pos = (char16_t*)(startPos + 6);
+            add_export(start_pos, start_pos + 7, NULL, NULL);
+            pos = (char16_t*)(start_pos + 6);
             return;
           }
           localName = true;
@@ -664,21 +664,21 @@ void try_parse_export_statement () {
           pos += 5;
           ch = comment_whitespace(true);
           if (ch == '{') {
-            addExport(startPos, startPos + 7, NULL, NULL);
-            pos = (char16_t*)(startPos + 6);
+            add_export(start_pos, start_pos + 7, NULL, NULL);
+            pos = (char16_t*)(start_pos + 6);
             return;
           }
           localName = true;
         }
-        const char16_t* localStartPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        if (localName && pos > localStartPos) {
-          addExport(startPos, startPos + 7, localStartPos, pos);
+        const char16_t* localstart_pos = pos;
+        ch = read_to_ws_or_punctuator(ch);
+        if (localName && pos > localstart_pos) {
+          add_export(start_pos, start_pos + 7, localstart_pos, pos);
           pos--;
         }
         else {
-          addExport(startPos, startPos + 7, NULL, NULL);
-          pos = (char16_t*)(startPos + 6);
+          add_export(start_pos, start_pos + 7, NULL, NULL);
+          pos = (char16_t*)(start_pos + 6);
         }
         return;
       }
