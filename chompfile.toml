@@ -5,9 +5,8 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '/opt/wasi-sdk'
 WASM_TOOLS = '../wasm-tools/target/debug/wasm-tools'
-JSCT = '../wasm-component-tools/src/jsct.js'
+JSCT = 'jsct'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
-WIT_COMPONENT = '../wit-bindgen/target/debug/wit-component'
 
 [[task]]
 name = 'build'
@@ -50,7 +49,7 @@ target = 'obj/lexer-component.wasm'
 stdio = 'stderr-only'
 deps = ['obj/lexer.wasm', 'src/lexer-world.wit']
 run = '''
-  ${{ WIT_COMPONENT }} $DEP --encoding utf16 --world src/lexer-world.wit -o $TARGET
+  ${{ WASM_TOOLS }} component new $DEP --encoding utf16 --wit src/lexer-world.wit -o $TARGET
 '''
 
 [[task]]
