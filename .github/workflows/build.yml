@@ -50,14 +50,6 @@ jobs:
           # print clang version
           ./wasi-sdk-${WASI_VERSION_FULL}/bin/clang --version
 
-      - name: Install Emscripten
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd ./emsdk
-          ./emsdk install ${{ env.EMCC_VERSION }}
-          ./emsdk activate ${{ env.EMCC_VERSION }}
-          ./fastcomp/emscripten/emcc -v
-
       - name: npm Install
         run: npm install
 
