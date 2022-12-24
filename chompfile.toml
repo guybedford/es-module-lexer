@@ -4,8 +4,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 
 [env-default]
 WASI_PATH = '/opt/wasi-sdk'
-WASM_TOOLS = '../wasm-tools/target/debug/wasm-tools'
-JSCT = '../js-component-tools/dist/cli.mjs'
+JSCT = 'jsct'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
 
 [[task]]
@@ -20,9 +19,8 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 [[task]]
 targets = ['dist/lexer.js', 'dist/lexer.d.ts']
 deps = ['obj/lexer-component.wasm', 'obj/preamble', 'npm:install']
-# -b9000 --optimize --minify -q
 run = '''
-	${{ WIT_BINDGEN }} host js obj/lexer-component.wasm --out-dir dist --name=lexer
+	${{ JSCT }} transpile obj/lexer-component.wasm --out-dir dist --name=lexer --valid-lifting-optimization -b9000 --optimize --minify -q
 	cat obj/preamble > dist/tmp ; cat dist/lexer.js >> dist/tmp ; mv dist/tmp dist/lexer.js
 '''
 
@@ -30,7 +28,7 @@ run = '''
 target = 'dist/lexer.asm.js'
 deps = ['obj/lexer-component.wasm', 'npm:install']
 run = '''
-	${{ JSCT }} host obj/lexer-component.wasm -o dist --name=lexer.asm --valid-binary-optimization --optimize --minify --asm -q
+	${{ JSCT }} transpile obj/lexer-component.wasm -o dist --name=lexer.asm --valid-lifting-optimization --optimize --minify --asm -q
 	cat obj/preamble.asm > dist/tmp ; cat dist/lexer.asm.js >> dist/tmp ; mv dist/tmp dist/lexer.asm.js
 '''
 
@@ -50,7 +48,7 @@ target = 'obj/lexer-component.wasm'
 stdio = 'stderr-only'
 deps = ['obj/lexer.wasm', 'src/lexer-world.wit']
 run = '''
-  ${{ WASM_TOOLS }} component new $DEP --encoding utf16 --wit src/lexer-world.wit -o $TARGET
+  ${{ JSCT }} new $DEP --encoding utf16 --wit src/lexer-world.wit -o $TARGET
 '''
 
 [[task]]
@@ -122,12 +120,12 @@ run = 'mocha -b -u tdd test/*.cjs'
 [[task]]
 target = 'obj/lexer.wat'
 dep = 'obj/lexer.wasm'
-run = '${{ WASM_TOOLS }} parse -t $DEP -o $TARGET'
+run = '${{ jsct }} parse -t $DEP -o $TARGET'
 
 [[task]]
 target = 'obj/lexer-component.core.wat'
 dep = 'obj/lexer-component.core.wasm'
-run = '${{ WASM_TOOLS }} parse -t $DEP -o $TARGET'
+run = '${{ jsct }} parse -t $DEP -o $TARGET'
 
 [[task]]
 name = 'footprint'

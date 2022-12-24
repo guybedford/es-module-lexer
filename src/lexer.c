@@ -167,21 +167,22 @@ void add_export (const char16_t* start,
 
 // Error handler
 
-static lexer_parse_result_t* ret;
+static lexer_tuple3_list_import_list_export_bool_t* ret;
+static lexer_string_t* err;
 
 // `Parse error (${name || '@'}:${line}:${col})`
 void syntax_error () {
   has_error = true;
-  char16_t* err = cabi_realloc(0, 0, 2, 50);
+  char16_t* err_msg = cabi_realloc(0, 0, 2, 50);
   size_t len = LEN(PARSE_ERROR_) + 1;
-  cpy(err, (char16_t*)PARSE_ERROR_, len);
+  cpy(err_msg, (char16_t*)PARSE_ERROR_, len);
   if (name_len) {
-    cpy(err + len, name, name_len);
+    cpy(err_msg + len, name, name_len);
     len += name_len;
   } else {
-    err[len++] = '@';
+    err_msg[len++] = '@';
   }
-  err[len++] = ':';
+  err_msg[len++] = ':';
   int32_t line = 1, col = 1;
   char16_t* err_pos = pos;
   char16_t ch;
@@ -195,31 +196,24 @@ void syntax_error () {
       col++;
     }
   }
-  len += write_num(&err[len], line);
-  err[len++] = ':';
-  len += write_num(&err[len], col);
-  lexer_parse_result_t result = {
-    .is_err = true,
-    .val = {
-      .err = {
-        .ptr = err,
-        .len = len
-      }
-    }
-  };
-  *ret = result;
+  len += write_num(&err_msg[len], line);
+  err_msg[len++] = ':';
+  len += write_num(&err_msg[len], col);
+  err->ptr = err_msg;
+  err->len = len;
   pos = end + 1;
 }
 
 // Main
 
-void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexer_parse_result_t* _ret) {
+bool lexer_parse(lexer_string_t* input, lexer_string_t* maybe_name, lexer_tuple3_list_import_list_export_bool_t *_ret, lexer_string_t *_err) {
   source_len = input->len;
   source = input->ptr;
   ret = _ret;
-  if (name_option->is_some) {
-    name = name_option->val.ptr;
-    name_len = name_option->val.len;
+  err = _err;
+  if (maybe_name != NULL) {
+    name = maybe_name->ptr;
+    name_len = maybe_name->len;
   } else {
     name_len = 0;
   }
@@ -298,7 +292,7 @@ void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexe
   }
 
   if (has_error)
-    return;
+    return false;
 
   main_parse: while (pos++ < end) {
     ch = *pos;
@@ -324,8 +318,10 @@ void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexe
         open_token_stack[open_token_depth++].pos = last_token_pos;
         break;
       case ')':
-        if (open_token_depth == 0)
-          return syntax_error();
+        if (open_token_depth == 0) {
+          syntax_error();
+          return false;
+        }
         open_token_depth--;
         if (dynamic_import_stack_depth > 0 && source + dynamic_import_stack[dynamic_import_stack_depth - 1]->d == open_token_stack[open_token_depth].pos) {
           lexer_import_t* cur_dynamic_import = dynamic_import_stack[dynamic_import_stack_depth - 1];
@@ -347,8 +343,10 @@ void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexe
         next_brace_is_class = false;
         break;
       case '}':
-        if (open_token_depth == 0)
-          return syntax_error();
+        if (open_token_depth == 0) {
+          syntax_error();
+          return false;
+        }
         if (open_token_stack[--open_token_depth].token == TemplateBrace) {
           template_string();
         }
@@ -414,28 +412,26 @@ void lexer_parse(lexer_string_t* input, lexer_option_string_t* name_option, lexe
   }
 
   if (has_error)
-    return;
+    return false;
 
-  if (open_token_depth || dynamic_import_stack_depth)
-    return syntax_error();
+  if (open_token_depth || dynamic_import_stack_depth) {
+    syntax_error();
+    return false;
+  }
 
-  lexer_parse_result_t result = {
-    .is_err = false,
-    .val = {
-      .ok = {
-        .f0 = {
-          .ptr = imports_base,
-          .len = imports_head - imports_base
-        },
-        .f1 = {
-          .ptr = exports_base,
-          .len = exports_head - exports_base
-        },
-        .f2 = facade
-      }
-    }
+  lexer_tuple3_list_import_list_export_bool_t result = {
+    .f0 = {
+      .ptr = imports_base,
+      .len = imports_head - imports_base
+    },
+    .f1 = {
+      .ptr = exports_base,
+      .len = exports_head - exports_base
+    },
+    .f2 = facade
   };
-  *_ret = result;
+  *ret = result;
+  return true;
 }
 
 void try_parse_import_statement () {
