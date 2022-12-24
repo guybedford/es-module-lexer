@@ -5,7 +5,7 @@ extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
 [env-default]
 WASI_PATH = '/opt/wasi-sdk'
 WASM_TOOLS = '../wasm-tools/target/debug/wasm-tools'
-JSCT = './node_modules/.bin/jsct'
+JSCT = '../js-component-tools/dist/cli.mjs'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
 
 [[task]]
@@ -20,8 +20,9 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 [[task]]
 targets = ['dist/lexer.js', 'dist/lexer.d.ts']
 deps = ['obj/lexer-component.wasm', 'obj/preamble', 'npm:install']
+# -b9000 --optimize --minify -q
 run = '''
-	${{ JSCT }} host obj/lexer-component.wasm -o dist --name=lexer --valid-lifting-optimization --optimize --minify -b9000 -q
+	${{ WIT_BINDGEN }} host js obj/lexer-component.wasm --out-dir dist --name=lexer
 	cat obj/preamble > dist/tmp ; cat dist/lexer.js >> dist/tmp ; mv dist/tmp dist/lexer.js
 '''
 
@@ -29,7 +30,7 @@ run = '''
 target = 'dist/lexer.asm.js'
 deps = ['obj/lexer-component.wasm', 'npm:install']
 run = '''
-	${{ JSCT }} host obj/lexer-component.wasm -o dist --name=lexer.asm --valid-lifting-optimization --optimize --minify --asm -q
+	${{ JSCT }} host obj/lexer-component.wasm -o dist --name=lexer.asm --valid-binary-optimization --optimize --minify --asm -q
 	cat obj/preamble.asm > dist/tmp ; cat dist/lexer.asm.js >> dist/tmp ; mv dist/tmp dist/lexer.asm.js
 '''
 
