@@ -170,8 +170,7 @@ void add_export (const char16_t* start,
 static lexer_tuple3_list_import_list_export_bool_t* ret;
 static lexer_string_t* err;
 
-// `Parse error (${name || '@'}:${line}:${col})`
-void syntax_error () {
+void error (int32_t line, int32_t col) {
   has_error = true;
   char16_t* err_msg = cabi_realloc(0, 0, 2, 50);
   size_t len = LEN(PARSE_ERROR_) + 1;
@@ -183,6 +182,16 @@ void syntax_error () {
     err_msg[len++] = '@';
   }
   err_msg[len++] = ':';
+  len += write_num(&err_msg[len], line);
+  err_msg[len++] = ':';
+  len += write_num(&err_msg[len], col);
+  err->ptr = err_msg;
+  err->len = len * 2;
+  pos = end + 1;
+}
+
+// `Parse error (${name || '@'}:${line}:${col})`
+void syntax_error () {
   int32_t line = 1, col = 1;
   char16_t* err_pos = pos;
   char16_t ch;
@@ -196,12 +205,7 @@ void syntax_error () {
       col++;
     }
   }
-  len += write_num(&err_msg[len], line);
-  err_msg[len++] = ':';
-  len += write_num(&err_msg[len], col);
-  err->ptr = err_msg;
-  err->len = len;
-  pos = end + 1;
+  error(line, col);
 }
 
 // Main

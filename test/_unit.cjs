@@ -39,13 +39,13 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
-  test(`Template string default bracket`, () => {
+  test(`Export default bracket`, () => {
     const source = `export default{};`;
     const [, [expt]] = parse(source);
     assert.strictEqual(source.slice(expt.s, expt.e), 'default');
     assert.strictEqual(source.slice(expt.ls, expt.le), '');
     assert.strictEqual(expt.n, 'default');
-    assert.strictEqual(expt.ln, undefined);
+    assert.strictEqual(expt.ln, null);
   });
 
   test(`Template string default`, () => {
@@ -55,7 +55,7 @@ suite('Invalid syntax', () => {
     assert.strictEqual(source.slice(expt.s, expt.e), 'default');
     assert.strictEqual(source.slice(expt.ls, expt.le), '');
     assert.strictEqual(expt.n, 'default');
-    assert.strictEqual(expt.ln, undefined);
+    assert.strictEqual(expt.ln, null);
   });
 
   test('Class fn ASI', () => {

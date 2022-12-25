@@ -9,7 +9,6 @@ on:
 env:
   WASI_VERSION: 17
   WASI_VERSION_FULL: "17.0"
-  EMCC_VERSION: "1.40.1-fastcomp"
 
 jobs:
   build:
@@ -50,17 +49,12 @@ jobs:
           # print clang version
           ./wasi-sdk-${WASI_VERSION_FULL}/bin/clang --version
 
-      - name: npm Install
-        run: npm install
-
       - name: Setup Chomp
         uses: guybedford/chomp-action@v1
 
       - name: Compile to Wasm & Test Wasm
         env:
           WASI_PATH: './wasi-sdk-${{ env.WASI_VERSION_FULL }}'
-          EMSDK_PATH: './emsdk'
-          EMSCRIPTEN_BIN: './emsdk/fastcomp/emscripten/emcc'
         run: chomp test
 
       - name: Footprint
