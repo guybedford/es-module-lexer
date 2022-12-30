@@ -1,8 +1,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <uchar.h>
 
-typedef unsigned short char16_t;
+typedef uint64_t char64_t;
 extern unsigned char __heap_base;
 
 const char16_t* STANDARD_IMPORT = (char16_t*)0x1;

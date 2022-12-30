@@ -798,9 +798,33 @@ bool keywordStart (char16_t* pos) {
   return pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1));
 }
 
-bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
+static inline uint64_t string_to_uint64(const char* data) {
+  uint64_t val;
+  memcpy(&val, data, sizeof(uint64_t));
+  return val;
+}
+
+static inline uint32_t string_to_uint32(const char* data) {
+  uint32_t val;
+  memcpy(&val, data, sizeof(uint32_t));
+  return val;
+}
+
+const uint64_t vo64 = ('o' << 24) | ('v' << 16);
+
+bool readPrecedingKeyword1 (char16_t* pos, char16_t c16) {
   if (pos < source) return false;
-  return *pos == c1 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
+  return *pos == c16 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
+}
+
+bool readPrecedingKeyword32 (char16_t* pos, uint32_t c32) {
+  if (pos < source) return false;
+  return *(char32_t*)pos == c32 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
+}
+
+bool readPrecedingKeyword64 (char16_t* pos, uint64_t c64) {
+  if (pos < source) return false;
+  return *(uint64_t*)pos == c64 && (pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1)));
 }
 
 bool readPrecedingKeywordn (char16_t* pos, const char16_t* compare, size_t n) {
@@ -816,7 +840,7 @@ bool isExpressionKeyword (char16_t* pos) {
       switch (*(pos - 1)) {
         case 'i':
           // void
-          return readPrecedingKeywordn(pos - 2, &VO[0], 2);
+          return readPrecedingKeyword32(pos - 2, vo64);
         case 'l':
           // yield
           return readPrecedingKeywordn(pos - 2, &YIE[0], 3);
