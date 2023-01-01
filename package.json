@@ -27,9 +27,10 @@
     "@swc/cli": "^0.1.57",
     "@swc/core": "^1.2.224",
     "@types/node": "^18.7.1",
+    "js-component-tools": "^0.2.2",
     "kleur": "^2.0.2",
     "mocha": "^5.2.0",
-    "terser": "^5.14.2",
+    "terser": "^5.15.1",
     "typescript": "^4.7.4"
   },
   "files": [

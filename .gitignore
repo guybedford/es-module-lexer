@@ -1,8 +1,4 @@
-node_modules
-lib/lexer.wat
-dist
+/node_modules
+/obj
+/dist
 package-lock.json
-yarn.lock
-lib/lexer.emcc.js
-src/lexer.js
-types/lexer.d.ts
