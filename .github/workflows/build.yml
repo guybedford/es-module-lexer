@@ -27,6 +27,9 @@ jobs:
 
       - name: Install WIT Bindgen
         run: cargo install --git https://github.com/bytecodealliance/wit-bindgen wit-bindgen-cli
+        
+      - name: Install Wasm Tools
+        run: cargo install wasm-tools
 
       - name: Install wasi-sdk
         shell: bash
