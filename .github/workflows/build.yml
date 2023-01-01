@@ -51,6 +51,8 @@ jobs:
 
       - name: Setup Chomp
         uses: guybedford/chomp-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile to Wasm & Test Wasm
         env:
