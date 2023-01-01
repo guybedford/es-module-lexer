@@ -36,7 +36,11 @@ run = '''
 
 	const { version } = JSON.parse(await readFile('package.json'));
 
-	await writeFile('dist/lexer.js', `/* es-module-lexer ${version} */\n${files['dist/lexer.js'].replace(/n:(\w+)/, 'n:eval($1)')}`);
+	await writeFile('dist/lexer.js', `/* es-module-lexer ${version} */\n${
+		files['dist/lexer.js']
+			.replace(/n:(\w+)/, 'n:$1?eval($1):$1')
+			.replace(/n:([^e])/g, `n:$1&&($1[0]==='"'||$1[0]==="'")?eval($1):$1`)
+	}`);
 	await writeFile('dist/lexer.d.ts', files['dist/lexer.d.ts']);
 '''
 
@@ -61,7 +65,9 @@ run = '''
 	const readstring = await readFile('obj/readstring.min.js', 'utf8');
 
 	await writeFile('dist/lexer.asm.js', `/* es-module-lexer asm.js ${version} */\n${readstring}${
-		files['dist/lexer.asm.js'].replace(/n:(\w)/, 'n:readString($1)')
+		files['dist/lexer.asm.js']
+			.replace(/n:(\w)/, 'n:$1?readString($1):$1')
+			.replace(/n:([a-qs-zA-Z])/g, `n:$1&&($1[0]==='"'||$1[0]==="'")?readString($1):$1`)
 	}`);
 '''
 
