@@ -46,10 +46,10 @@ size_t write_num(char16_t* out, uint32_t num) {
     num /= 10;
     *ptr++ = "0123456789"[tmp_num - num * 10];
   } while (num);
-  size_t len = ptr - ptr1 + 1;
+  size_t len = ptr - ptr1;
   while (ptr1 < ptr) {
-    tmp_char = *ptr;
-    *ptr-- = *ptr1;
+    tmp_char = *--ptr;
+    *ptr = *ptr1;
     *ptr1++ = tmp_char;
   }
   return len;
@@ -124,13 +124,13 @@ void add_import (const char16_t* statement_start,
   imports_head->ss = statement_start - source;
   imports_head->s = start - source;
   imports_head->e = end - source;
-  imports_head->a = 0;
+  imports_head->a = -1;
   if (dynamic == STANDARD_IMPORT) {
     imports_head->d = -1;
     imports_head->se = end - source + 1;
     imports_head->n.is_some = true;
-    imports_head->n.val.len = end - start;
-    imports_head->n.val.ptr = (char16_t*)start;
+    imports_head->n.val.len = end - start + 2;
+    imports_head->n.val.ptr = (char16_t*)start - 1;
   } else if (dynamic == IMPORT_META) {
     imports_head->d = -2;
     imports_head->se = end - source;
@@ -154,6 +154,7 @@ void add_export (const char16_t* start,
   exports_head->n.ptr = (char16_t*)start;
   if (local_start == NULL || local_end == NULL) {
     exports_head->ls = exports_head->le = -1;
+    exports_head->ln.is_some = false;
   } else {
     exports_head->ls = local_start - source;
     exports_head->le = local_end - source;
@@ -186,7 +187,7 @@ void error (int32_t line, int32_t col) {
   err_msg[len++] = ':';
   len += write_num(&err_msg[len], col);
   err->ptr = err_msg;
-  err->len = len * 2;
+  err->len = len;
   pos = end + 1;
 }
 
@@ -246,7 +247,7 @@ bool lexer_parse(lexer_string_t* input, lexer_string_t* maybe_name, lexer_tuple3
 
   pos = (char16_t*)(source - 1);
   char16_t ch = '\0';
-  end = pos + source_len;
+  end = pos + source_len - 1;
 
   // start with a pure "module-only" parser
   while (pos++ < end) {
@@ -459,6 +460,7 @@ void try_parse_import_statement () {
       ch = comment_whitespace(true);
       add_import(start_pos, pos, 0, dynamic_pos);
       dynamic_import_stack[dynamic_import_stack_depth++] = imports_head - 1;
+      (imports_head - 1)->e = -1;
       if (ch == '\'') {
         string_literal(ch);
       }
@@ -751,8 +753,9 @@ void try_parse_export_statement () {
     read_import_string(s_start_pos, comment_whitespace(true));
 
     // There were no local names.
-    for (lexer_export_t* expt = prev_exports_head == exports_base ? exports_base : prev_exports_head + 1; expt != exports_head; expt++) {
+    for (lexer_export_t* expt = prev_exports_head == exports_base ? exports_base : prev_exports_head; expt != exports_head; expt++) {
       expt->ls = expt->le = -1;
+      expt->ln.is_some = false;
     }
   }
   else {
