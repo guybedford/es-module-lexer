@@ -72,7 +72,6 @@ suite('Invalid syntax', () => {
     const source = `import(\n"./statehash\\u1011.js"\r)`;
     const [imports] = parse(source);
     assert.strictEqual(imports.length, 1);
-    console.log(imports);
     assert.strictEqual(imports[0].n, './statehashထ.js');
     assert.strictEqual(source.slice(imports[0].s, imports[0].e), '"./statehash\\u1011.js"');
   });
@@ -81,6 +80,7 @@ suite('Invalid syntax', () => {
   test('Basic nested dynamic import support', () => {
     const source = `await import (await import  ('foo'))`;
     const [imports] = parse(source);
+    console.log(imports);
     assert.strictEqual(imports.length, 2);
     assert.strictEqual(source.slice(imports[0].ss, imports[0].d), 'import ');
     assert.strictEqual(source.slice(imports[0].ss, imports[0].se), 'import (await import  (\'foo\'))');

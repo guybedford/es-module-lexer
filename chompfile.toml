@@ -1,8 +1,9 @@
 version = 0.1
 
-extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint']
+extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
 
 [env-default]
+WASM_TOOLS = 'wasm-tools'
 WASI_PATH = '/opt/wasi-sdk'
 JSCT = 'jsct'
 WIT_BINDGEN = '../wit-bindgen/target/debug/wit-bindgen'
@@ -18,37 +19,64 @@ run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
 
 [[task]]
 targets = ['dist/lexer.js', 'dist/lexer.d.ts']
-deps = ['obj/lexer-component.wasm', 'obj/preamble', 'npm:install']
+deps = ['obj/lexer-component.wasm', 'package.json', 'npm:install']
+engine = 'node'
 run = '''
-	${{ JSCT }} transpile obj/lexer-component.wasm --out-dir dist --name=lexer --valid-lifting-optimization -b9000 --optimize --minify -q
-	cat obj/preamble > dist/tmp ; cat dist/lexer.js >> dist/tmp ; mv dist/tmp dist/lexer.js
+	import { transpile } from 'js-component-tools';
+	import { readFile, writeFile } from 'node:fs/promises';
+
+	const { files } = await transpile(await readFile('obj/lexer-component.wasm'), {
+		outDir: 'dist',
+		name: 'lexer',
+		validLiftingOptimization: true,
+		base64Cutoff: 9000,
+		optimize: true,
+		minify: true
+	});
+
+	const { version } = JSON.parse(await readFile('package.json'));
+
+	await writeFile('dist/lexer.js', `/* es-module-lexer ${version} */\n${files['dist/lexer.js'].replace(/n:(\w+)/, 'n:eval($1)')}`);
+	await writeFile('dist/lexer.d.ts', files['dist/lexer.d.ts']);
 '''
 
 [[task]]
 target = 'dist/lexer.asm.js'
-deps = ['obj/lexer-component.wasm', 'npm:install']
+deps = ['obj/lexer-component.wasm', 'package.json', 'npm:install', 'obj/readstring.min.js']
+engine = 'node'
 run = '''
-	${{ JSCT }} transpile obj/lexer-component.wasm -o dist --name=lexer.asm --valid-lifting-optimization --optimize --minify --asm -q
-	cat obj/preamble.asm > dist/tmp ; cat dist/lexer.asm.js >> dist/tmp ; mv dist/tmp dist/lexer.asm.js
+	import { transpile } from 'js-component-tools';
+	import { readFile, writeFile } from 'node:fs/promises';
+
+	const { files } = await transpile(await readFile('obj/lexer-component.wasm'), {
+		outDir: 'dist',
+		name: 'lexer.asm',
+		validLiftingOptimization: true,
+		optimize: true,
+		minify: true,
+		asm: true
+	});
+
+	const { version } = JSON.parse(await readFile('package.json'));
+	const readstring = await readFile('obj/readstring.min.js', 'utf8');
+
+	await writeFile('dist/lexer.asm.js', `/* es-module-lexer asm.js ${version} */\n${readstring}${
+		files['dist/lexer.asm.js'].replace(/n:(\w)/, 'n:readString($1)')
+	}`);
 '''
 
 [[task]]
-targets = ['obj/preamble', 'obj/preamble.asm']
-dep = 'package.json'
-engine = 'node'
-run = '''
-import { readFile, writeFile } from 'fs/promises';
-const { version } = JSON.parse(await readFile('package.json'));
-await writeFile('obj/preamble', `/* es-module-lexer ${version} */\n`);
-await writeFile('obj/preamble.asm', `/* es-module-lexer asm.js ${version} */\n`);
-'''
+target = 'obj/readstring.min.js'
+dep = 'src/readstring.js'
+template = 'terser'
 
 [[task]]
 target = 'obj/lexer-component.wasm'
 stdio = 'stderr-only'
 deps = ['obj/lexer.wasm', 'src/lexer-world.wit']
+# Switch back to jsct after next release with encoding fix
 run = '''
-  ${{ JSCT }} new $DEP --encoding utf16 --wit src/lexer-world.wit -o $TARGET
+  ${{ WASM_TOOLS }} component new $DEP --encoding utf16 --wit src/lexer-world.wit -o $TARGET
 '''
 
 [[task]]
