@@ -42,7 +42,7 @@ jobs:
 
       - name: Install Emscripten
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git
+          git clone https://github.com/emscripten-core/emsdk.git --branch 3.1.29
           cd ./emsdk
           ./emsdk install ${{ env.EMCC_VERSION }}
           ./emsdk activate ${{ env.EMCC_VERSION }}
@@ -53,6 +53,8 @@ jobs:
 
       - name: Setup Chomp
         uses: guybedford/chomp-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile to Wasm & Test Wasm
         env:

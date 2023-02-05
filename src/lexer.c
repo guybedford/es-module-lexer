@@ -6,7 +6,7 @@
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
 static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
-static const char16_t FROM[] = { 'f', 'r', 'o', 'm' };
+static const char16_t ROM[] = { 'r', 'o', 'm' };
 static const char16_t ETA[] = { 'e', 't', 'a' };
 static const char16_t SSERT[] = { 's', 's', 'e', 'r', 't' };
 static const char16_t VO[] = { 'v', 'o' };
@@ -335,7 +335,7 @@ void tryParseImportStatement () {
       }
 
       ch = commentWhitespace(true);
-      if (memcmp(pos, &FROM[0], 4 * 2) != 0) {
+      if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
         syntaxError();
         break;
       }
@@ -425,35 +425,51 @@ void tryParseExportStatement () {
         pos += 7;
         ch = commentWhitespace(true);
         bool localName = false;
-        // export default async? function*? name? (){}
-        if (ch == 'a' && keywordStart(pos) &&  memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
-          pos += 5;
-          ch = commentWhitespace(false);
-        }
-        if (ch == 'f' && keywordStart(pos) && memcmp(pos + 1, &UNCTION[0], 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
-          pos += 8;
-          ch = commentWhitespace(true);
-          if (ch == '*') {
-            pos++;
+        switch (ch) {
+          // export default async? function*? name? (){}
+          case 'a':
+            if (memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
+              pos += 5;
+              ch = commentWhitespace(false);
+            }
+            else {
+              break;
+            }
+          // fallthrough
+          case 'f':
+            if (memcmp(pos + 1, &UNCTION[0], 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
+              pos += 8;
+              ch = commentWhitespace(true);
+              if (ch == '*') {
+                pos++;
+                ch = commentWhitespace(true);
+              }
+              if (ch == '(') {
+                break;
+              }
+              localName = true;
+            }
+            break;
+          case 'c':
+            // export default class name? {}
+            if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
+              pos += 5;
+              ch = commentWhitespace(true);
+              if (ch == '{') {
+                break;
+              }
+              localName = true;
+            }
+            break;
+          default: {
+            const char16_t* localStartPos = pos;
+            ch = readToWsOrPunctuator(ch);
             ch = commentWhitespace(true);
+            if (ch == ';') {
+              break;
+            }
+            localName = true;
           }
-          if (ch == '(') {
-            addExport(startPos, startPos + 7, NULL, NULL);
-            pos = (char16_t*)(startPos + 6);
-            return;
-          }
-          localName = true;
-        }
-        // export default class name? {}
-        if (ch == 'c' && keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
-          pos += 5;
-          ch = commentWhitespace(true);
-          if (ch == '{') {
-            addExport(startPos, startPos + 7, NULL, NULL);
-            pos = (char16_t*)(startPos + 6);
-            return;
-          }
-          localName = true;
         }
         const char16_t* localStartPos = pos;
         ch = readToWsOrPunctuator(ch);
@@ -470,7 +486,7 @@ void tryParseExportStatement () {
       // export async? function*? name () {
       case 'a':
         pos += 5;
-        commentWhitespace(true);
+        commentWhitespace(false);
       // fallthrough
       case 'f':
         pos += 8;
@@ -532,7 +548,7 @@ void tryParseExportStatement () {
   }
 
   // from ...
-  if (ch == 'f' && memcmp(pos + 1, &FROM[1], 3 * 2) == 0) {
+  if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true));
 
