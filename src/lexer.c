@@ -284,7 +284,7 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace(true);
       // import.meta indicated by d == -2
-      if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && *lastTokenPos != '.')
+      if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.'))
         addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
 
@@ -806,12 +806,20 @@ bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
   return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
 }
 
+bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
+  return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
+}
+
+bool isSpread (char16_t* c) {
+  return *c == '.' && *(c - 1) == '.' && *(c - 2) == '.';
+}
+
 bool isQuote (char16_t ch) {
   return ch == '\'' || ch == '"';
 }
 
 bool keywordStart (char16_t* pos) {
-  return pos == source || isBrOrWsOrPunctuatorNotDot(*(pos - 1));
+  return pos == source || isBrOrWsOrPunctuatorOrSpreadNotDot(pos - 1);
 }
 
 bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
@@ -821,7 +829,7 @@ bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
 
 bool readPrecedingKeywordn (char16_t* pos, const char16_t* compare, size_t n) {
   if (pos - n + 1 < source) return false;
-  return memcmp(pos - n + 1, compare, n * 2) == 0 && (pos - n + 1 == source || isBrOrWsOrPunctuatorNotDot(*(pos - n)));
+  return memcmp(pos - n + 1, compare, n * 2) == 0 && (pos - n + 1 == source || isBrOrWsOrPunctuatorOrSpreadNotDot(pos - n));
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,

@@ -39,6 +39,13 @@ function assertExportIs(source, actual, expected) {
 suite('Invalid syntax', () => {
   beforeEach(async () => await init);
 
+  test(`import.meta spread`, () => {
+    const source = `console.log(...import.meta.obj);`;
+    const [impts] = parse(source);
+    assert.strictEqual(impts.length, 1);
+    assert.strictEqual(source.substring(impts[0].s, impts[0].e), 'import.meta');
+  });
+
   test(`Template string default bracket`, () => {
     const source = `export default{};`;
     const [, [expt]] = parse(source);
@@ -1328,7 +1335,6 @@ function x() {
     export default functionName;
   `;
     const [imports, exports] = parse(source);
-    console.log(exports);
     assert.strictEqual(imports.length, 0);
     assert.strictEqual(exports.length, 12);
     assertExportIs(source, exports[0], { n: 'default', ln: 'example'});

@@ -240,6 +240,7 @@ bool isBr (char16_t c);
 bool isWsNotBr (char16_t c);
 bool isBrOrWs (char16_t c);
 bool isBrOrWsOrPunctuator (char16_t c);
+bool isSpread (char16_t* c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
 
 bool readPrecedingKeyword1(char16_t* pos, char16_t c1);
