@@ -461,26 +461,18 @@ void tryParseExportStatement () {
               localName = true;
             }
             break;
-          default: {
-            const char16_t* localStartPos = pos;
-            ch = readToWsOrPunctuator(ch);
-            ch = commentWhitespace(true);
-            if (ch == ';') {
-              break;
-            }
-            localName = true;
+        }
+        if (localName) {
+          const char16_t* localStartPos = pos;
+          readToWsOrPunctuator(ch);
+          if (pos > localStartPos) {
+            addExport(startPos, startPos + 7, localStartPos, pos);
+            pos--;
+            return;
           }
         }
-        const char16_t* localStartPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        if (localName && pos > localStartPos) {
-          addExport(startPos, startPos + 7, localStartPos, pos);
-          pos--;
-        }
-        else {
-          addExport(startPos, startPos + 7, NULL, NULL);
-          pos = (char16_t*)(startPos + 6);
-        }
+        addExport(startPos, startPos + 7, NULL, NULL);
+        pos = (char16_t*)(startPos + 6);
         return;
       }
       // export async? function*? name () {

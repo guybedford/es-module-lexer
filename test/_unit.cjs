@@ -36,8 +36,19 @@ function assertExportIs(source, actual, expected) {
   assert.strictEqual(actual.ln, expected.ln, `export.ln: ${actual.ln} != ${expected.ln}`);
 }
 
-suite('Invalid syntax', () => {
+suite('Lexer', () => {
   beforeEach(async () => await init);
+
+  test(`Export default cases`, () => {
+    const source = `
+      export default "export default a"
+      export default "export default 'a'"
+      export default "export function foo() {}"
+      export default "export function foo() {return bar}"
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(expt => expt.n), ['default', 'default', 'default', 'default']);
+  });
 
   test(`import.meta spread`, () => {
     const source = `console.log(...import.meta.obj);`;
@@ -127,56 +138,6 @@ suite('Invalid syntax', () => {
     assert.strictEqual(imports.length, 2);
     assert.strictEqual(source.substring(imports[0].s, imports[0].e), 'import.meta.url');
   });
-
-  test('Unterminated object', () => {
-    const source = `
-      const foo = };
-      const bar = {};
-    `;
-    try {
-      parse(source);
-    }
-    catch (err) {
-      assert.strictEqual(err.message, 'Parse error @:2:19');
-    }
-  });
-
-  test('Invalid string', () => {
-    const source = `import './export.js';
-
-import d from './export.js';
-
-import { s as p } from './reexport1.js';
-
-import { z, q as r } from './reexport2.js';
-
-   '
-
-import * as q from './reexport1.js';
-
-export { d as a, p as b, z as c, r as d, q }`;
-    try {
-      parse(source);
-    }
-    catch (err) {
-      assert.strictEqual(err.message, 'Parse error @:9:5');
-    }
-  });
-
-  test('Invalid export', () => {
-    try {
-      const source = `export { a = };`;
-      parse(source);
-      assert(false, 'Should error');
-    }
-    catch (err) {
-      assert.strictEqual(err.idx, 11);
-    }
-  });
-});
-
-suite('Lexer', () => {
-  beforeEach(async () => await init);
 
   test('Export', () => {
     const source = `export var p=5`;
@@ -1352,3 +1313,52 @@ function x() {
   });
 });
 
+suite('Invalid syntax', () => {
+  beforeEach(async () => await init);
+
+  test('Unterminated object', () => {
+    const source = `
+      const foo = };
+      const bar = {};
+    `;
+    try {
+      parse(source);
+    }
+    catch (err) {
+      assert.strictEqual(err.message, 'Parse error @:2:19');
+    }
+  });
+
+  test('Invalid string', () => {
+    const source = `import './export.js';
+
+import d from './export.js';
+
+import { s as p } from './reexport1.js';
+
+import { z, q as r } from './reexport2.js';
+
+   '
+
+import * as q from './reexport1.js';
+
+export { d as a, p as b, z as c, r as d, q }`;
+    try {
+      parse(source);
+    }
+    catch (err) {
+      assert.strictEqual(err.message, 'Parse error @:9:5');
+    }
+  });
+
+  test('Invalid export', () => {
+    try {
+      const source = `export { a = };`;
+      parse(source);
+      assert(false, 'Should error');
+    }
+    catch (err) {
+      assert.strictEqual(err.idx, 11);
+    }
+  });
+});
