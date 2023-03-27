@@ -131,6 +131,30 @@ suite('Lexer', () => {
     assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
   });
 
+  if (!js)
+  test('Import attributes', () => {
+    const source = `
+      import json from "./foo.json" with { type: "json" };
+      import("foo.json" , { with: { type: "json" } });
+
+      import test from './asdf'
+      with { not: 'an assertion!' }
+      export var p = 5;
+    `
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 3);
+    assert.strictEqual(imports[0].n, './foo.json');
+    assert.strictEqual(source.substring(imports[0].s, imports[0].e), './foo.json');
+    assert.strictEqual(source.substring(imports[0].a, imports[0].se), '{ type: "json" }');
+    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ with: { type: "json" } })');
+    assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
+    assert.strictEqual(imports[1].n, 'foo.json');
+    assert.strictEqual(imports[2].n, './asdf');
+    assert.strictEqual(imports[2].a, -1);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
+  });
+
   test('Import meta inside dynamic import', () => {
     const source = `import(import.meta.url)`;
     const [imports] = parse(source);

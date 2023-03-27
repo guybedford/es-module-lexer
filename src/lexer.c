@@ -604,12 +604,12 @@ void readImportString (const char16_t* ss, char16_t ch) {
   addImport(ss, startPos, pos, STANDARD_IMPORT);
   pos++;
   ch = commentWhitespace(false);
-  if (ch != 'a' || memcmp(pos + 1, &SSERT[0], 5 * 2) != 0) {
+  if (!(ch == 'a' && memcmp(pos + 1, &SSERT[0], 5 * 2) == 0) && !(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
     pos--;
     return;
   }
   char16_t* assertIndex = pos;
-  pos += 6;
+  pos += ch == 'a' ? 6 : 4;
   ch = commentWhitespace(true);
   if (ch != '{') {
     pos = assertIndex;
