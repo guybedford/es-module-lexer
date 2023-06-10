@@ -517,7 +517,7 @@ void tryParseExportStatement () {
         ch = commentWhitespace(true);
         startPos = pos;
         ch = readToWsOrPunctuator(ch);
-        // very basic destructuring support only of the form:
+        // very basic destructuring support only of the singular form:
         //   export const { a, b, ...c }
         // without aliasing, nesting or defaults
         bool destructuring = ch == '{' || ch == '[';
