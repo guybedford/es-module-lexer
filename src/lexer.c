@@ -510,28 +510,51 @@ void tryParseExportStatement () {
       // export var/let/const name = ...(, name = ...)+
       case 'v':
       case 'l':
-        // destructured initializations not currently supported (skipped for { or [)
-        // also, lexing names after variable equals is skipped (export var p = function () { ... }, q = 5 skips "q")
-        pos += 2;
+        // simple declaration lexing only handles names. Any syntax after variable equals is skipped
+        // (export var p = function () { ... }, q = 5 skips "q")
+        pos += 3;
         facade = false;
-        do {
-          pos++;
+        ch = commentWhitespace(true);
+        startPos = pos;
+        ch = readToWsOrPunctuator(ch);
+        // very basic destructuring support only of the singular form:
+        //   export const { a, b, ...c }
+        // without aliasing, nesting or defaults
+        bool destructuring = ch == '{' || ch == '[';
+        const char16_t* destructuringPos = pos;
+        if (destructuring) {
+          pos += 1;
           ch = commentWhitespace(true);
-          const char16_t* startPos = pos;
+          startPos = pos;
           ch = readToWsOrPunctuator(ch);
-          // dont yet handle [ { destructurings
-          if (ch == '{' || ch == '[') {
-            break;
-          }
+        }
+        do {
           if (pos == startPos)
-            return;
+            break;
           addExport(startPos, pos, startPos, pos);
           ch = commentWhitespace(true);
-          if (ch == '=') {
+          if (destructuring && (ch == '}' || ch == ']')) {
+            destructuring = false;
             break;
           }
-        } while (ch == ',');
-        pos--;
+          if (ch != ',') {
+            pos -= 1;
+            break;
+          }
+          pos++;
+          ch = commentWhitespace(true);
+          startPos = pos;
+          // internal destructurings unsupported
+          if (ch == '{' || ch == '[') {
+            pos -= 1;
+            break;
+          }
+          ch = readToWsOrPunctuator(ch);
+        } while (true);
+        // if stuck inside destructuring syntax, backtrack
+        if (destructuring) {
+          pos = (char16_t*)destructuringPos - 1;
+        }
         return;
 
       default:

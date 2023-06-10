@@ -39,6 +39,17 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test(`Simple export destructuring`, () => {
+    const source = `
+      export const{URI,Utils,...Another}=LIB
+      export var p, { z } = {};
+
+      export var { aa, qq: { z } } = { qq: {} }, pp = {};
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['URI', 'Utils', 'p', 'aa', 'qq']);
+  });
+
   test(`Export default cases`, () => {
     const source = `
       export default "export default a"
@@ -343,8 +354,8 @@ suite('Lexer', () => {
       export { ok };
     `;
     const [, exports] = parse(source);
-    assert.strictEqual(exports.length, 1);
-    assertExportIs(source, exports[0], { n: 'ok', ln: 'ok' });
+    assert.strictEqual(exports.length, 3);
+    assertExportIs(source, exports[0], { n: 'a', ln: 'a' });
   });
 
   test('Minified import syntax', () => {

@@ -6,3 +6,4 @@ yarn.lock
 lib/lexer.emcc.js
 src/lexer.js
 types/lexer.d.ts
+src/*.mem
