@@ -40,9 +40,14 @@ suite('Lexer', () => {
   beforeEach(async () => await init);
 
   test(`Simple export destructuring`, () => {
-    const source = `export const{URI,Utils,...Another}=LIB`;
+    const source = `
+      export const{URI,Utils,...Another}=LIB
+      export var p, { z } = {};
+
+      export var { aa, qq: { z } } = { qq: {} }, pp = {};
+    `;
     const [, exports] = parse(source);
-    assert.deepStrictEqual(exports.map(e => e.n), ['URI', 'Utils']);
+    assert.deepStrictEqual(exports.map(e => e.n), ['URI', 'Utils', 'p', 'aa', 'qq']);
   });
 
   test(`Export default cases`, () => {

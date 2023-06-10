@@ -544,6 +544,11 @@ void tryParseExportStatement () {
           pos++;
           ch = commentWhitespace(true);
           startPos = pos;
+          // internal destructurings unsupported
+          if (ch == '{' || ch == '[') {
+            pos -= 1;
+            break;
+          }
           ch = readToWsOrPunctuator(ch);
         } while (true);
         // if stuck inside destructuring syntax, backtrack
