@@ -42,7 +42,6 @@ suite('Lexer', () => {
   test(`Dynamic import expression range`, () => {
     const source = `import(("asdf"))  aaaa`;
     const [[impt]] = parse(source);
-    console.log(impt);
     assert.strictEqual(source.slice(impt.ss, impt.se), 'import(("asdf"))');
     assert.strictEqual(source.slice(impt.s, impt.e), '("asdf")');
   });
