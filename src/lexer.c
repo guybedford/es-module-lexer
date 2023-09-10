@@ -129,7 +129,7 @@ bool parse () {
         if (openTokenDepth == 0)
           return syntaxError(), false;
         openTokenDepth--;
-        if (dynamicImportStackDepth > 0 && dynamicImportStack[dynamicImportStackDepth - 1]->dynamic == openTokenStack[openTokenDepth].pos) {
+        if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
           Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->end == 0)
             cur_dynamic_import->end = pos;

@@ -39,6 +39,13 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test(`Dynamic import expression range`, () => {
+    const source = `import(("asdf"))  aaaa`;
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(("asdf"))');
+    assert.strictEqual(source.slice(impt.s, impt.e), '("asdf")');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB
