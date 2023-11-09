@@ -139,6 +139,10 @@ export interface ExportSpecifier {
   readonly le: number;
 }
 
+export interface ParseError extends Error {
+  idx: number
+}
+
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 /**
