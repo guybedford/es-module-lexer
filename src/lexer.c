@@ -38,6 +38,7 @@ bool parse () {
   Import* dynamicImportStack_[512];
 
   facade = true;
+  hasModuleSyntax = false;
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
@@ -405,6 +406,7 @@ void tryParseExportStatement () {
       if (pos > end)
         return syntaxError();
     }
+    hasModuleSyntax = true; // to handle "export {}"
     pos++;
     ch = commentWhitespace(true);
   }

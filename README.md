@@ -165,6 +165,17 @@ const [,, facade] = parse(`
 facade === true;
 ```
 
+### ESM Detection
+
+Modules that uses ESM syntaxes can be detected via the fourth return value:
+
+```js
+const [,,, hasModuleSyntax] = parse(`
+  export {}
+`);
+hasModuleSyntax === true;
+```
+
 ### Environment Support
 
 Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
@@ -301,4 +312,3 @@ MIT
 
 [actions-image]: https://github.com/guybedford/es-module-lexer/actions/workflows/build.yml/badge.svg
 [actions-url]: https://github.com/guybedford/es-module-lexer/actions/workflows/build.yml
-
