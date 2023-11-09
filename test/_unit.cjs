@@ -46,6 +46,13 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(impt.s, impt.e), '("asdf")');
   });
 
+  test(`Dynamic import expression range 2`, () => {
+    const source = 'import(/* comment */ `asdf` /* comment */)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(/* comment */ `asdf` /* comment */)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB

@@ -132,7 +132,7 @@ bool parse () {
         if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
           Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->end == 0)
-            cur_dynamic_import->end = pos;
+            cur_dynamic_import->end = lastTokenPos + 1;
           cur_dynamic_import->statement_end = pos + 1;
           dynamicImportStackDepth--;
         }
