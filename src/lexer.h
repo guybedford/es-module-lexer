@@ -64,6 +64,7 @@ void* analysis_base;
 void* analysis_head;
 
 bool facade;
+bool hasModuleSyntax;
 bool lastSlashWasDivision;
 uint16_t openTokenDepth;
 char16_t* lastTokenPos;
@@ -114,7 +115,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
     import->statement_end = end;
   else if (dynamic == STANDARD_IMPORT)
     import->statement_end = end + 1;
-  else 
+  else
     import->statement_end = 0;
   import->start = start;
   import->end = end;
@@ -122,6 +123,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
   import->next = NULL;
+  hasModuleSyntax = true;
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
@@ -137,6 +139,7 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->local_start = local_start;
   export->local_end = local_end;
   export->next = NULL;
+  hasModuleSyntax = true;
 }
 
 // getErr
@@ -215,6 +218,9 @@ bool re () {
 }
 bool f () {
   return facade;
+}
+bool ms () {
+  return hasModuleSyntax;
 }
 
 bool parse ();
