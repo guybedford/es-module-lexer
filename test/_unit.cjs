@@ -1399,7 +1399,8 @@ function x() {
   })
   test('hasModuleSyntax import3', () => {
     const [,,, hasModuleSyntax] = parse('import("./foo")')
-    assert.strictEqual(hasModuleSyntax, true)
+    // dynamic imports can be used in non-ESM files as well
+    assert.strictEqual(hasModuleSyntax, false)
   })
   test('hasModuleSyntax import4', () => {
     const [,,, hasModuleSyntax] = parse('import.meta.url')

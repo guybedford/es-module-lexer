@@ -123,7 +123,8 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
   import->next = NULL;
-  hasModuleSyntax = true;
+  if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
+    hasModuleSyntax = true;
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
