@@ -46,6 +46,41 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(impt.s, impt.e), '("asdf")');
   });
 
+  test(`Dynamic import expression range 2`, () => {
+    const source = 'import(/* comment */ `asdf` /* comment */)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(/* comment */ `asdf` /* comment */)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
+  });
+
+  test(`Dynamic import expression range 3`, () => {
+    const source = 'import(`asdf` // comment\n)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(`asdf` // comment\n)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
+  });
+
+  test(`Dynamic import expression range 4`, () => {
+    const source = 'import("foo" + /* comment */ "bar")';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import("foo" + /* comment */ "bar")');
+    assert.strictEqual(source.slice(impt.s, impt.e), '"foo" + /* comment */ "bar"');
+  });
+
+  test(`Dynamic import expression range 5`, () => {
+    const source = 'import((() => { return "foo" })() /* comment */)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import((() => { return "foo" })() /* comment */)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '(() => { return "foo" })()');
+  });
+
+  test(`Dynamic import expression range 6`, () => {
+    const source = 'import(/* comment */ `asdf` /* comment */ /* comment 2 */)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(/* comment */ `asdf` /* comment */ /* comment 2 */)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB
