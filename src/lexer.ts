@@ -139,6 +139,10 @@ export interface ExportSpecifier {
   readonly le: number;
 }
 
+export interface ParseError extends Error {
+  idx: number
+}
+
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 /**
@@ -152,7 +156,8 @@ const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 export function parse (source: string, name = '@'): readonly [
   imports: ReadonlyArray<ImportSpecifier>,
   exports: ReadonlyArray<ExportSpecifier>,
-  facade: boolean
+  facade: boolean,
+  hasModuleSyntax: boolean
 ] {
   if (!wasm)
     // actually returns a promise if init hasn't resolved (not type safe).
@@ -198,7 +203,7 @@ export function parse (source: string, name = '@'): readonly [
     catch (e) {}
   }
 
-  return [imports, exports, !!wasm.f()];
+  return [imports, exports, !!wasm.f(), !!wasm.ms()];
 }
 
 function copyBE (src: string, outBuf16: Uint16Array) {
@@ -235,6 +240,8 @@ let wasm: {
   es(): number;
   /** facade */
   f(): boolean;
+  /** hasModuleSyntax */
+  ms(): boolean;
   /** getImportDynamic */
   id(): number;
   /** getImportEnd */

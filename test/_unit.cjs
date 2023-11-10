@@ -696,7 +696,7 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 10);
-  
+
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
       assert.strictEqual(imports[2].n, './mod2.js');
@@ -707,7 +707,7 @@ function x() {
       assert.strictEqual(imports[7].n, './mod7.js');
       assert.strictEqual(imports[8].n, './mod8.js');
     });
-  
+
     if (!js)
     test('non-identifier-string as (singleQuote)', () => {
       const source = `
@@ -723,7 +723,7 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 9);
-  
+
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
       assert.strictEqual(imports[2].n, './mod2.js');
@@ -734,7 +734,7 @@ function x() {
       assert.strictEqual(imports[7].n, './mod7.js');
       assert.strictEqual(imports[8].n, './mod8.js');
     });
-  
+
     if (!js)
     test('with-backslash-keywords as (doubleQuote)', () => {
       const source = String.raw`
@@ -745,13 +745,13 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 4);
-  
+
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
       assert.strictEqual(imports[2].n, './mod2.js');
       assert.strictEqual(imports[3].n, './mod3.js');
     });
-  
+
     if (!js)
     test('with-backslash-keywords as (singleQuote)', () => {
       const source = String.raw`
@@ -762,13 +762,13 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 4);
-  
+
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
       assert.strictEqual(imports[2].n, './mod2.js');
       assert.strictEqual(imports[3].n, './mod3.js');
     });
-  
+
     if (!js)
     test('with-emoji as', () => {
       const source = `
@@ -777,7 +777,7 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 2);
-  
+
       assert.strictEqual(imports[0].n, './mod0.js');
       assert.strictEqual(imports[1].n, './mod1.js');
     });
@@ -789,7 +789,7 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(exports.length, 0);
       assert.strictEqual(imports.length, 1);
-  
+
       assert.strictEqual(imports[0].n, 'mod0');
     });
 
@@ -839,7 +839,7 @@ function x() {
         export { " notidentifier " as foo8 } from './mod8.js';`;
       const [imports, exports] = parse(source);
       assert.strictEqual(imports.length, 9);
-  
+
       assert.strictEqual(exports.length, 9);
       assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
       assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
@@ -1360,6 +1360,35 @@ function x() {
     assertExportIs(source, exports[10], { n: 'default', ln: undefined });
     assertExportIs(source, exports[11], { n: 'default', ln: undefined });
   });
+
+  test('hasModuleSyntax import1', () => {
+    const [,,, hasModuleSyntax] = parse('import foo from "./foo"')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
+  test('hasModuleSyntax import2', () => {
+    const [,,, hasModuleSyntax] = parse('const foo = "import"')
+    assert.strictEqual(hasModuleSyntax, false)
+  })
+  test('hasModuleSyntax import3', () => {
+    const [,,, hasModuleSyntax] = parse('import("./foo")')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
+  test('hasModuleSyntax import4', () => {
+    const [,,, hasModuleSyntax] = parse('import.meta.url')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
+  test('hasModuleSyntax export1', () => {
+    const [,,, hasModuleSyntax] = parse('export const foo = "foo"')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
+  test('hasModuleSyntax export2', () => {
+    const [,,, hasModuleSyntax] = parse('export {}')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
+  test('hasModuleSyntax export3', () => {
+    const [,,, hasModuleSyntax] = parse('export * from "./foo"')
+    assert.strictEqual(hasModuleSyntax, true)
+  })
 });
 
 suite('Invalid syntax', () => {

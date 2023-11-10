@@ -96,7 +96,7 @@ deps = ['src/lexer.h', 'src/lexer.c']
 run = """
 	${{ WASI_PATH }}/bin/clang src/lexer.c --sysroot=${{ WASI_PATH }}/share/wasi-sysroot -o lib/lexer.wasm -nostartfiles \
 	"-Wl,-z,stack-size=13312,--no-entry,--compress-relocations,--strip-all,\
-	--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is,--export=ie,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es,--export=ee,--export=els,--export=ele,--export=f,--export=__heap_base" \
+	--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is,--export=ie,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es,--export=ee,--export=els,--export=ele,--export=f,--export=ms,--export=__heap_base" \
 	-Wno-logical-op-parentheses -Wno-parentheses \
 	-Oz
 """
@@ -110,7 +110,7 @@ run = """
 	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
 
 	${{ EMSDK_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
-	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_setSource']" \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_ms','_setSource']" \
 	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
 
 	# rm lib/lexer.emcc.js

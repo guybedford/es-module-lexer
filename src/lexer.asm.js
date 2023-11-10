@@ -61,12 +61,12 @@ export function parse (_source, _name = '@') {
     });
   }
 
-  return [imports, exports, !!asm.f()];
+  return [imports, exports, !!asm.f(), !!asm.ms()];
 }
 
 /*
  * Ported from Acorn
- *   
+ *
  * MIT License
 
  * Copyright (C) 2012-2020 by various contributors (see AUTHORS)
