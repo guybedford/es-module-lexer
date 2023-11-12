@@ -176,6 +176,15 @@ const [,,, hasModuleSyntax] = parse(`
 hasModuleSyntax === true;
 ```
 
+Dynamic imports are ignored since they can be used in Non-ESM files.
+
+```js
+const [,,, hasModuleSyntax] = parse(`
+  import('./foo.js')
+`);
+hasModuleSyntax === false;
+```
+
 ### Environment Support
 
 Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
