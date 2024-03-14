@@ -195,6 +195,11 @@ bool parse () {
             regularExpression();
             lastSlashWasDivision = false;
           }
+          else if (export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end) {
+            // export default /some-regexp/
+            regularExpression();
+            lastSlashWasDivision = false;
+          }
           else {
             // Final check - if the last token was "break x" or "continue x"
             while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
