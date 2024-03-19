@@ -252,6 +252,23 @@ suite('Lexer', () => {
     `);
   });
 
+  test('Regexp default export', () => {
+    const source = `
+      export default /[\`]/
+      export default 1/2
+      export default /* asdf */ 1/2
+      export default /* asdf */ /regex/
+      export default
+      // line comment
+      /regex/
+      export default
+      // line comment
+      1 / 2
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(expt => expt.n), ['default', 'default', 'default', 'default', 'default', 'default']);
+  });
+
   if (!js)
   test('Regexp keyword prefixes', () => {
     const [imports] = parse(`

@@ -186,6 +186,7 @@ export function parse (_source, _name) {
           // - if a closing brace or paren, what token came before the corresponding
           //   opening brace or paren (lastOpenTokenIndex)
           const lastToken = source.charCodeAt(lastTokenPos);
+          const lastExport = exports[exports.length - 1];
           if (isExpressionPunctuator(lastToken) &&
               !(lastToken === 46/*.*/ && (source.charCodeAt(lastTokenPos - 1) >= 48/*0*/ && source.charCodeAt(lastTokenPos - 1) <= 57/*9*/)) &&
               !(lastToken === 43/*+*/ && source.charCodeAt(lastTokenPos - 1) === 43/*+*/) && !(lastToken === 45/*-*/ && source.charCodeAt(lastTokenPos - 1) === 45/*-*/) ||
@@ -194,6 +195,11 @@ export function parse (_source, _name) {
               lastToken === 47/*/*/ && lastSlashWasDivision ||
               isExpressionKeyword(lastTokenPos) ||
               !lastToken) {
+            regularExpression();
+            lastSlashWasDivision = false;
+          }
+          else if (lastExport && lastTokenPos >= lastExport.s && lastTokenPos <= lastExport.e) {
+            // export default /some-regexp/
             regularExpression();
             lastSlashWasDivision = false;
           }
