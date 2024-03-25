@@ -39,6 +39,43 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test(`Source phase imports`, () => {
+    const source = `
+      import source
+        source from 'specifier'
+      
+      import source blah from './x.js' with { type: 'css' }
+
+      import.source('blah');
+    
+    `;
+    try {
+      const [impts] = parse(source);
+      assert.strictEqual(impts.length, 3);
+
+      assert.strictEqual(impts[0].t, 4);
+      assert.strictEqual(source.slice(impts[0].ss, impts[0].se), source.slice(7, 52));
+      assert.strictEqual(source.slice(impts[0].s, impts[0].e), 'specifier');
+      assert.strictEqual(impts[0].d, -1);
+      assert.strictEqual(impts[0].a, -1);
+
+      assert.strictEqual(impts[1].t, 4);
+      assert.strictEqual(source.slice(impts[1].ss, impts[1].se), `import source blah from './x.js' with { type: 'css' }`);
+      assert.strictEqual(source.slice(impts[1].s, impts[1].e), './x.js');
+      assert.strictEqual(impts[1].d, -1);
+      assert.strictEqual(source.slice(impts[1].a, impts[1].se), `{ type: 'css' }`);
+
+      assert.strictEqual(impts[2].t, 5);
+      assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import.source('blah')`);
+      assert.strictEqual(source.slice(impts[2].s, impts[2].e), "'blah'");
+      assert.strictEqual(source.slice(impts[2].d, impts[2].se), `('blah')`);
+      assert.strictEqual(impts[2].a, -1);
+    }
+    catch (e) {
+      throw e;
+    }
+  });
+
   test(`Dynamic import expression range`, () => {
     const source = `import(("asdf"))  aaaa`;
     const [[impt]] = parse(source);

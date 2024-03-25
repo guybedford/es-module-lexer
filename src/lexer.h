@@ -15,6 +15,14 @@ void setSource (void* ptr) {
   source = ptr;
 }
 
+enum ImportType {
+  Static = 1,
+  Dynamic = 2,
+  ImportMeta = 3,
+  StaticSourcePhase = 4,
+  DynamicSourcePhase = 5,
+};
+
 struct Import {
   const char16_t* start;
   const char16_t* end;
@@ -23,6 +31,7 @@ struct Import {
   const char16_t* assert_index;
   const char16_t* dynamic;
   bool safe;
+  enum ImportType import_ty;
   struct Import* next;
 };
 typedef struct Import Import;
@@ -111,12 +120,18 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import_write_head_last = import_write_head;
   import_write_head = import;
   import->statement_start = statement_start;
-  if (dynamic == IMPORT_META)
+  if (dynamic == IMPORT_META) {
     import->statement_end = end;
-  else if (dynamic == STANDARD_IMPORT)
+    import->import_ty = ImportMeta;
+  }
+  else if (dynamic == STANDARD_IMPORT) {
     import->statement_end = end + 1;
-  else
+    import->import_ty = Dynamic;
+  }
+  else {
     import->statement_end = 0;
+    import->import_ty = Static;
+  }
   import->start = start;
   import->end = end;
   import->assert_index = 0;
@@ -163,6 +178,10 @@ uint32_t ss () {
 // getImportStatementEnd
 uint32_t se () {
   return import_read_head->statement_end == 0 ? -1 : import_read_head->statement_end - source;
+}
+// getImportType
+uint32_t it () {
+  return import_read_head->import_ty;
 }
 // getAssertIndex
 uint32_t ai () {
@@ -229,7 +248,7 @@ bool parse ();
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
-void readImportString (const char16_t* ss, char16_t ch);
+void readImportString (const char16_t* ss, char16_t ch, bool source_phase);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t commentWhitespace (bool br);

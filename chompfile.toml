@@ -52,7 +52,7 @@ dep = 'src/lexer.ts'
 # even when we set "source-maps = false", so for now we have ejected the
 # template to its raw "run" command, and added an "rm" step.
 run = '''
-node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAttributes=true
+node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAssertions=true
 '''
 
 [[task]]
@@ -96,7 +96,7 @@ deps = ['src/lexer.h', 'src/lexer.c']
 run = """
 	${{ WASI_PATH }}/bin/clang src/lexer.c --sysroot=${{ WASI_PATH }}/share/wasi-sysroot -o lib/lexer.wasm -nostartfiles \
 	"-Wl,-z,stack-size=13312,--no-entry,--compress-relocations,--strip-all,\
-	--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is,--export=ie,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es,--export=ee,--export=els,--export=ele,--export=f,--export=ms,--export=__heap_base" \
+	--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is,--export=ie,--export=it,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es,--export=ee,--export=els,--export=ele,--export=f,--export=ms,--export=__heap_base" \
 	-Wno-logical-op-parentheses -Wno-parentheses \
 	-Oz
 """

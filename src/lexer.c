@@ -28,6 +28,7 @@ static const char16_t BREA[] = { 'b', 'r', 'e', 'a' };
 static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
 static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
 static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
+static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
@@ -239,124 +240,136 @@ void tryParseImportStatement () {
 
   char16_t ch = commentWhitespace(true);
 
-  switch (ch) {
-    // dynamic import
-    case '(':
-      openTokenStack[openTokenDepth].token = ImportParen;
-      openTokenStack[openTokenDepth++].pos = pos;
-      if (*lastTokenPos == '.')
-        return;
-      // dynamic import indicated by positive d
-      char16_t* dynamicPos = pos;
-      // try parse a string, to record a safe dynamic import string
-      pos++;
-      ch = commentWhitespace(true);
-      addImport(startPos, pos, 0, dynamicPos);
-      dynamicImportStack[dynamicImportStackDepth++] = import_write_head;
-      if (ch == '\'') {
-        stringLiteral(ch);
-      }
-      else if (ch == '"') {
-        stringLiteral(ch);
-      }
-      else {
-        pos--;
-        return;
-      }
-      pos++;
-      char16_t* endPos = pos;
-      ch = commentWhitespace(true);
-      if (ch == ',') {
-        pos++;
-        ch = commentWhitespace(true);
-        import_write_head->end = endPos;
-        import_write_head->assert_index = pos;
-        import_write_head->safe = true;
-        pos--;
-      }
-      else if (ch == ')') {
-        openTokenDepth--;
-        import_write_head->end = endPos;
-        import_write_head->statement_end = pos + 1;
-        import_write_head->safe = true;
-        dynamicImportStackDepth--;
-      }
-      else {
-        pos--;
-      }
-      return;
+  bool source_keyword = false;
+
+  if (ch == '.') {
     // import.meta
-    case '.':
+    pos++;
+    ch = commentWhitespace(true);
+    // import.meta indicated by d == -2
+    if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+      addImport(startPos, startPos, pos + 4, IMPORT_META);
+      return;
+    }
+    else if (ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+      source_keyword = true;
+      pos += 6;
+      ch = commentWhitespace(true);
+    }
+    else {
+      return;
+    }
+  }
+  else if (pos > startPos + 6 && ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
+    source_keyword = true;
+    pos += 6;
+    ch = commentWhitespace(true);
+  }
+
+  // dynamic import
+  if (ch == '(') {
+    openTokenStack[openTokenDepth].token = ImportParen;
+    openTokenStack[openTokenDepth++].pos = pos;
+    if (*lastTokenPos == '.')
+      return;
+    // dynamic import indicated by positive d
+    char16_t* dynamicPos = pos;
+    // try parse a string, to record a safe dynamic import string
+    pos++;
+    ch = commentWhitespace(true);
+    addImport(startPos, pos, 0, dynamicPos);
+    if (source_keyword)
+      import_write_head->import_ty = DynamicSourcePhase;
+    dynamicImportStack[dynamicImportStackDepth++] = import_write_head;
+    if (ch == '\'') {
+      stringLiteral(ch);
+    }
+    else if (ch == '"') {
+      stringLiteral(ch);
+    }
+    else {
+      pos--;
+      return;
+    }
+    pos++;
+    char16_t* endPos = pos;
+    ch = commentWhitespace(true);
+    if (ch == ',') {
       pos++;
       ch = commentWhitespace(true);
-      // import.meta indicated by d == -2
-      if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.'))
-        addImport(startPos, startPos, pos + 4, IMPORT_META);
+      import_write_head->end = endPos;
+      import_write_head->assert_index = pos;
+      import_write_head->safe = true;
+      pos--;
+    }
+    else if (ch == ')') {
+      openTokenDepth--;
+      import_write_head->end = endPos;
+      import_write_head->statement_end = pos + 1;
+      import_write_head->safe = true;
+      dynamicImportStackDepth--;
+    }
+    else {
+      pos--;
+    }
+    return;
+  }
+
+  if (ch == '{' && !source_keyword) {
+    // import statement only permitted at base-level
+    if (openTokenDepth != 0) {
+      pos--;
       return;
+    }
 
-    default:
-      // no space after "import" -> not an import keyword
-      if (pos == startPos + 6) {
-        pos--;
+    while (pos < end) {
+      ch = commentWhitespace(true);
+      if (isQuote(ch)) {
+        stringLiteral(ch);
+      } else if (ch == '}') {
+        pos++;
         break;
       }
-    case '"':
-    case '\'':
-    case '*': {
-      // import statement only permitted at base-level
-      if (openTokenDepth != 0) {
-        pos--;
-        return;
-      }
-      while (pos < end) {
-        ch = *pos;
-        if (isQuote(ch)) {
-          readImportString(startPos, ch);
-          return;
-        }
-        pos++;
-      }
+      pos++;
+    }
+
+    ch = commentWhitespace(true);
+    if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
       syntaxError();
-      break;
+      return;
     }
 
-    case '{': {
-      // import statement only permitted at base-level
-      if (openTokenDepth != 0) {
+    pos += 4;
+    ch = commentWhitespace(true);
+
+    if (!isQuote(ch)) {
+      return syntaxError();
+    }
+
+    readImportString(startPos, ch, false);
+  }
+  else {
+    if (source_keyword || !(ch == '"' || ch == '\'' || ch == '*')) {
+      // no space after "import" -> not an import keyword
+      if (pos == startPos + (source_keyword ? 12 : 6)) {
         pos--;
         return;
       }
-
-      while (pos < end) {
-        ch = commentWhitespace(true);
-
-        if (isQuote(ch)) {
-          stringLiteral(ch);
-        } else if (ch == '}') {
-          pos++;
-          break;
-        }
-
-        pos++;
-      }
-
-      ch = commentWhitespace(true);
-      if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
-        syntaxError();
-        break;
-      }
-
-      pos += 4;
-      ch = commentWhitespace(true);
-
-      if (!isQuote(ch)) {
-        return syntaxError();
-      }
-
-      readImportString(startPos, ch);
-
-      break;
     }
+    // import statement only permitted at base-level
+    if (openTokenDepth != 0 ) {
+      pos--;
+      return;
+    }
+    while (pos < end) {
+      ch = *pos;
+      if (isQuote(ch)) {
+        readImportString(startPos, ch, source_keyword);
+        return;
+      }
+      pos++;
+    }
+    syntaxError();
   }
 }
 
@@ -572,7 +585,7 @@ void tryParseExportStatement () {
   // from ...
   if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
     pos += 4;
-    readImportString(sStartPos, commentWhitespace(true));
+    readImportString(sStartPos, commentWhitespace(true), false);
 
     // There were no local names.
     for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
@@ -619,7 +632,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   return ch;
 }
 
-void readImportString (const char16_t* ss, char16_t ch) {
+void readImportString (const char16_t* ss, char16_t ch, bool source_phase) {
   const char16_t* startPos = pos + 1;
   if (ch == '\'') {
     stringLiteral(ch);
@@ -632,6 +645,9 @@ void readImportString (const char16_t* ss, char16_t ch) {
     return;
   }
   addImport(ss, startPos, pos, STANDARD_IMPORT);
+  if (source_phase) {
+    import_write_head->import_ty = StaticSourcePhase;
+  }
   pos++;
   ch = commentWhitespace(false);
   if (!(ch == 'a' && memcmp(pos + 1, &SSERT[0], 5 * 2) == 0) && !(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {

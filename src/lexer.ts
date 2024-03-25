@@ -1,3 +1,29 @@
+export enum ImportType {
+  /**
+   * A normal static using any syntax variations
+   *   import .. from 'module'
+   */
+  Static = 1,
+  /**
+   * A dynamic import expression `import(specifier)`
+   * or `import(specifier, opts)`
+   */
+  Dynamic = 2,
+  /**
+   * An import.meta expression
+   */
+  ImportMeta = 3,
+  /**
+   * A source phase import
+   *   import source x from 'module'
+   */
+  StaticSourcePhase = 4,
+  /**
+   * A dynamic source phase import
+   *   import.source('module')
+   */
+  DynamicSourcePhase = 5,
+}
 
 export interface ImportSpecifier {
   /**
@@ -21,6 +47,10 @@ export interface ImportSpecifier {
    * // Returns undefined
    */
   readonly n: string | undefined;
+  /**
+   * Type of import statement
+   */
+  readonly t: ImportType;
   /**
    * Start of module specifier
    *
@@ -179,11 +209,11 @@ export function parse (source: string, name = '@'): readonly [
 
   const imports: ImportSpecifier[] = [], exports: ExportSpecifier[] = [];
   while (wasm.ri()) {
-    const s = wasm.is(), e = wasm.ie(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
+    const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
-    imports.push({ n, s, e, ss, se, d, a });
+    imports.push({ n, t, s, e, ss, se, d, a });
   }
   while (wasm.re()) {
     const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
@@ -226,6 +256,8 @@ let wasm: {
   __heap_base: {value: number} | number & {value: undefined};
   memory: WebAssembly.Memory;
   parse(): boolean;
+  /** importType */
+  it(): number;
   /** getAssertIndex */
   ai(): number;
   /** getErr */
