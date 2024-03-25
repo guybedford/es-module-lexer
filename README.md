@@ -6,6 +6,8 @@ A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
+Supports new syntax features including import attributes and source phase imports.
+
 A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
@@ -19,6 +21,8 @@ _Comprehensively handles the JS language grammar while remaining small and fast.
 ```
 npm install es-module-lexer
 ```
+
+See [types/lexer.d.ts](types/lexer.d.ts) for the type definitions.
 
 For use in CommonJS:
 
@@ -60,6 +64,10 @@ import { init, parse } from 'es-module-lexer';
     // Comments provided to demonstrate edge cases
     import /*comment!*/ (  'asdf', { assert: { type: 'json' }});
     import /*comment!*/.meta.asdf;
+
+    // Source phase imports:
+    import source mod from './mod.wasm';
+    import.source('./mod.wasm);
   `;
 
   const [imports, exports] = parse(source, 'optional-sourcename');
@@ -98,10 +106,10 @@ import { init, parse } from 'es-module-lexer';
   // Returns -1
   exports[2].le;
 
-  // Dynamic imports are indicated by imports[2].d > -1
-  // In this case the "d" index is the start of the dynamic import bracket
+  // Import type is provided by `t` value
+  // (1 for static, 2, for dynamic)
   // Returns true
-  imports[2].d > -1;
+  imports[2].t == 2;
 
   // Returns "asdf" (only for string literal dynamic imports)
   imports[2].n
@@ -128,6 +136,13 @@ import { init, parse } from 'es-module-lexer';
   // Returns "import /*comment!*/.meta"
   source.slice(imports[4].s, imports[4].e);
   // ss and se are the same for import meta
+
+  // Returns "'./mod.wasm'"
+  source.slice(imports[5].s, imports[5].e);
+
+  // Import type 4 and 5 for static and dynamic source phase
+  imports[5].t === 4;
+  imports[6].t === 5;
 })();
 ```
 
