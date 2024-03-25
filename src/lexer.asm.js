@@ -13,7 +13,7 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
     outBuf16[i++] = (ch & 0xff) << 8 | ch >>> 8;
   }
 };
-const words = 'xportmportlassetaromsyncunctionssertvoyiedelecontininstantybreareturdebuggeawaithrwhileforifcatcfinallels';
+const words = 'xportmportlassetaourceromsyncunctionssertvoyiedelecontininstantybreareturdebuggeawaithrwhileforifcatcfinallels';
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -44,11 +44,11 @@ export function parse (_source, _name = '@') {
 
   const imports = [], exports = [];
   while (asm.ri()) {
-    const s = asm.is(), e = asm.ie(), a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
+    const s = asm.is(), e = asm.ie(), a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se(), t = asm.it();
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
-    imports.push({ n, s, e, ss, se, d, a });
+    imports.push({ t, n, s, e, ss, se, d, a });
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
