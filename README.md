@@ -329,6 +329,7 @@ chomp test
 ```
 
 For the `asm.js` build, git clone `emsdk` from  is assumed to be a sibling folder as well.
+Fastcomp only works on AMD64 architectures.
 
 ### License
 
