@@ -39,6 +39,33 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('import types', () => {
+    const input = `
+      // dynamic
+      const { a } = await import('a');
+      const { b } = await import.source('b');
+      // static
+      import b from 'b';
+      import { c } from 'c';
+      import source z from 'z';
+      // meta
+      import.meta.url
+    `;
+
+    const [imports] = parse(input);
+    assert.strictEqual(imports[0].t, 2);
+    assert.strictEqual(imports[1].t, 5);
+    assert.strictEqual(imports[2].t, 1);
+    assert.strictEqual(imports[3].t, 1);
+    assert.strictEqual(imports[4].t, 4);
+    assert.strictEqual(imports[5].t, 3);
+  });
+
+  test('Another regex case', () => {
+    parse(`import{readFileSync as e}from"fs";import{join as t}from"path";import o from"#db";import r from"#core/error_logger";let l={};let i={};function setFile(e){l=e}function autoSetFile(){try{let r=JSON.parse(e(t(o.theme.dirs.extra,"i18n.default.json")).toString());i=r}catch(e){r.couldNotLoadI18nDefault()}{let i=t(o.theme.dirs.extra,"i18n."+o.language+".json");try{let t=JSON.parse(e(i).toString());l=t}catch(e){r.couldNotLoadI18nFile()}}}function i18n(e){let t;if(/[0-9]/.test(e)){let o=[];for(let t of/[0-9]+/g.exec(e)){e=e.replace(t,"{NUMBER}");o.push(t)}t=l[e]??i[e]??e;for(let e of o)t=t.replace("{NUMBER}",e)}else t=l[e]??i[e]??e;return t}var a={i18n:i18n,setFile:setFile,autoSetFile:autoSetFile};export{a as default};
+//# sourceMappingURL=i18n.js.map`);
+  });
+
   test(`Regex case`, () => {
     const source = `for(let t of/[0-9]+/g.exec(e)){}`
     parse(source);

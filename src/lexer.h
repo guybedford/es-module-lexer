@@ -126,11 +126,11 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   }
   else if (dynamic == STANDARD_IMPORT) {
     import->statement_end = end + 1;
-    import->import_ty = Dynamic;
+    import->import_ty = Static;
   }
   else {
     import->statement_end = 0;
-    import->import_ty = Static;
+    import->import_ty = Dynamic;
   }
   import->start = start;
   import->end = end;
