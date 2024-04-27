@@ -39,6 +39,28 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('import types', () => {
+    const input = `
+      // dynamic
+      const { a } = await import('a');
+      const { b } = await import.source('b');
+      // static
+      import b from 'b';
+      import { c } from 'c';
+      import source z from 'z';
+      // meta
+      import.meta.url
+    `;
+
+    const [imports] = parse(input);
+    assert.strictEqual(imports[0].t, 2);
+    assert.strictEqual(imports[1].t, 5);
+    assert.strictEqual(imports[2].t, 1);
+    assert.strictEqual(imports[3].t, 1);
+    assert.strictEqual(imports[4].t, 4);
+    assert.strictEqual(imports[5].t, 3);
+  });
+
   test(`Regex case`, () => {
     const source = `for(let t of/[0-9]+/g.exec(e)){}`
     parse(source);
