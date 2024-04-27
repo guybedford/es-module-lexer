@@ -39,6 +39,11 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test(`Regex case`, () => {
+    const source = `for(let t of/[0-9]+/g.exec(e)){}`
+    parse(source);
+  });
+
   test(`Source phase imports`, () => {
     const source = `
       import source
