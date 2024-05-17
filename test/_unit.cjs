@@ -39,6 +39,15 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test(`Regex case`, () => {
+    const source = `for(let t of/[0-9]+/g.exec(e)){}`
+    parse(source);
+  });
+
+  test('keyword case', () => {
+    parse('const of=1;console.log(1+of/1)');
+  });
+
   test('import types', () => {
     const input = `
       // dynamic
@@ -59,11 +68,6 @@ suite('Lexer', () => {
     assert.strictEqual(imports[3].t, 1);
     assert.strictEqual(imports[4].t, 4);
     assert.strictEqual(imports[5].t, 3);
-  });
-
-  test(`Regex case`, () => {
-    const source = `for(let t of/[0-9]+/g.exec(e)){}`
-    parse(source);
   });
 
   test(`Source phase imports`, () => {
