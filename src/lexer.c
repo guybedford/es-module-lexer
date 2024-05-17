@@ -189,6 +189,7 @@ bool parse () {
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
               lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isParenKeyword(openTokenStack[openTokenDepth - 1].pos) ||
               lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||
@@ -871,7 +872,7 @@ bool readPrecedingKeywordn (char16_t* pos, const char16_t* compare, size_t n) {
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,
-//   return, throw, typeof, void, yield ,await, of
+//   return, throw, typeof, void, yield ,await
 bool isExpressionKeyword (char16_t* pos) {
   switch (*pos) {
     case 'd':
@@ -908,12 +909,7 @@ bool isExpressionKeyword (char16_t* pos) {
           return false;
       }
     case 'f':
-      if (*(pos - 1) != 'o')
-        return false;
-      // of
-      if (pos -2 == source || isBrOrWsOrPunctuatorNotDot(*(pos - 2)))
-        return true;
-      if (*(pos - 2) != 'e')
+      if (*(pos - 1) != 'o' || *(pos - 2) != 'e')
         return false;
       switch (*(pos - 3)) {
         case 'c':
