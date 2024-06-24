@@ -189,7 +189,7 @@ bool parse () {
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
               lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isParenKeyword(openTokenStack[openTokenDepth - 1].pos) ||
+              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
               lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||

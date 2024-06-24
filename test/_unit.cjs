@@ -38,6 +38,10 @@ function assertExportIs(source, actual, expected) {
 
 suite('Lexer', () => {
   beforeEach(async () => await init);
+ 
+  test('keyword case again', () => {
+    parse('if (of / 2) {}');
+  });
 
   test(`Regex case`, () => {
     const source = `for(let t of/[0-9]+/g.exec(e)){}`
