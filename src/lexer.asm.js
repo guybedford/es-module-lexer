@@ -13,7 +13,8 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
     outBuf16[i++] = (ch & 0xff) << 8 | ch >>> 8;
   }
 };
-const words = 'xportmportlassetaourceromsyncunctionssertvoyiedelecontininstantybreareturdebuggeawaithrwhileforifcatcfinallels';
+
+const words = 'xportmportlassforetaourceromsyncunctionssertvoyiedelecontininstantybreareturdebuggeawaithrwhileifcatcfinallels';
 
 let source, name;
 export function parse (_source, _name = '@') {
