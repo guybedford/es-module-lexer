@@ -12,7 +12,11 @@
       "import": "./dist/lexer.js",
       "require": "./dist/lexer.cjs"
     },
-    "./js": "./dist/lexer.asm.js"
+    "./js": {
+      "types": "./types/lexer.d.ts",
+      "module": "./dist/lexer.asm.js",
+      "import": "./dist/lexer.asm.js"
+    }
   },
   "scripts": {
     "build": "npm install -g chomp ; chomp build",
