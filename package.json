@@ -14,8 +14,7 @@
     },
     "./js": {
       "types": "./types/lexer.d.ts",
-      "module": "./dist/lexer.asm.js",
-      "import": "./dist/lexer.asm.js"
+      "default": "./dist/lexer.asm.js"
     }
   },
   "scripts": {
