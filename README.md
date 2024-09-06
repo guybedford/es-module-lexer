@@ -67,7 +67,7 @@ import { init, parse } from 'es-module-lexer';
 
     // Source phase imports:
     import source mod from './mod.wasm';
-    import.source('./mod.wasm);
+    import.source('./mod.wasm');
   `;
 
   const [imports, exports] = parse(source, 'optional-sourcename');
