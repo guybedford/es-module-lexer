@@ -488,7 +488,7 @@ function readString (start, quote) {
 // Used to read escaped characters
 
 function readEscapedChar () {
-  let ch = source.charCodeAt(++acornPos);
+  let ch = source.charCodeAt(acornPos);
   ++acornPos;
   switch (ch) {
     case 110: return '\n'; // 'n' -> '\n'
@@ -497,6 +497,7 @@ function readEscapedChar () {
     case 117: return readCodePointToString(); // 'u'
     case 116: return '\t'; // 't' -> '\t'
     case 98: return '\b'; // 'b' -> '\b'
+    case 92: return '\\';  // '\' -> '\\'
     case 118: return '\u000b'; // 'v' -> '\u000b'
     case 102: return '\f'; // 'f' -> '\f'
     case 13: if (source.charCodeAt(acornPos) === 10) ++acornPos; // '\r\n'
