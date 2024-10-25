@@ -22,7 +22,7 @@ _Comprehensively handles the JS language grammar while remaining small and fast.
 npm install es-module-lexer
 ```
 
-See [types/lexer.d.ts](types/lexer.d.ts) for the type definitions.
+See [src/lexer.ts](src/lexer.ts) for the type definitions.
 
 For use in CommonJS:
 
