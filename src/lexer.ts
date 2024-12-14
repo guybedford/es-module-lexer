@@ -294,13 +294,24 @@ let wasm: {
   ss(): number;
 };
 
+const getWasmBytes = () => (
+  binary => typeof Buffer !== 'undefined'
+    ? Buffer.from(binary, 'base64')
+    : Uint8Array.from(atob(binary), x => x.charCodeAt(0))
+)('WASM_BINARY');
 
 /**
  * Wait for init to resolve before calling `parse`.
  */
-export const init = WebAssembly.compile(
-  (binary => typeof Buffer !== 'undefined' ? Buffer.from(binary, 'base64') : Uint8Array.from(atob(binary), x => x.charCodeAt(0)))
-  ('WASM_BINARY')
-)
+export const init = WebAssembly.compile(getWasmBytes())
 .then(WebAssembly.instantiate)
 .then(({ exports }) => { wasm = exports as typeof wasm; });
+
+export const initSync = () => {
+  if (wasm) {
+    return;
+  }
+  const compiled = new WebAssembly.Module(getWasmBytes());
+  wasm = new WebAssembly.Instance(compiled).exports as typeof wasm;
+  return;
+};
