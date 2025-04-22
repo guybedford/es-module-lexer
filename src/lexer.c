@@ -29,6 +29,7 @@ static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
 static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
 static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
+static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
@@ -241,7 +242,9 @@ void tryParseImportStatement () {
 
   char16_t ch = commentWhitespace(true);
 
-  bool source_keyword = false;
+  char16_t* maybePhasePos = pos;
+
+  int phase_keyword = 0;
 
   if (ch == '.') {
     // import.meta
@@ -253,8 +256,13 @@ void tryParseImportStatement () {
       return;
     }
     else if (ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
-      source_keyword = true;
+      phase_keyword = 1;
       pos += 6;
+      ch = commentWhitespace(true);
+    }
+    else if (ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+      phase_keyword = 2;
+      pos += 5;
       ch = commentWhitespace(true);
     }
     else {
@@ -262,9 +270,24 @@ void tryParseImportStatement () {
     }
   }
   else if (pos > startPos + 6 && ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
-    source_keyword = true;
+    phase_keyword = 1;
     pos += 6;
     ch = commentWhitespace(true);
+    // need a space after the source keyword, and must not be followed by from keyword
+    if (pos == maybePhasePos + 6 || ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 4))) {
+      pos = maybePhasePos;
+      phase_keyword = 0;
+    }
+  }
+  else if (pos > startPos + 5 && ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5))) {
+    phase_keyword = 2;
+    pos += 5;
+    ch = commentWhitespace(true);
+    // need a * after the defer keyword
+    if (ch != '*') {
+      pos = maybePhasePos;
+      phase_keyword = 0;
+    }
   }
 
   // dynamic import
@@ -279,8 +302,8 @@ void tryParseImportStatement () {
     pos++;
     ch = commentWhitespace(true);
     addImport(startPos, pos, 0, dynamicPos);
-    if (source_keyword)
-      import_write_head->import_ty = DynamicSourcePhase;
+    if (phase_keyword > 0)
+      import_write_head->import_ty = phase_keyword == 1 ? DynamicSourcePhase : DynamicDeferPhase;
     dynamicImportStack[dynamicImportStackDepth++] = import_write_head;
     if (ch == '\'') {
       stringLiteral(ch);
@@ -316,7 +339,7 @@ void tryParseImportStatement () {
     return;
   }
 
-  if (ch == '{' && !source_keyword) {
+  if (ch == '{' && phase_keyword == 0) {
     // import statement only permitted at base-level
     if (openTokenDepth != 0) {
       pos--;
@@ -350,22 +373,23 @@ void tryParseImportStatement () {
     readImportString(startPos, ch, false);
   }
   else {
-    if (source_keyword || !(ch == '"' || ch == '\'' || ch == '*')) {
+    if (!(ch == '"' || ch == '\'' || ch == '*')) {
       // no space after "import" -> not an import keyword
-      if (pos == startPos + (source_keyword ? 12 : 6)) {
+      if (pos == startPos + 6) {
         pos--;
         return;
       }
     }
+    // import defer * as foo mandates *;
     // import statement only permitted at base-level
-    if (openTokenDepth != 0 ) {
+    if (phase_keyword == 2 && ch != '*' || openTokenDepth != 0) {
       pos--;
       return;
     }
     while (pos < end) {
       ch = *pos;
       if (isQuote(ch)) {
-        readImportString(startPos, ch, source_keyword);
+        readImportString(startPos, ch, phase_keyword);
         return;
       }
       pos++;
@@ -633,7 +657,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   return ch;
 }
 
-void readImportString (const char16_t* ss, char16_t ch, bool source_phase) {
+void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   const char16_t* startPos = pos + 1;
   if (ch == '\'') {
     stringLiteral(ch);
@@ -646,8 +670,8 @@ void readImportString (const char16_t* ss, char16_t ch, bool source_phase) {
     return;
   }
   addImport(ss, startPos, pos, STANDARD_IMPORT);
-  if (source_phase) {
-    import_write_head->import_ty = StaticSourcePhase;
+  if (phase_keyword > 0) {
+    import_write_head->import_ty = phase_keyword == 1 ? StaticSourcePhase : StaticDeferPhase;
   }
   pos++;
   ch = commentWhitespace(false);
