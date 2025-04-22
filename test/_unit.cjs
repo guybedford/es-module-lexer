@@ -38,6 +38,49 @@ function assertExportIs(source, actual, expected) {
 
 suite('Lexer', () => {
   beforeEach(async () => await init);
+
+  test(`Defer phase imports`, () => {
+    const source = `
+      import defer
+        * as foo from 'specifier'
+      
+      import defer * as blah from './x.js' with { type: 'css' }
+
+      import defer from 'x'
+
+      import.defer('blah');
+    
+    `;
+    try {
+      const [impts] = parse(source);
+      assert.strictEqual(impts.length, 4);
+
+      assert.strictEqual(impts[0].t, 6);
+      assert.strictEqual(source.slice(impts[0].ss, impts[0].se), source.slice(7, 53));
+      assert.strictEqual(source.slice(impts[0].s, impts[0].e), 'specifier');
+      assert.strictEqual(impts[0].d, -1);
+      assert.strictEqual(impts[0].a, -1);
+
+      assert.strictEqual(impts[1].t, 6);
+      assert.strictEqual(source.slice(impts[1].ss, impts[1].se), `import defer * as blah from './x.js' with { type: 'css' }`);
+      assert.strictEqual(source.slice(impts[1].s, impts[1].e), './x.js');
+      assert.strictEqual(impts[1].d, -1);
+      assert.strictEqual(source.slice(impts[1].a, impts[1].se), `{ type: 'css' }`);
+
+      assert.strictEqual(impts[2].t, 1);
+      assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import defer from 'x'`);
+      assert.strictEqual(source.slice(impts[2].s, impts[2].e), "x");
+
+      assert.strictEqual(impts[3].t, 7);
+      assert.strictEqual(source.slice(impts[3].ss, impts[3].se), `import.defer('blah')`);
+      assert.strictEqual(source.slice(impts[3].s, impts[3].e), "'blah'");
+      assert.strictEqual(source.slice(impts[3].d, impts[3].se), `('blah')`);
+      assert.strictEqual(impts[3].a, -1);
+    }
+    catch (e) {
+      throw e;
+    }
+  });
  
   test('keyword case again', () => {
     parse('if (of / 2) {}');
@@ -81,12 +124,14 @@ suite('Lexer', () => {
       
       import source blah from './x.js' with { type: 'css' }
 
+      import source from 'x'
+
       import.source('blah');
     
     `;
     try {
       const [impts] = parse(source);
-      assert.strictEqual(impts.length, 3);
+      assert.strictEqual(impts.length, 4);
 
       assert.strictEqual(impts[0].t, 4);
       assert.strictEqual(source.slice(impts[0].ss, impts[0].se), source.slice(7, 52));
@@ -100,11 +145,15 @@ suite('Lexer', () => {
       assert.strictEqual(impts[1].d, -1);
       assert.strictEqual(source.slice(impts[1].a, impts[1].se), `{ type: 'css' }`);
 
-      assert.strictEqual(impts[2].t, 5);
-      assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import.source('blah')`);
-      assert.strictEqual(source.slice(impts[2].s, impts[2].e), "'blah'");
-      assert.strictEqual(source.slice(impts[2].d, impts[2].se), `('blah')`);
-      assert.strictEqual(impts[2].a, -1);
+      assert.strictEqual(impts[2].t, 1);
+      assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import source from 'x'`);
+      assert.strictEqual(source.slice(impts[2].s, impts[2].e), "x");
+
+      assert.strictEqual(impts[3].t, 5);
+      assert.strictEqual(source.slice(impts[3].ss, impts[3].se), `import.source('blah')`);
+      assert.strictEqual(source.slice(impts[3].s, impts[3].e), "'blah'");
+      assert.strictEqual(source.slice(impts[3].d, impts[3].se), `('blah')`);
+      assert.strictEqual(impts[3].a, -1);
     }
     catch (e) {
       throw e;

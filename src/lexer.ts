@@ -23,6 +23,16 @@ export enum ImportType {
    *   import.source('module')
    */
   DynamicSourcePhase = 5,
+  /**
+   * A defer phase import
+   *   import defer * as x from 'module'
+   */
+  StaticDeferPhase = 6,
+  /**
+   * A dynamic defer phase import
+   *   import.defer('module')
+   */
+  DynamicDeferPhase = 7,
 }
 
 export interface ImportSpecifier {
@@ -32,6 +42,7 @@ export interface ImportSpecifier {
    * To handle escape sequences in specifier strings, the .n field of imported specifiers will be provided where possible.
    *
    * For dynamic import expressions, this field will be empty if not a valid JS string.
+   * For static import expressions, this field will always be populated.
    *
    * @example
    * const [imports1, exports1] = parse(String.raw`import './\u0061\u0062.js'`);

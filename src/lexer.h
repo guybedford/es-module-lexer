@@ -21,6 +21,8 @@ enum ImportType {
   ImportMeta = 3,
   StaticSourcePhase = 4,
   DynamicSourcePhase = 5,
+  StaticDeferPhase = 6,
+  DynamicDeferPhase = 7,
 };
 
 struct Import {
@@ -248,7 +250,7 @@ bool parse ();
 void tryParseImportStatement ();
 void tryParseExportStatement ();
 
-void readImportString (const char16_t* ss, char16_t ch, bool source_phase);
+void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t commentWhitespace (bool br);
