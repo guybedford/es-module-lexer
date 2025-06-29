@@ -30,7 +30,7 @@ struct Import {
   const char16_t* end;
   const char16_t* statement_start;
   const char16_t* statement_end;
-  const char16_t* assert_index;
+  const char16_t* attr_index;
   const char16_t* dynamic;
   bool safe;
   enum ImportType import_ty;
@@ -136,7 +136,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   }
   import->start = start;
   import->end = end;
-  import->assert_index = 0;
+  import->attr_index = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
   import->next = NULL;
@@ -187,7 +187,7 @@ uint32_t it () {
 }
 // getAssertIndex
 uint32_t ai () {
-  return import_read_head->assert_index == 0 ? -1 : import_read_head->assert_index - source;
+  return import_read_head->attr_index == 0 ? -1 : import_read_head->attr_index - source;
 }
 // getImportDynamic
 uint32_t id () {

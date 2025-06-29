@@ -282,13 +282,13 @@ suite('Lexer', () => {
   });
 
   if (!js)
-  test('Import assertions', () => {
+  test('Import attributes', () => {
     const source = `
-      import json from "./foo.json" assert { type: "json" };
-      import("foo.json" , { assert: { type: "json" } });
+      import json from "./foo.json" with { type: "json" };
+      import("foo.json" , { with: { type: "json" } });
 
       import test from './asdf'
-      assert { not: 'an assertion!' }
+      with { not: 'an assertion!' }
       export var p = 5;
     `
     const [imports, exports] = parse(source);
@@ -296,7 +296,7 @@ suite('Lexer', () => {
     assert.strictEqual(imports[0].n, './foo.json');
     assert.strictEqual(source.substring(imports[0].s, imports[0].e), './foo.json');
     assert.strictEqual(source.substring(imports[0].a, imports[0].se), '{ type: "json" }');
-    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ assert: { type: "json" } })');
+    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ with: { type: "json" } })');
     assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
     assert.strictEqual(imports[1].n, 'foo.json');
     assert.strictEqual(imports[2].n, './asdf');
