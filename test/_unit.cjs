@@ -39,6 +39,15 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('Invalid division case in for operator', () => {
+    const source = `
+      for (i = of / 2;;) break
+      for (; of / 2;) break
+      for (;; of / 2) break
+    `;
+    const [impts] = parse(source);
+  });
+
   test(`Defer phase imports`, () => {
     const source = `
       import defer
