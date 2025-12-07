@@ -39,6 +39,54 @@ function assertExportIs(source, actual, expected) {
 suite('Lexer', () => {
   beforeEach(async () => await init);
 
+  test('Division of `of` identifier in for statement', () => {
+    // `of` as identifier on the LHS of a binary expression with `/`,
+    // inside a C-style for header. The lexer must not treat `/` as the
+    // start of a regex (which would happen if `of` were the for-of keyword).
+    const sources = [
+      'for (i = of / 2;;) break',
+      'for (; of / 2;) break',
+      'for (;; of / 2) break',
+      'for (i + of / 2;;) break',
+      'for (i - of / 2;;) break',
+      'for (i * of / 2;;) break',
+      'for (i, of / 2;;) break',
+      'for (i < of / 2;;) break',
+      'for (i | of / 2;;) break',
+      'for (i & of / 2;;) break',
+      'for (i ? of / 2 : 0;;) break',
+      'for ((of) / 2;;) break',
+    ];
+    for (const source of sources) {
+      parse(source);
+    }
+  });
+
+  test('for-of with regex iterable retains regex parsing', () => {
+    // Disambiguation must still let `/regex/` parse as a regex when `of` is
+    // the contextual for-of keyword. Includes the no-whitespace and
+    // multi-whitespace variants.
+    const sources = [
+      'for (i of /regex/) break',
+      'for (let x of /regex/) break',
+      'for (const x of /regex/) break',
+      'for (var x of /regex/) break',
+      'for ([a] of /regex/) break',
+      'for ({a} of /regex/) break',
+      'for ((x) of /regex/) break',
+      'for(let t of/[0-9]+/g.exec(e)){}',
+      'for ([x]of /regex/) break',
+      'for ({x}of /regex/) break',
+      'for ((x)of /regex/) break',
+      'for (i  of /regex/) break',
+      'for (i\tof /regex/) break',
+      'for (i\nof /regex/) break',
+    ];
+    for (const source of sources) {
+      parse(source);
+    }
+  });
+
   test(`Defer phase imports`, () => {
     const source = `
       import defer
