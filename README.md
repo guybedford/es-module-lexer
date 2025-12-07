@@ -54,7 +54,7 @@ import { init, parse } from 'es-module-lexer';
 
   const source = `
     import { name } from 'mod\\u1011';
-    import json from './json.json' assert { type: 'json' }
+    import json from './json.json' with { type: 'json' }
     export var p = 5;
     export function q () {
 
@@ -62,7 +62,7 @@ import { init, parse } from 'es-module-lexer';
     export { x as 'external name' } from 'external';
 
     // Comments provided to demonstrate edge cases
-    import /*comment!*/ (  'asdf', { assert: { type: 'json' }});
+    import /*comment!*/ (  'asdf', { with: { type: 'json' }});
     import /*comment!*/.meta.asdf;
 
     // Source phase imports:
@@ -86,7 +86,7 @@ import { init, parse } from 'es-module-lexer';
 
   // Returns "{ type: 'json' }"
   source.slice(imports[1].a, imports[1].se);
-  // "a" = assert, -1 for no assertion
+  // "a" = with, -1 for no import attributes
 
   // Returns "external"
   source.slice(imports[2].s, imports[2].e);
@@ -113,18 +113,18 @@ import { init, parse } from 'es-module-lexer';
 
   // Returns "asdf" (only for string literal dynamic imports)
   imports[2].n
-  // Returns "import /*comment!*/ (  'asdf', { assert: { type: 'json' } })"
+  // Returns "import /*comment!*/ (  'asdf', { with: { type: 'json' } })"
   source.slice(imports[3].ss, imports[3].se);
   // Returns "'asdf'"
   source.slice(imports[3].s, imports[3].e);
-  // Returns "(  'asdf', { assert: { type: 'json' } })"
+  // Returns "(  'asdf', { with: { type: 'json' } })"
   source.slice(imports[3].d, imports[3].se);
-  // Returns "{ assert: { type: 'json' } }"
+  // Returns "{ with: { type: 'json' } }"
   source.slice(imports[3].a, imports[3].se - 1);
 
   // For non-string dynamic import expressions:
   // - n will be undefined
-  // - a is currently -1 even if there is an assertion
+  // - a is currently -1 even if there is an import attribute
   // - e is currently the character before the closing )
 
   // For nested dynamic imports, the se value of the outer import is -1 as end tracking does not

@@ -8,7 +8,6 @@ static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
 static const char16_t ROM[] = { 'r', 'o', 'm' };
 static const char16_t ETA[] = { 'e', 't', 'a' };
-static const char16_t SSERT[] = { 's', 's', 'e', 'r', 't' };
 static const char16_t VO[] = { 'v', 'o' };
 static const char16_t YIE[] = { 'y', 'i', 'e' };
 static const char16_t DELE[] = { 'd', 'e', 'l', 'e' };
@@ -322,7 +321,7 @@ void tryParseImportStatement () {
       pos++;
       ch = commentWhitespace(true);
       import_write_head->end = endPos;
-      import_write_head->assert_index = pos;
+      import_write_head->attr_index = pos;
       import_write_head->safe = true;
       pos--;
     }
@@ -675,18 +674,18 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   }
   pos++;
   ch = commentWhitespace(false);
-  if (!(ch == 'a' && memcmp(pos + 1, &SSERT[0], 5 * 2) == 0) && !(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
+  if (!(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
     pos--;
     return;
   }
-  char16_t* assertIndex = pos;
-  pos += ch == 'a' ? 6 : 4;
+  char16_t* attrIndex = pos;
+  pos += 4;
   ch = commentWhitespace(true);
   if (ch != '{') {
-    pos = assertIndex;
+    pos = attrIndex;
     return;
   }
-  const char16_t* assertStart = pos;
+  const char16_t* attrStart = pos;
   do {
     pos++;
     ch = commentWhitespace(true);
@@ -704,7 +703,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       ch = readToWsOrPunctuator(ch);
     }
     if (ch != ':') {
-      pos = assertIndex;
+      pos = attrIndex;
       return;
     }
     pos++;
@@ -716,7 +715,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       stringLiteral(ch);
     }
     else {
-      pos = assertIndex;
+      pos = attrIndex;
       return;
     }
     pos++;
@@ -730,10 +729,10 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     }
     if (ch == '}')
       break;
-    pos = assertIndex;
+    pos = attrIndex;
     return;
   } while (true);
-  import_write_head->assert_index = assertStart;
+  import_write_head->attr_index = attrStart;
   import_write_head->statement_end = pos + 1;
 }
 

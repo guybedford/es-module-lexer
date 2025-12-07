@@ -100,7 +100,7 @@ export interface ImportSpecifier {
   readonly d: number;
 
   /**
-   * If this import has an import assertion, this is the start value.
+   * If this import has an import attribute, this is the start value.
    * Otherwise this is `-1`.
    */
   readonly a: number;
@@ -269,7 +269,7 @@ let wasm: {
   parse(): boolean;
   /** importType */
   it(): number;
-  /** getAssertIndex */
+  /** getAttributeIndex */
   ai(): number;
   /** getErr */
   e(): number;
