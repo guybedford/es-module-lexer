@@ -25,6 +25,15 @@ enum ImportType {
   DynamicDeferPhase = 7,
 };
 
+struct Attribute {
+  const char16_t* key_start;
+  const char16_t* key_end;
+  const char16_t* value_start;
+  const char16_t* value_end;
+  struct Attribute* next;
+};
+typedef struct Attribute Attribute;
+
 struct Import {
   const char16_t* start;
   const char16_t* end;
@@ -34,6 +43,7 @@ struct Import {
   const char16_t* dynamic;
   bool safe;
   enum ImportType import_ty;
+  struct Attribute* attributes;
   struct Import* next;
 };
 typedef struct Import Import;
@@ -139,6 +149,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->attr_index = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
+  import->attributes = NULL;
   import->next = NULL;
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
     hasModuleSyntax = true;
@@ -243,6 +254,39 @@ bool f () {
 }
 bool ms () {
   return hasModuleSyntax;
+}
+
+Attribute* attribute_read_head = NULL;
+
+// readAttribute
+bool ra () {
+  if (attribute_read_head == NULL)
+    attribute_read_head = import_read_head->attributes;
+  else
+    attribute_read_head = attribute_read_head->next;
+  if (attribute_read_head == NULL)
+    return false;
+  return true;
+}
+// getAttributeKeyStart
+uint32_t aks () {
+  return attribute_read_head->key_start - source;
+}
+// getAttributeKeyEnd
+uint32_t ake () {
+  return attribute_read_head->key_end - source;
+}
+// getAttributeValueStart
+uint32_t avs () {
+  return attribute_read_head->value_start - source;
+}
+// getAttributeValueEnd
+uint32_t ave () {
+  return attribute_read_head->value_end - source;
+}
+// resetAttributes
+void rsa () {
+  attribute_read_head = NULL;
 }
 
 bool parse ();

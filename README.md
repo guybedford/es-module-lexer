@@ -86,7 +86,16 @@ import { init, parse } from 'es-module-lexer';
 
   // Returns "{ type: 'json' }"
   source.slice(imports[1].a, imports[1].se);
-  // "a" = with, -1 for no import attributes
+  // "a" = attribute start, -1 for no import attributes
+
+  // Parsed import attributes are available in `at`
+  // Returns [['type', 'json']]
+  imports[1].at;
+  // Returns 'json'
+  imports[1].at[0][1];
+
+  // Returns null (no attributes)
+  imports[0].at;
 
   // Returns "external"
   source.slice(imports[2].s, imports[2].e);
@@ -159,6 +168,49 @@ import { parse } from 'es-module-lexer/js';
 ```
 
 Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
+
+### Import Attributes
+
+The `a` field provides the index of the start of the `{` attributes bracket, or -1 for no attributes.
+
+The list of attribute key and value pairs are provided on the `at` field:
+
+```js
+const [imports] = parse(`
+  import json from './foo.json' with { type: 'json' };
+  import './foo.css' with { type: 'css' };
+  import pkg from 'pkg' with { type: 'json', integrity: 'sha384-...' };
+`);
+
+// Returns [['type', 'json']]
+imports[0].at;
+
+// Returns [['type', 'css']]
+imports[1].at;
+
+// Multiple attributes
+// Returns [['type', 'json'], ['integrity', 'sha384-...']]
+imports[2].at;
+```
+
+The `at` field is an array of `[key, value]` tuples, or `null` if there are no attributes.
+
+Both keys and values support escape sequences:
+
+```js
+const [imports] = parse(`
+  import foo from './foo.js' with { "custom-key": "value" };
+  import bar from './bar.js' with { "key\\nwith\\nnewlines": "value\\twith\\ttabs" };
+`);
+
+// Quoted keys are unquoted
+// Returns [['custom-key', 'value']]
+imports[0].at;
+
+// Escape sequences are processed
+// Returns [['key\nwith\nnewlines', 'value\twith\ttabs']]
+imports[1].at;
+```
 
 ### Escape Sequences
 

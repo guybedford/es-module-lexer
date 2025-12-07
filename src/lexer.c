@@ -686,21 +686,31 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     return;
   }
   const char16_t* attrStart = pos;
+  Attribute* attr_write_head = NULL;
+  Attribute* attr_write_head_last = NULL;
   do {
     pos++;
     ch = commentWhitespace(true);
+    const char16_t* key_start;
+    const char16_t* key_end;
     if (ch == '\'') {
+      key_start = pos;
       stringLiteral(ch);
+      key_end = pos + 1;
       pos++;
       ch = commentWhitespace(true);
     }
     else if (ch == '"') {
+      key_start = pos;
       stringLiteral(ch);
+      key_end = pos + 1;
       pos++;
       ch = commentWhitespace(true);
     }
     else {
+      key_start = pos;
       ch = readToWsOrPunctuator(ch);
+      key_end = pos;
     }
     if (ch != ':') {
       pos = attrIndex;
@@ -708,23 +718,39 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     }
     pos++;
     ch = commentWhitespace(true);
+    const char16_t* value_start;
+    const char16_t* value_end;
     if (ch == '\'') {
+      value_start = pos;
       stringLiteral(ch);
+      value_end = pos + 1;
     }
     else if (ch == '"') {
+      value_start = pos;
       stringLiteral(ch);
+      value_end = pos + 1;
     }
     else {
       pos = attrIndex;
       return;
     }
+    Attribute* attr = (Attribute*)(analysis_head);
+    analysis_head = analysis_head + sizeof(Attribute);
+    attr->key_start = key_start;
+    attr->key_end = key_end;
+    attr->value_start = value_start;
+    attr->value_end = value_end;
+    attr->next = NULL;
+    if (attr_write_head == NULL)
+      import_write_head->attributes = attr;
+    else
+      attr_write_head->next = attr;
+    attr_write_head_last = attr_write_head;
+    attr_write_head = attr;
     pos++;
     ch = commentWhitespace(true);
     if (ch == ',') {
       pos++;
-      ch = commentWhitespace(true);
-      if (ch == '}')
-        break;
       continue;
     }
     if (ch == '}')

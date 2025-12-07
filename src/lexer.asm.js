@@ -49,20 +49,34 @@ export function parse (_source, _name = '@') {
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
-    imports.push({ t, n, s, e, ss, se, d, a });
+    const at = [];
+    asm.rsa();
+    while (asm.ra()) {
+      const aks = asm.aks(), ake = asm.ake(), avs = asm.avs(), ave = asm.ave();
+      const attrKey = decodeIfQuoted(aks, ake);
+      const attrValue = decodeIfQuoted(avs, ave);
+      at.push([attrKey, attrValue]);
+    }
+    imports.push({ t, n, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
-    const ch = source.charCodeAt(s);
-    const lch = ls >= 0 ? source.charCodeAt(ls) : -1;
+    const n = decodeIfQuoted(s, e);
+    const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
     exports.push({
       s, e, ls, le,
-      n: (ch === 34 || ch === 39) ? readString(s + 1, ch) : source.slice(s, e),
-      ln: ls < 0 ? undefined : (lch === 34 || lch === 39) ? readString(ls + 1, lch) : source.slice(ls, le),
+      n, ln,
     });
   }
 
   return [imports, exports, !!asm.f(), !!asm.ms()];
+
+  function decodeIfQuoted (pos, end) {
+    const ch = source.charCodeAt(pos);
+    if (ch === 34 || ch === 39)
+      return readString(pos + 1, ch);
+    return source.slice(pos, end);
+  }
 }
 
 /*
