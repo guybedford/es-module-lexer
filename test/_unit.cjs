@@ -60,12 +60,14 @@ suite('Lexer', () => {
       assert.strictEqual(source.slice(impts[0].s, impts[0].e), 'specifier');
       assert.strictEqual(impts[0].d, -1);
       assert.strictEqual(impts[0].a, -1);
+      assert.strictEqual(impts[0].at, null);
 
       assert.strictEqual(impts[1].t, 6);
       assert.strictEqual(source.slice(impts[1].ss, impts[1].se), `import defer * as blah from './x.js' with { type: 'css' }`);
       assert.strictEqual(source.slice(impts[1].s, impts[1].e), './x.js');
       assert.strictEqual(impts[1].d, -1);
       assert.strictEqual(source.slice(impts[1].a, impts[1].se), `{ type: 'css' }`);
+      assert.deepStrictEqual(impts[1].at, [['type', 'css']]);
 
       assert.strictEqual(impts[2].t, 1);
       assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import defer from 'x'`);
@@ -82,6 +84,74 @@ suite('Lexer', () => {
     }
   });
  
+  test(`Import attributes parsing`, () => {
+    const source = `
+      import foo from 'module' with { type: "json" }
+      import bar from 'module2' with { type: 'css', integrity: "sha384-abc" }
+      import { baz } from 'module3' with { "custom-key": "value" }
+      import * as ns from 'module4' with { type: "json" }
+      import 'module5' with { type: "json" }
+      import noAttrs from 'module6'
+    `;
+    const [impts] = parse(source);
+    assert.strictEqual(impts.length, 6);
+
+    // Single attribute
+    assert.deepStrictEqual(impts[0].at, [['type', 'json']]);
+    assert.strictEqual(source.slice(impts[0].s, impts[0].e), 'module');
+
+    // Multiple attributes
+    assert.deepStrictEqual(impts[1].at, [['type', 'css'], ['integrity', 'sha384-abc']]);
+    assert.strictEqual(source.slice(impts[1].s, impts[1].e), 'module2');
+
+    // Quoted key
+    assert.deepStrictEqual(impts[2].at, [['custom-key', 'value']]);
+    assert.strictEqual(source.slice(impts[2].s, impts[2].e), 'module3');
+
+    // Namespace import with attribute
+    assert.deepStrictEqual(impts[3].at, [['type', 'json']]);
+    assert.strictEqual(source.slice(impts[3].s, impts[3].e), 'module4');
+
+    // Bare import with attribute
+    assert.deepStrictEqual(impts[4].at, [['type', 'json']]);
+    assert.strictEqual(source.slice(impts[4].s, impts[4].e), 'module5');
+
+    // No attributes
+    assert.strictEqual(impts[5].at, null);
+    assert.strictEqual(source.slice(impts[5].s, impts[5].e), 'module6');
+  });
+
+  test(`Import attributes with quoted keys and escape sequences`, () => {
+    const source = `
+      import a from 'a' with { "quoted-key": "value" }
+      import b from 'b' with { 'single-quoted': "value" }
+      import c from 'c' with { "key-with-\\"quote\\"": "value-with-\\"quote\\"" }
+      import d from 'd' with { "key\\nwith\\nnewlines": "value\\twith\\ttabs" }
+      import e from 'e' with { "unicode\\u0041": "test\\u0042" }
+      import f from 'f' with { type: "val\\\\backslash" }
+    `;
+    const [impts] = parse(source);
+    assert.strictEqual(impts.length, 6);
+
+    // Double-quoted key
+    assert.deepStrictEqual(impts[0].at, [['quoted-key', 'value']]);
+
+    // Single-quoted key
+    assert.deepStrictEqual(impts[1].at, [['single-quoted', 'value']]);
+
+    // Escaped quotes in both key and value
+    assert.deepStrictEqual(impts[2].at, [['key-with-"quote"', 'value-with-"quote"']]);
+
+    // Escaped newlines and tabs
+    assert.deepStrictEqual(impts[3].at, [['key\nwith\nnewlines', 'value\twith\ttabs']]);
+
+    // Unicode escapes
+    assert.deepStrictEqual(impts[4].at, [['unicodeA', 'testB']]);
+
+    // Backslash escape
+    assert.deepStrictEqual(impts[5].at, [['type', 'val\\backslash']]);
+  });
+
   test('keyword case again', () => {
     parse('if (of / 2) {}');
   });

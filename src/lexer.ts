@@ -104,6 +104,23 @@ export interface ImportSpecifier {
    * Otherwise this is `-1`.
    */
   readonly a: number;
+  /**
+   * Parsed import attributes as an array of [key, value] tuples.
+   * If this import has no attributes, this is `null`.
+   *
+   * @example
+   * const source = `import foo from 'bar' with { type: "json" }`;
+   * const [imports] = parse(source);
+   * imports[0].at;
+   * // Returns [['type', 'json']]
+   *
+   * @example
+   * const source = `import foo from 'bar' with { type: "json", integrity: "sha384-..." }`;
+   * const [imports] = parse(source);
+   * imports[0].at;
+   * // Returns [['type', 'json'], ['integrity', 'sha384-...']]
+   */
+  readonly at: ReadonlyArray<readonly [string, string]> | null;
 }
 
 export interface ExportSpecifier {
@@ -224,24 +241,37 @@ export function parse (source: string, name = '@'): readonly [
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
-    imports.push({ n, t, s, e, ss, se, d, a });
+    const at: Array<[string, string]> = [];
+    wasm.rsa();
+    while (wasm.ra()) {
+      const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
+      at.push([decodeIfQuoted(source.slice(aks, ake)), decodeIfQuoted(source.slice(avs, ave))]);
+    }
+    imports.push({ n, t, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
   }
   while (wasm.re()) {
     const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
-    const n = source.slice(s, e), ch = n[0];
-    const ln = ls < 0 ? undefined : source.slice(ls, le), lch = ln ? ln[0] : '';
+    const n = decodeIfQuoted(source.slice(s, e));
+    const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
     exports.push({
       s, e, ls, le,
-      n: (ch === '"' || ch === "'") ? decode(n) : n,
-      ln: (lch === '"' || lch === "'") ? decode(ln) : ln,
+      n, ln,
     });
   }
 
-  function decode (str: string | undefined) {
+  function decode (str: string) {
     try {
-      return (0, eval)(str as string) // eval(undefined) -> undefined
+      return (0, eval)(str)
     }
     catch (e) {}
+  }
+
+  function decodeIfQuoted (str: string): string {
+    if (!str) return str;
+    const firstChar = str[0];
+    if (firstChar === '"' || firstChar === "'")
+      return decode(str) || str;
+    return str;
   }
 
   return [imports, exports, !!wasm.f(), !!wasm.ms()];
@@ -303,6 +333,18 @@ let wasm: {
   se(): number;
   /** getImportStatementStart */
   ss(): number;
+  /** readAttribute */
+  ra(): boolean;
+  /** resetAttributes */
+  rsa(): void;
+  /** getAttributeKeyStart */
+  aks(): number;
+  /** getAttributeKeyEnd */
+  ake(): number;
+  /** getAttributeValueStart */
+  avs(): number;
+  /** getAttributeValueEnd */
+  ave(): number;
 };
 
 const getWasmBytes = () => (
