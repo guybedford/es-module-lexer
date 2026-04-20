@@ -272,6 +272,30 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
   });
 
+  test(`Dynamic import expression range 7`, () => {
+    const source = 'import((() => { return "foo" })(x, y), attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import((() => { return "foo" })(x, y), attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '(() => { return "foo" })(x, y)');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
+  test(`Dynamic import expression range 8`, () => {
+    const source = 'import({ x, y }, attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import({ x, y }, attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '{ x, y }');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
+  test(`Dynamic import expression range 9`, () => {
+    const source = 'import([ x, y ], attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import([ x, y ], attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '[ x, y ]');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB

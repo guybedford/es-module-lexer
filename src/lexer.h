@@ -57,6 +57,7 @@ enum OpenTokenState {
   ImportParen = 5, // import(),
   ClassBrace = 6,
   AsyncParen = 7, // async()
+  AnyBracket = 8, // [
 };
 
 struct OpenToken {
