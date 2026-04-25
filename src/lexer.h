@@ -314,6 +314,7 @@ bool isBrOrWs (char16_t c);
 bool isBrOrWsOrPunctuator (char16_t c);
 bool isSpread (char16_t* c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
+bool isForOfBinding (char16_t* pos);
 
 bool readPrecedingKeyword1(char16_t* pos, char16_t c1);
 bool readPrecedingKeywordn(char16_t* pos, const char16_t* compare, size_t n);
