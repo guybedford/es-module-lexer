@@ -144,6 +144,7 @@ bool parse () {
             pos++;
             ch = commentWhitespace(true);
             cur_dynamic_import->attr_index = pos;
+            pos--;
           }
         }
         break;
