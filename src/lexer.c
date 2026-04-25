@@ -127,6 +127,27 @@ bool parse () {
         openTokenStack[openTokenDepth].token = AnyParen;
         openTokenStack[openTokenDepth++].pos = lastTokenPos;
         break;
+      case '[':
+        openTokenStack[openTokenDepth].token = AnyBracket;
+        openTokenStack[openTokenDepth++].pos = lastTokenPos;
+        break;
+      case ']':
+        if (openTokenDepth == 0)
+          return syntaxError(), false;
+        openTokenDepth--;
+        break;
+      case ',':
+        if (dynamicImportStackDepth > 0 && openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == ImportParen) {
+          Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+          if (cur_dynamic_import->end == 0) {
+            cur_dynamic_import->end = lastTokenPos + 1;
+            pos++;
+            ch = commentWhitespace(true);
+            cur_dynamic_import->attr_index = pos;
+            pos--;
+          }
+        }
+        break;
       case ')':
         if (openTokenDepth == 0)
           return syntaxError(), false;

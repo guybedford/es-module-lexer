@@ -272,6 +272,94 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(impt.s, impt.e), '`asdf`');
   });
 
+  test(`Dynamic import expression range 7`, () => {
+    const source = 'import((() => { return "foo" })(x, y), attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import((() => { return "foo" })(x, y), attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '(() => { return "foo" })(x, y)');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
+  test(`Dynamic import expression range 8`, () => {
+    const source = 'import({ x, y }, attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import({ x, y }, attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '{ x, y }');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
+  test(`Dynamic import expression range 9`, () => {
+    const source = 'import([ x, y ], attributes)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import([ x, y ], attributes)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '[ x, y ]');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attributes)');
+  });
+
+  test(`Dynamic import expression range 10`, () => {
+    const source = `import(foo, { type: 'json' })`;
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), `import(foo, { type: 'json' })`);
+    assert.strictEqual(source.slice(impt.s, impt.e), 'foo');
+    assert.strictEqual(source.slice(impt.a, impt.se), `{ type: 'json' })`);
+  });
+
+  test(`Dynamic import expression range 11`, () => {
+    const source = `import(foo, /*c*/ { type: 'json' })`;
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), `import(foo, /*c*/ { type: 'json' })`);
+    assert.strictEqual(source.slice(impt.s, impt.e), 'foo');
+    assert.strictEqual(source.slice(impt.a, impt.se), `{ type: 'json' })`);
+  });
+
+  test(`Dynamic import expression range 12`, () => {
+    const source = 'import(foo, [1, 2])';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(foo, [1, 2])');
+    assert.strictEqual(source.slice(impt.s, impt.e), 'foo');
+    assert.strictEqual(source.slice(impt.a, impt.se), '[1, 2])');
+  });
+
+  test(`Dynamic import expression range 13`, () => {
+    const source = 'import(x, "y")';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(x, "y")');
+    assert.strictEqual(source.slice(impt.s, impt.e), 'x');
+    assert.strictEqual(source.slice(impt.a, impt.se), '"y")');
+  });
+
+  test(`Dynamic import expression range 14`, () => {
+    const source = 'import(x, (y))';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(x, (y))');
+    assert.strictEqual(source.slice(impt.s, impt.e), 'x');
+    assert.strictEqual(source.slice(impt.a, impt.se), '(y))');
+  });
+
+  test(`Dynamic import expression range 15`, () => {
+    const source = 'import(x, `tmpl`)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import(x, `tmpl`)');
+    assert.strictEqual(source.slice(impt.s, impt.e), 'x');
+    assert.strictEqual(source.slice(impt.a, impt.se), '`tmpl`)');
+  });
+
+  test(`Dynamic import expression range 16`, () => {
+    const source = 'import((a, b))';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import((a, b))');
+    assert.strictEqual(source.slice(impt.s, impt.e), '(a, b)');
+    assert.strictEqual(impt.a, -1);
+  });
+
+  test(`Dynamic import expression range 17`, () => {
+    const source = 'import((a, b), attrs)';
+    const [[impt]] = parse(source);
+    assert.strictEqual(source.slice(impt.ss, impt.se), 'import((a, b), attrs)');
+    assert.strictEqual(source.slice(impt.s, impt.e), '(a, b)');
+    assert.strictEqual(source.slice(impt.a, impt.se), 'attrs)');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB

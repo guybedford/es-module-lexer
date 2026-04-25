@@ -141,6 +141,23 @@ export function parse (_source, _name) {
           curDynamicImport = null;
         }
         break;
+      case 91/*[*/:
+        openTokenPosStack[openTokenDepth++] = lastTokenPos;
+        break;
+      case 93/*]*/:
+        if (openTokenDepth === 0)
+          syntaxError();
+        openTokenDepth--;
+        break;
+      case 44/*,*/:
+        if (curDynamicImport && curDynamicImport.e === 0 && curDynamicImport.d === openTokenPosStack[openTokenDepth - 1]) {
+          curDynamicImport.e = lastTokenPos + 1;
+          pos++;
+          commentWhitespace(true);
+          curDynamicImport.a = pos;
+          pos--;
+        }
+        break;
       case 123/*{*/:
         // dynamic import followed by { is not a dynamic import (so remove)
         // this is a sneaky way to get around { import () {} } v { import () }

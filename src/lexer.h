@@ -48,7 +48,6 @@ struct Import {
 };
 typedef struct Import Import;
 
-// Paren = odd, Brace = even
 enum OpenTokenState {
   AnyParen = 1, // (
   AnyBrace = 2, // {
@@ -57,6 +56,7 @@ enum OpenTokenState {
   ImportParen = 5, // import(),
   ClassBrace = 6,
   AsyncParen = 7, // async()
+  AnyBracket = 8, // [
 };
 
 struct OpenToken {
