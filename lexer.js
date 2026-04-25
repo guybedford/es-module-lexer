@@ -208,7 +208,7 @@ export function parse (_source, _name) {
               !(lastToken === 46/*.*/ && (source.charCodeAt(lastTokenPos - 1) >= 48/*0*/ && source.charCodeAt(lastTokenPos - 1) <= 57/*9*/)) &&
               !(lastToken === 43/*+*/ && source.charCodeAt(lastTokenPos - 1) === 43/*+*/) && !(lastToken === 45/*-*/ && source.charCodeAt(lastTokenPos - 1) === 45/*-*/) ||
               lastToken === 41/*)*/ && isParenKeyword(openTokenPosStack[openTokenDepth]) ||
-              openTokenDepth > 0 && lastToken === 102/*f*/ && source.charCodeAt(lastTokenPos - 1) === 111/*o*/ && isForOfBinding(lastTokenPos - 2) && isForParen(openTokenPosStack[openTokenDepth - 1]) ||
+              openTokenDepth > 0 && lastToken === 102/*f*/ && source.charCodeAt(lastTokenPos - 1) === 111/*o*/ && isBrOrWs(source.charCodeAt(lastTokenPos - 2)) && (source.charCodeAt(lastTokenPos - 3) === 93/*]*/ || source.charCodeAt(lastTokenPos - 3) === 125/*}*/ || source.charCodeAt(lastTokenPos - 3) === 41/*)*/ || !isPunctuator(source.charCodeAt(lastTokenPos - 3))) && isForParen(openTokenPosStack[openTokenDepth - 1]) ||
               lastToken === 125/*}*/ && (isExpressionTerminator(openTokenPosStack[openTokenDepth]) || openClassPosStack[openTokenDepth]) ||
               lastToken === 47/*/*/ && lastSlashWasDivision ||
               isExpressionKeyword(lastTokenPos) ||
@@ -915,18 +915,6 @@ function isParenKeyword (curPos) {
 
 function isForParen (curPos) {
   return source.charCodeAt(curPos) === 114/*r*/ && source.startsWith('fo', curPos - 2);
-}
-
-// In valid JS, the for-of `of` keyword always follows a binding,
-// which ends with an identifier-tail char, ']', '}', or ')'.
-function isForOfBinding (pos) {
-  const ch = source.charCodeAt(pos);
-  if (!isBrOrWs(ch) && ch !== 93/*]*/ && ch !== 125/*}*/ && ch !== 41/*)*/)
-    return false;
-  while (pos > 0 && isBrOrWs(source.charCodeAt(pos)))
-    pos--;
-  const c = source.charCodeAt(pos);
-  return c === 93/*]*/ || c === 125/*}*/ || c === 41/*)*/ || !isPunctuator(c);
 }
 
 function isPunctuator (ch) {

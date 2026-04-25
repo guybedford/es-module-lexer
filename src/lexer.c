@@ -210,7 +210,7 @@ bool parse () {
               !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
               !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
               lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
+              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isBrOrWs(*(lastTokenPos - 2)) && (*(lastTokenPos - 3) == ']' || *(lastTokenPos - 3) == '}' || *(lastTokenPos - 3) == ')' || !isPunctuator(*(lastTokenPos - 3))) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
               lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
               isExpressionKeyword(lastTokenPos) ||
               lastToken == '/' && lastSlashWasDivision ||
@@ -917,21 +917,6 @@ bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
 
 bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
   return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
-}
-
-// Detects whether the character sequence ending at `pos` (inclusive) ends a
-// for-of binding. In valid JS, the for-of `of` keyword always follows a
-// binding that ends with an identifier-tail char, ']', '}', or ')'.
-// Used to disambiguate `for (... of /regex/)` from `for (i = of / 2;;)`.
-bool isForOfBinding (char16_t* pos) {
-  // 'of' must be a complete token: the char before 'o' must be whitespace
-  // or a binding-terminator punctuator (excludes `proof / 2` etc.)
-  if (!isBrOrWs(*pos) && *pos != ']' && *pos != '}' && *pos != ')')
-    return false;
-  // Skip whitespace back to the binding's last char.
-  while (pos > source && isBrOrWs(*pos))
-    pos--;
-  return *pos == ']' || *pos == '}' || *pos == ')' || !isPunctuator(*pos);
 }
 
 bool isSpread (char16_t* c) {
