@@ -254,13 +254,21 @@ function tryParseImportStatement () {
       if (source.charCodeAt(lastTokenPos) === 46/*.*/)
         return;
       // dynamic import indicated by positive d
-      const impt = addImport(startPos, pos + 1, 0, startPos);
-      curDynamicImport = impt;
       // try parse a string, to record a safe dynamic import string
       pos++;
       ch = commentWhitespace(true);
+      // The specifier start is recorded after leading whitespace/comments so it
+      // points at the literal, matching the C lexer (src/lexer.c).
+      const impt = addImport(startPos, pos, 0, startPos);
+      curDynamicImport = impt;
       if (ch === 39/*'*/ || ch === 34/*"*/) {
         stringLiteral(ch);
+      }
+      else if (ch === 96/*`*/ && noSubstitutionTemplate()) {
+        // A no-substitution template literal is a constant string, so it is a
+        // safe specifier exactly like a quoted one. An interpolated template
+        // leaves noSubstitutionTemplate() false and falls through to the open-
+        // token machinery, which records the import as unsafe (n stays unset).
       }
       else {
         pos--;
@@ -495,7 +503,9 @@ function readString (start, quote) {
       ++acornPos;
     }
     else {
-      if (isBr(ch)) syntaxError();
+      // Template literals (backtick quote) permit raw line breaks; string
+      // literals do not.
+      if (isBr(ch) && quote !== 96/*`*/) syntaxError();
       ++acornPos;
     }
   }
@@ -726,6 +736,28 @@ function templateString () {
       pos++;
   }
   syntaxError();
+}
+
+// pos AT the opening backtick. A no-substitution template literal (no ${...})
+// is a constant string, so a dynamic import can record it as a safe specifier.
+// On success consumes it, leaves pos AT the closing backtick and returns true.
+// On a substitution or EOF restores pos and returns false, leaving the literal
+// to the main loop's template handling.
+function noSubstitutionTemplate () {
+  const startPos = pos;
+  while (pos++ < end) {
+    const ch = source.charCodeAt(pos);
+    if (ch === 96/*`*/)
+      return true;
+    if (ch === 92/*\*/) {
+      pos++;
+      continue;
+    }
+    if (ch === 36/*$*/ && source.charCodeAt(pos + 1) === 123/*{*/)
+      break;
+  }
+  pos = startPos;
+  return false;
 }
 
 function blockComment (br) {

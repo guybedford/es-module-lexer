@@ -408,6 +408,33 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(impt.a, impt.se), 'attrs)');
   });
 
+  test(`Dynamic import no-substitution template specifier`, () => {
+    // A no-substitution template literal is a constant string, so n is set the
+    // same as for the quoted forms; an interpolated template has no constant
+    // value, so n stays undefined.
+    assert.strictEqual(parse('import("./x.js")')[0][0].n, './x.js');
+    assert.strictEqual(parse("import('./x.js')")[0][0].n, './x.js');
+    assert.strictEqual(parse('import(`./x.js`)')[0][0].n, './x.js');
+    assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, undefined);
+  });
+
+  test(`Dynamic import template specifier with escapes and attributes`, () => {
+    // \\${ is an escaped dollar, not a substitution, so the literal is constant.
+    assert.strictEqual(parse('import(`./a\\${x}.js`)')[0][0].n, './a${x}.js');
+    // Quotes inside the template are ordinary characters.
+    assert.strictEqual(parse("import(`./'q\".js`)")[0][0].n, `./'q".js`);
+    // A constant template specifier is still detected when an import attribute
+    // argument follows it.
+    const [[impt]] = parse("import(`./x.js`, { with: { type: 'json' } })");
+    assert.strictEqual(impt.n, './x.js');
+    assert.notStrictEqual(impt.a, -1);
+  });
+
+  test(`Dynamic import multi-line no-substitution template specifier`, () => {
+    // Template literals permit raw line breaks; the constant value keeps them.
+    assert.strictEqual(parse('import(`./a\nb.js`)')[0][0].n, './a\nb.js');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB

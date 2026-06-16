@@ -331,6 +331,12 @@ void tryParseImportStatement () {
     else if (ch == '"') {
       stringLiteral(ch);
     }
+    else if (ch == '`' && noSubstitutionTemplate()) {
+      // A no-substitution template literal is a constant string, so it is a
+      // safe specifier exactly like a quoted one. An interpolated template
+      // leaves noSubstitutionTemplate() false and falls through to the open-
+      // token machinery, which records the import as unsafe (n stays unset).
+    }
     else {
       pos--;
       return;
@@ -821,6 +827,28 @@ void templateString () {
       pos++;
   }
   syntaxError();
+}
+
+// pos AT the opening backtick. A no-substitution template literal (no ${...})
+// is a constant string, so a dynamic import can record it as a safe specifier.
+// On success consumes it, leaves pos AT the closing backtick and returns true.
+// On a substitution or EOF restores pos and returns false, leaving the literal
+// to the main loop's template handling.
+bool noSubstitutionTemplate () {
+  char16_t* startPos = pos;
+  while (pos++ < end) {
+    char16_t ch = *pos;
+    if (ch == '`')
+      return true;
+    if (ch == '\\') {
+      pos++;
+      continue;
+    }
+    if (ch == '$' && *(pos + 1) == '{')
+      break;
+  }
+  pos = startPos;
+  return false;
 }
 
 void blockComment (bool br) {
