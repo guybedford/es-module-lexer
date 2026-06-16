@@ -62,8 +62,10 @@ node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser
 name = 'build:types'
 target = 'types/lexer.d.ts'
 dep = 'src/lexer.ts'
+# `--types node` is explicit: TypeScript 6 no longer auto-includes @types/node
+# for a file passed on the command line, so `Buffer` (lexer.ts) would error.
 run = '''
-  tsc --strict --declaration --emitDeclarationOnly --outdir types src/lexer.ts
+  tsc --strict --declaration --emitDeclarationOnly --types node --outdir types src/lexer.ts
 '''
 
 [[task]]

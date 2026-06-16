@@ -37,7 +37,7 @@ function assertExportIs(source, actual, expected) {
 }
 
 suite('Lexer', () => {
-  beforeEach(async () => await init);
+  setup(async () => await init);
 
   test('Division of `of` identifier in for statement', () => {
     // `of` as identifier on the LHS of a binary expression with `/`,
@@ -1765,7 +1765,7 @@ function x() {
 });
 
 suite('Invalid syntax', () => {
-  beforeEach(async () => await init);
+  setup(async () => await init);
 
   test('Unterminated object', () => {
     const source = `
