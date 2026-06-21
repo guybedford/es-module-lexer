@@ -104,75 +104,31 @@ run = """
 """
 
 [[task]]
-target = 'lib/lexer.emcc.asm.js'
-deps = ['src/lexer.h', 'src/lexer.c']
-env = { PYTHONHOME = '' }
-run = """
-	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
-	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
-
-	${{ EMSDK_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
-	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_setSource']" \
-	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
-
-	# rm lib/lexer.emcc.js
-"""
+target = 'lib/lexer.2js.js'
+deps = ['lib/lexer.wasm']
+# Triple-quoted so chomp runs it through a shell: direct-exec of the emulated
+# binaryen binary fails on Apple-Silicon emulation, the same as the wasi clang.
+run = '''
+	wasm2js lib/lexer.wasm -o lib/lexer.2js.js
+'''
 
 [[task]]
 target = 'lib/lexer.asm.js'
-deps = ['lib/lexer.emcc.asm.js', 'src/lexer.asm.js']
+deps = ['lib/lexer.2js.js', 'src/lexer.asm.js']
 engine = 'node'
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
 
-	const wrapper_start = readFileSync('src/lexer.asm.js', 'utf8');
-	let source = readFileSync('lib/lexer.emcc.asm.js', 'utf8').trim();
+	// wasm2js emits its exports as `export var <name> = retasmFunc.<name>`. Drop
+	// those lines and concatenate the CSP-safe wrapper, which drives retasmFunc
+	// directly (memory.grow + sa + parse, like the wasm wrapper) and owns the
+	// single public `parse` export. The wasm data section is embedded by
+	// wasm2js, so there is no hand-maintained keyword dictionary to keep in sync.
+	const mod = readFileSync('lib/lexer.2js.js', 'utf8')
+		.replace(/\nexport var \w+ = retasmFunc\.\w+;/g, '');
+	const wrapper = readFileSync('src/lexer.asm.js', 'utf8');
 
-	const endFuncs = 'EMSCRIPTEN_END_FUNCS';
-	const removeFunc = name => [new RegExp(`function ${name}\\([^]+?}\\s*(function|return\\s?{[^{}]+};?\\s*}\\s*$)`), '$1'];
-
-	const replacements = [
-		[/Module\["asm"\]=\s?\(\/\*\* @suppress {uselessCode} \*\/ function\(/, 'function asmInit('],
-		[/\)$/, ''],
-		[/,\s?_(\w+):/g, ',$1:', null, endFuncs],
-		['setSource:', 'ses:', null, endFuncs],
-		['parse:', 'p:', null, endFuncs],
-		[/___errno_location:\s?(\w+),/, '', removeFunc, endFuncs],
-		[/_apply_relocations:\s?(\w+),/, '', removeFunc, endFuncs],
-		[/,\s?free:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?malloc:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?memcpy:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?memset:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackAlloc:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?emscripten_get_sbrk_ptr:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackRestore:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackSave:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
-		[/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
-		[/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, ''],
-		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*return\{/, `  function su(a) {
-		a = a | 0;
-		v = a + 992 + 15 & -16;
-		return 992;
-	}
-	return {
-		su,`],
-		[/\s*\/\/ EMSCRIPTEN_START_FUNCS\s*/, ''],
-	];
-
-	for (const [from, to, add, after] of replacements) {
-		const [matched, match] = source.match(from) || [];
-		if (!matched) {
-			console.log(source.slice(0, 1000));
-			throw new Error(`Match not found for ${from} -> ${to}${after ? `, after ${after}` : ''}`);
-		}
-		const afterIndex = after ? source.indexOf(after) : 0;
-		const replaced = source.slice(0, afterIndex) + source.slice(afterIndex).replace(from, to);
-		if (add) replacements.push(add(match));
-		source = replaced;
-	}
-
-	writeFileSync(process.env.TARGET, wrapper_start + source);
+	writeFileSync('lib/lexer.asm.js', mod + '\n' + wrapper);
 '''
 
 [[task]]

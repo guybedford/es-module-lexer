@@ -360,27 +360,21 @@ With Chomp installed, download the WASI SDK 12.0 from https://github.com/WebAsse
 
 Locate the WASI-SDK as a sibling folder, or customize the path via the `WASI_PATH` environment variable.
 
-Emscripten emsdk is also assumed to be a sibling folder or via the `EMSDK_PATH` environment variable.
+The `asm.js` build additionally requires [Binaryen](https://github.com/WebAssembly/binaryen)'s `wasm2js` on the `PATH` (`apt-get install binaryen` or `brew install binaryen`).
 
 Example setup:
 
 ```
 git clone https://github.com:guybedford/es-module-lexer
-git clone https://github.com/emscripten-core/emsdk
-cd emsdk
-git checkout 1.40.1-fastcomp
-./emsdk install 1.40.1-fastcomp
-cd ..
 wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz
 gunzip wasi-sdk-12.0-linux.tar.gz
 tar -xf wasi-sdk-12.0-linux.tar
 mv wasi-sdk-12.0-linux.tar wasi-sdk-12.0
+apt-get install binaryen
 cargo install chompbuild
 cd es-module-lexer
 chomp test
 ```
-
-For the `asm.js` build, git clone `emsdk` from  is assumed to be a sibling folder as well.
 
 ### License
 

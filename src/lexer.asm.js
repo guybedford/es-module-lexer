@@ -1,4 +1,9 @@
-let asm, asmBuffer, allocSize = 2<<19, addr;
+// `retasmFunc` is the wasm2js module instance concatenated above at build time
+// (see chompfile.toml `lib/lexer.asm.js`). Its exports mirror the wasm build:
+// a WebAssembly.Memory-like `memory` ({ grow, buffer }), `__heap_base`, the
+// source allocator `sa`, `parse`, and the analysis readers. wasm2js embeds the
+// wasm data section, so there is no keyword dictionary to hand-maintain here.
+const asm = retasmFunc;
 
 const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (src, outBuf16) {
   const len = src.length;
@@ -14,31 +19,21 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
   }
 };
 
-const words = 'xportmportlassforetaourceeferromsyncunctionvoyiedelecontininstantybreareturdebuggeawaithrwhileifcatcfinallels';
-
 let source, name;
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
-  // 2 bytes per string code point
-  // + analysis space (2^17)
-  // remaining space is EMCC stack space (2^17)
-  const memBound = source.length * 2 + (2 << 18);
-  if (memBound > allocSize || !asm) {
-    while (memBound > allocSize) allocSize *= 2;
-    asmBuffer = new ArrayBuffer(allocSize);
-    copy(words, new Uint16Array(asmBuffer, 16, words.length));
-    asm = asmInit(typeof globalThis !== 'undefined' ? globalThis : self, {}, asmBuffer);
-    // lexer.c bulk allocates string space + analysis space
-    addr = asm.su(allocSize - (2<<17));
-  }
   const len = source.length + 1;
-  asm.ses(addr);
-  asm.sa(len - 1);
 
-  copy(source, new Uint16Array(asmBuffer, addr, len));
+  // 2 bytes per code point plus analysis space (so * 4); grow memory to fit.
+  const extraMem = asm.__heap_base.value + len * 4 - asm.memory.buffer.byteLength;
+  if (extraMem > 0)
+    asm.memory.grow(Math.ceil(extraMem / 65536));
 
-  if (!asm.p()) {
+  const addr = asm.sa(len - 1);
+  copy(source, new Uint16Array(asm.memory.buffer, addr, len));
+
+  if (!asm.parse()) {
     acornPos = asm.e();
     syntaxError();
   }
@@ -227,4 +222,5 @@ function syntaxError () {
   throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
 }
 
-// function asmInit () { ... } from lib/lexer.asm.js is concatenated at the end here
+// The wasm2js module (asmFunc + `var retasmFunc = asmFunc(...)`) is concatenated
+// ABOVE this wrapper at build time (chompfile.toml `lib/lexer.asm.js`).
