@@ -300,6 +300,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 char16_t commentWhitespace (bool br);
 void regularExpression ();
 void templateString ();
+bool noSubstitutionTemplate ();
 void blockComment (bool br);
 void lineComment ();
 void stringLiteral (char16_t quote);

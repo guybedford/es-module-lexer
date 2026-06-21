@@ -121,7 +121,7 @@ function readString (start, quote) {
       ++acornPos;
     }
     else {
-      if (isBr(ch)) syntaxError();
+      if (isBr(ch) && quote !== 96/*`*/) syntaxError();
       ++acornPos;
     }
   }
