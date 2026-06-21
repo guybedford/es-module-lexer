@@ -14,7 +14,10 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
   }
 };
 
-const words = 'xportmportlassforetaourceeferromsyncunctionvoyiedelecontininstantybreareturdebuggeawaithrwhileifcatcfinallels';
+// Keyword dictionary, extracted from the fastcomp static memory image at build
+// time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
+// keyword tables in lexer.c automatically.
+const words = '{{WORDS}}';
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -27,10 +30,10 @@ export function parse (_source, _name = '@') {
   if (memBound > allocSize || !asm) {
     while (memBound > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize);
-    copy(words, new Uint16Array(asmBuffer, 16, words.length));
+    copy(words, new Uint16Array(asmBuffer, {{OFFSET}}, words.length));
     asm = asmInit(typeof globalThis !== 'undefined' ? globalThis : self, {}, asmBuffer);
     // lexer.c bulk allocates string space + analysis space
-    addr = asm.su(allocSize - (2<<17));
+    addr = asm.su(allocSize - (2<<17), {{STATIC_TOP}});
   }
   const len = source.length + 1;
   asm.ses(addr);

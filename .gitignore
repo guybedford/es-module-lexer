@@ -4,6 +4,9 @@ dist
 package-lock.json
 yarn.lock
 lib/lexer.emcc.js
+lib/lexer.asm.in.js
+lib/lexer.layout.js
+lib/*.mem
 src/lexer.js
 types/lexer.d.ts
 src/*.mem

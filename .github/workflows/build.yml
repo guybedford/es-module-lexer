@@ -7,9 +7,8 @@ on:
     branches: main
 
 env:
-  WASI_VERSION: 12
-  WASI_VERSION_FULL: "12.0"
-  EMCC_VERSION: "1.40.1-fastcomp"
+  EMCC_VERSION: "6.0.0"
+  EMCC_FASTCOMP_VERSION: "1.40.1-fastcomp"
 
 jobs:
   build:
@@ -19,33 +18,20 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v2
 
-      - name: Install wasi-sdk
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            export WASI_OS="linux";
-          fi
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            export WASI_OS="macos";
-          fi
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export WASI_OS="mingw";
-          fi
-
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-${WASI_OS}.tar.gz -O
-          # check if package downloaded
-          ls -la
-          tar xvf wasi-sdk-${WASI_VERSION_FULL}-${WASI_OS}.tar.gz
-
-          # print clang version
-          ./wasi-sdk-${WASI_VERSION_FULL}/bin/clang --version
-
       - name: Install Emscripten
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git --branch 3.1.29
+          git clone https://github.com/emscripten-core/emsdk.git
           cd ./emsdk
           ./emsdk install ${{ env.EMCC_VERSION }}
           ./emsdk activate ${{ env.EMCC_VERSION }}
+          ./upstream/emscripten/emcc -v
+
+      - name: Install Emscripten Fastcomp
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git emsdk-fastcomp --branch 3.1.29
+          cd ./emsdk-fastcomp
+          ./emsdk install ${{ env.EMCC_FASTCOMP_VERSION }}
+          ./emsdk activate ${{ env.EMCC_FASTCOMP_VERSION }}
           ./fastcomp/emscripten/emcc -v
 
       - name: npm Install
@@ -56,15 +42,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compile to Wasm & Test Wasm
+      - name: Compile to Wasm & Test
         env:
-          WASI_PATH: './wasi-sdk-${{ env.WASI_VERSION_FULL }}'
           EMSDK_PATH: './emsdk'
-          EMSCRIPTEN_BIN: './emsdk/fastcomp/emscripten/emcc'
+          EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
         run: chomp test
 
       - name: Footprint
+        env:
+          EMSDK_PATH: './emsdk'
+          EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
         run: chomp footprint
 
       - name: Benchmark Wasm
+        env:
+          EMSDK_PATH: './emsdk'
+          EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
         run: chomp bench
