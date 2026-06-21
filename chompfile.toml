@@ -4,8 +4,8 @@ default-task = 'build'
 extensions = ['chomp@0.1:npm', 'chomp@0.1:footprint', 'chomp@0.1:terser']
 
 [env-default]
-WASI_PATH = '../wasi-sdk-12.0'
 EMSDK_PATH = '../emsdk'
+EMSDK_FASTCOMP_PATH = '../emsdk-fastcomp'
 WABT_PATH = '../wabt'
 
 [[task]]
@@ -95,12 +95,14 @@ run = '''
 [[task]]
 target = 'lib/lexer.wasm'
 deps = ['src/lexer.h', 'src/lexer.c']
+env = { PYTHONHOME = '' }
 run = """
-	${{ WASI_PATH }}/bin/clang src/lexer.c --sysroot=${{ WASI_PATH }}/share/wasi-sysroot -o lib/lexer.wasm -nostartfiles \
-	"-Wl,-z,stack-size=13312,--no-entry,--compress-relocations,--strip-all,\
-	--export=parse,--export=sa,--export=e,--export=ri,--export=re,--export=is,--export=ie,--export=it,--export=ss,--export=ip,--export=se,--export=ai,--export=id,--export=es,--export=ee,--export=els,--export=ele,--export=f,--export=ms,--export=ra,--export=rsa,--export=aks,--export=ake,--export=avs,--export=ave,--export=__heap_base" \
-	-Wno-logical-op-parentheses -Wno-parentheses \
-	-Oz
+	${{ EMSDK_PATH }}/emsdk install 6.0.0
+	${{ EMSDK_PATH }}/emsdk activate 6.0.0
+
+	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','___heap_base']" \
+	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 """
 
 [[task]]
@@ -108,24 +110,92 @@ target = 'lib/lexer.emcc.asm.js'
 deps = ['src/lexer.h', 'src/lexer.c']
 env = { PYTHONHOME = '' }
 run = """
-	${{ EMSDK_PATH }}/emsdk install 1.40.1-fastcomp
-	${{ EMSDK_PATH }}/emsdk activate 1.40.1-fastcomp
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
 
-	${{ EMSDK_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
+	${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.emcc.js -s WASM=0 -Oz --closure 1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_setSource']" \
-	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s SINGLE_FILE=1 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
-
-	# rm lib/lexer.emcc.js
+	-s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
 """
 
 [[task]]
-target = 'lib/lexer.asm.js'
-deps = ['lib/lexer.emcc.asm.js', 'src/lexer.asm.js']
+# Sidecar fastcomp build with closure disabled. Closure folds the memory-layout
+# constants away in the shipped (closure 1) build, so this readable build exists
+# only to extract GLOBAL_BASE and STACK_BASE. Same layout-affecting flags as
+# lib/lexer.emcc.asm.js, so its layout (and .mem) matches the shipped build.
+# Depends on lib/lexer.emcc.asm.js so the two fastcomp builds run sequentially
+# rather than racing on the shared emsdk activation.
+target = 'lib/lexer.layout.js'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.emcc.asm.js']
+env = { PYTHONHOME = '' }
+run = """
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
+
+	${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -o lib/lexer.layout.js -s WASM=0 -Oz --closure 0 \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_setSource']" \
+	-s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+# Resolve the wrapper's {{OFFSET}} (dictionary heap address) and {{STATIC_TOP}}
+# (source/stack base, above all static + BSS) from the actual fastcomp layout,
+# rather than hardcoding them. Both shift with optimization/toolchain/source
+# changes (e.g. LTO moves the dictionary); deriving them keeps the build robust.
+target = 'lib/lexer.asm.in.js'
+deps = ['src/lexer.asm.js', 'lib/lexer.layout.js']
 engine = 'node'
 run = '''
 	import { readFileSync, writeFileSync } from 'fs';
 
-	const wrapper_start = readFileSync('src/lexer.asm.js', 'utf8');
+	// Read the layout constants from the closure-disabled sidecar build.
+	const layout = readFileSync('lib/lexer.layout.js', 'utf8');
+	const constant = name => {
+		const m = layout.match(new RegExp(name + ' ?= ?(\\d+)'));
+		if (!m) throw new Error(`${name} not found in lib/lexer.layout.js`);
+		return +m[1];
+	};
+	const GLOBAL_BASE = constant('GLOBAL_BASE');
+	const STACK_BASE = constant('STACK_BASE');
+
+	// Extract the keyword dictionary directly from the static memory image: it is
+	// the longest run of ascii char16 (printable low byte, zero high byte).
+	const mem = readFileSync('lib/lexer.layout.js.mem');
+	let best = { start: -1, str: '' }, cur = null;
+	for (let i = 0; i + 1 < mem.length; i += 2) {
+		if (mem[i + 1] === 0 && mem[i] >= 0x20 && mem[i] <= 0x7e) {
+			if (!cur) cur = { start: i, str: '' };
+			cur.str += String.fromCharCode(mem[i]);
+			if (cur.str.length > best.str.length) best = cur;
+		} else cur = null;
+	}
+	if (best.start === -1)
+		throw new Error('keyword dictionary not found in lib/lexer.layout.js.mem');
+
+	let words = best.str;
+	// The image drops the trailing zero high byte of the final char16, leaving a
+	// lone printable low byte at the very end of the dictionary.
+	const tail = best.start + words.length * 2;
+	if (tail === mem.length - 1 && mem[tail] >= 0x20 && mem[tail] <= 0x7e)
+		words += String.fromCharCode(mem[tail]);
+
+	const out = readFileSync('src/lexer.asm.js', 'utf8')
+		.replace('{{WORDS}}', words)
+		.replace('{{OFFSET}}', GLOBAL_BASE + best.start)
+		.replace('{{STATIC_TOP}}', STACK_BASE);
+	writeFileSync('lib/lexer.asm.in.js', out);
+'''
+
+[[task]]
+target = 'lib/lexer.asm.js'
+deps = ['lib/lexer.emcc.asm.js', 'lib/lexer.asm.in.js']
+engine = 'node'
+run = '''
+	import { readFileSync, writeFileSync } from 'fs';
+
+	const wrapper_start = readFileSync('lib/lexer.asm.in.js', 'utf8');
 	let source = readFileSync('lib/lexer.emcc.asm.js', 'utf8').trim();
 
 	const endFuncs = 'EMSCRIPTEN_END_FUNCS';
@@ -150,10 +220,11 @@ run = '''
 		[/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
 		[/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
 		[/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, ''],
-		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*return\{/, `  function su(a) {
+		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*return\{/, `  function su(a, b) {
 		a = a | 0;
-		v = a + 992 + 15 & -16;
-		return 992;
+		b = b | 0;
+		v = a + b + 15 & -16;
+		return b;
 	}
 	return {
 		su,`],
