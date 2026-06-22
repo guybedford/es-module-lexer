@@ -70,6 +70,7 @@ struct Export {
   const char16_t* end;
   const char16_t* local_start;
   const char16_t* local_end;
+  const char16_t* statement_start;
   struct Export* next;
 };
 typedef struct Export Export;
@@ -81,6 +82,7 @@ Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
+const char16_t* export_statement_start = NULL;
 void* analysis_base;
 void* analysis_head;
 
@@ -167,6 +169,7 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->end = end;
   export->local_start = local_start;
   export->local_end = local_end;
+  export->statement_start = export_statement_start;
   export->next = NULL;
   hasModuleSyntax = true;
 }
@@ -228,6 +231,10 @@ int32_t els () {
 // getExportLocalEnd
 int32_t ele () {
   return export_read_head->local_end ? export_read_head->local_end - source : -1;
+}
+// getExportStatementStart
+uint32_t ess () {
+  return export_read_head->statement_start - source;
 }
 // readImport
 bool ri () {

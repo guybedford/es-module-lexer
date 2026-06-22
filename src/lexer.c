@@ -568,8 +568,13 @@ void tryParseExportStatement () {
 
   char16_t ch = commentWhitespace(true);
 
+  // Only commit the statement start once this is a real export: skipExpression
+  // re-enters here for an `export`-prefixed identifier (e.g. `exports`) in an
+  // initializer, which would otherwise clobber the start for later bindings.
   if (pos == curPos && !isPunctuator(ch))
     return;
+
+  export_statement_start = sStartPos;
 
   if (ch == '{') {
     pos++;

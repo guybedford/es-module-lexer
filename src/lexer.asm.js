@@ -63,11 +63,11 @@ export function parse (_source, _name = '@') {
     imports.push({ t, n, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
   }
   while (asm.re()) {
-    const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
+    const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele(), ss = asm.ess();
     const n = decodeIfQuoted(s, e);
     const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
     exports.push({
-      s, e, ls, le,
+      s, e, ls, le, ss,
       n, ln,
     });
   }

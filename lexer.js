@@ -12,6 +12,7 @@ let source, pos, end,
   templateStack,
   imports,
   exports,
+  exportStatementStart,
   name;
 
 function addImport (ss, s, e, d) {
@@ -26,6 +27,7 @@ function addExport (s, e, ls, le) {
     e,
     ls,
     le,
+    ss: exportStatementStart,
     n: s[0] === '"' ? readString(s, '"') : s[0] === "'" ? readString(s, "'") : source.slice(s, e),
     ln: ls[0] === '"' ? readString(ls, '"') : ls[0] === "'" ? readString(ls, "'") : source.slice(ls, le)
   });
@@ -339,8 +341,13 @@ function tryParseExportStatement () {
 
   let ch = commentWhitespace(true);
 
+  // Only commit the statement start once this is a real export: skipExpression
+  // re-enters here for an `export`-prefixed identifier (e.g. `exports`) in an
+  // initializer, which would otherwise clobber the start for later bindings.
   if (pos === curPos && !isPunctuator(ch))
     return;
+
+  exportStatementStart = sStartPos;
 
   switch (ch) {
     // export default ...
