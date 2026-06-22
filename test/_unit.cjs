@@ -485,7 +485,146 @@ suite('Lexer', () => {
       export var { aa, qq: { z } } = { qq: {} }, pp = {};
     `;
     const [, exports] = parse(source);
-    assert.deepStrictEqual(exports.map(e => e.n), ['URI', 'Utils', 'p', 'aa', 'qq']);
+    // Every bound name is reported: the rest element (Another), nested
+    // destructured names (both z's) and trailing declarators (pp). qq is a
+    // property key, not a binding, so it is not an export.
+    assert.deepStrictEqual(exports.map(e => e.n), ['URI', 'Utils', 'Another', 'p', 'z', 'aa', 'z', 'pp']);
+  });
+
+  test(`Export declaration multiple declarators`, () => {
+    const source = `
+      export var a = 'asdf', q = z;
+      export const obj = { x: 1, y: 2 }, arr = [1, 2], call = fn(a, b);
+      export let str = "a,b", re = /,/g, tpl = \`a\${x},\${y}\`, last = 1;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n),
+      ['a', 'q', 'obj', 'arr', 'call', 'str', 're', 'tpl', 'last']);
+  });
+
+  test(`Export destructuring aliases, defaults, nesting and rest`, () => {
+    const source = `
+      export const { a: x, b = 1, c: { d }, ...rest } = obj;
+      export const [ e, , f, [ g ], ...tail ] = arr;
+      export const { ['computed']: h, "str": i } = o, j = 1;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n),
+      ['x', 'b', 'd', 'rest', 'e', 'f', 'g', 'tail', 'h', 'i', 'j']);
+  });
+
+  test(`Export declaration stops at ASI without reading next statement`, () => {
+    const source = `
+      export const k = 1
+      foo, bar;
+      export const m = 2
+      const n = 3, o = 4
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['k', 'm']);
+  });
+
+  test(`Export initializer disambiguates regex, division and comments`, () => {
+    const source = `
+      export const re = () => /x/g, a = 1;
+      export const div = (b) / c, d = 2;
+      export const nw = new Foo(x, y), e = 3;
+      export const cm = /* , */ 4 /* , */, f = 5;
+    `;
+    const [, exports] = parse(source);
+    // '/' after '=>' opens a regex; '/' after ')' is division; commas inside
+    // block comments never split the declarator list.
+    assert.deepStrictEqual(exports.map(e => e.n), ['re', 'a', 'div', 'd', 'nw', 'e', 'cm', 'f']);
+  });
+
+  test(`Export initializer treats non-ASCII identifiers as values`, () => {
+    const source = `
+      export const a = π / 2, b = 3;
+      export const café = x / 2, d = 4;
+    `;
+    const [, exports] = parse(source);
+    // A '/' after a Unicode identifier is division, not a regex, so the comma
+    // and the trailing declarator are still seen.
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'café', 'd']);
+  });
+
+  test(`Export initializer skips nested templates and arrow bodies`, () => {
+    const source = `
+      export const t = \`a\${ \`b\${ c }d\` }e\`, u = 1;
+      export const o = \`\${ { a: 1, b: 2 } }\`, v = 2;
+      export const fn = (a) => a, w = 3;
+      export const opt = a?.b?.c, x = 4;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['t', 'u', 'o', 'v', 'fn', 'w', 'opt', 'x']);
+  });
+
+  test(`Export destructuring computed keys, holes and nested rest`, () => {
+    const source = `
+      export const { [a[0]]: y, [\`k\`]: z } = o, p = 1;
+      export const [ , q, , , r ] = arr;
+      export const [ ...[ s, t ] ] = arr2;
+      export const { u: [ v, { w } ] } = obj;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['y', 'z', 'p', 'q', 'r', 's', 't', 'v', 'w']);
+  });
+
+  test(`Export declaration does not read past a truncated binding list`, () => {
+    // Regression: a binding list reaching EOF must stop at the source
+    // terminator instead of scanning into the analysis heap and reporting a
+    // phantom export.
+    assert.deepStrictEqual(parse(`export const`)[1].map(e => e.n), []);
+    assert.deepStrictEqual(parse(`export let a,`)[1].map(e => e.n), ['a']);
+    assert.deepStrictEqual(parse(`export const = 1`)[1].map(e => e.n), []);
+  });
+
+  test(`Export initializer: '/' after a value keyword is a regex`, () => {
+    // Regression: skipExpression shares the main tokenizer, so a value keyword
+    // (return/typeof/yield/void) before '/' opens a regex - the comma inside it
+    // must not split the declarator list.
+    const source = `
+      export const f = () => { return /,/g }, b = 2;
+      export const h = typeof /,/g, c = 3;
+      export const g = function*(){ yield /,/g }, d = 4;
+      export const v = void /,/g, e = 5;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['f', 'b', 'h', 'c', 'g', 'd', 'v', 'e']);
+  });
+
+  test(`Export initializer: regex in statement position inside a nested body`, () => {
+    // A '}' that closes a block (not an object) leaves the next '/' in statement
+    // position, so it is a regex; the shared tokenizer tracks the brace kinds.
+    const source = `
+      export const fn = () => { if (x) {} /,/.test(y); return 1 }, a = 2;
+      export const cl = class { m() { switch (x) {} /,/.exec(y) } }, b = 3;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['fn', 'a', 'cl', 'b']);
+  });
+
+  test(`Export initializer: dynamic import is detected`, () => {
+    // Regression: skipExpression must still surface import() found inside an
+    // initializer or a destructuring default.
+    const source = `
+      export const x = import("a"), y = 2;
+      export const z = (async () => await import("b"))(), w = 3;
+      export const { p = import("c") } = o;
+    `;
+    const [imports, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['x', 'y', 'z', 'w', 'p']);
+    assert.deepStrictEqual(imports.map(i => i.n).filter(Boolean), ['a', 'b', 'c']);
+  });
+
+  test(`Export destructuring numeric and BigInt property keys`, () => {
+    // Regression: a numeric/BigInt key must be consumed whole; a partial read
+    // stopped at the '.' of 0.5 and mis-parsed the rest of the pattern.
+    const source = `
+      export const { 0: a, 0.5: b, 1e3: c, 1n: d, 0xff: e } = o, f = 1;
+    `;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
   test(`Export default cases`, () => {

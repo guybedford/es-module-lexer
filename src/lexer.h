@@ -297,6 +297,11 @@ void tryParseExportStatement ();
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
+char16_t readBindingTarget (char16_t ch);
+void readBindingPattern ();
+char16_t skipExpression (bool asi);
+bool isValueChar (char16_t c);
+
 char16_t commentWhitespace (bool br);
 void regularExpression ();
 void templateString ();
