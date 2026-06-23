@@ -435,6 +435,48 @@ suite('Lexer', () => {
     assert.strictEqual(parse('import(`./a\nb.js`)')[0][0].n, './a\nb.js');
   });
 
+  test(`Method named import is not a dynamic import`, () => {
+    // A class/object method or shorthand named `import` with 2+ params was
+    // misreported as a dynamic import: the `)`-then-`{` guard used the wrong
+    // offset once a comma moved the recorded end.
+    const methodSources = [
+      'class C { import(a, b) {} }',
+      'class C { async import(keys, values) {} }',
+      'class C { static import(a, b) {} }',
+      'class C { import(a, b, c) {} }',
+      'class C { *import(a, b) {} }',
+      'class C { async *import(a, b) {} }',
+      'const o = { import(a, b) {} };',
+      'const o = { async import(a, b) {} };',
+      // shapes that already lexed correctly and must stay non-imports
+      'class C { import(a) {} }',
+      'class C { import() {} }',
+      'class C { get import() {} }',
+      'class C { set import(v) {} }',
+    ];
+    for (const source of methodSources) {
+      const [imports] = parse(source);
+      assert.strictEqual(imports.length, 0, `expected no imports for: ${source}`);
+    }
+  });
+
+  test(`Real dynamic import with options still detected`, () => {
+    // Regression guard for the method-name fix: genuine dynamic imports,
+    // including the two-argument import(specifier, options) form, must remain.
+    const dynamicSources = [
+      "import('x')",
+      'import(x)',
+      "import(x, { with: { type: 'json' } })",
+      "import('x', { with: { type: 'json' } })",
+      `import(foo, { type: 'json' })`,
+    ];
+    for (const source of dynamicSources) {
+      const [imports] = parse(source);
+      assert.strictEqual(imports.length, 1, `expected one import for: ${source}`);
+      assert.ok(imports[0].d >= 0, `expected dynamic import for: ${source}`);
+    }
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB

@@ -162,7 +162,8 @@ export function parse (_source, _name) {
         // dynamic import followed by { is not a dynamic import (so remove)
         // this is a sneaky way to get around { import () {} } v { import () }
         // block / object ambiguity without a parser (assuming source is valid)
-        if (source.charCodeAt(lastTokenPos) === 41/*)*/ && imports.length && imports[imports.length - 1].e === lastTokenPos) {
+        // se marks the closing paren; e is moved before the first comma for import(a, b)
+        if (source.charCodeAt(lastTokenPos) === 41/*)*/ && imports.length && imports[imports.length - 1].se === lastTokenPos) {
           imports.pop();
         }
         openClassPosStack[openTokenDepth] = nextBraceIsClass;
