@@ -190,6 +190,33 @@ Compared to the full build:
 
 All other fields are identical to the full build. For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
 
+### TypeScript
+
+The default `parse` lexes the erasable TypeScript syntax that [Node.js type stripping](https://nodejs.org/api/typescript.html#type-stripping) accepts, so the same lexer that handles your JavaScript also handles your TypeScript without a separate transform step:
+
+```js
+const [imports, exports] = parse(`
+  import type { Foo } from './foo';
+  import { bar } from './bar';
+  export type { Baz } from './baz';
+`);
+```
+
+Type-only imports and exports are reported rather than elided, marked with the `tp` field:
+
+```js
+// import type { Foo } from './foo'  ->  { n: './foo', tp: true, ... }
+// import { bar } from './bar'       ->  { n: './bar', tp: false, ... }
+imports[0].tp; // true
+imports[1].tp; // false
+```
+
+`tp` is present on every import and export specifier. Inline modifiers are tracked per specifier, so `export { type A, b }` marks only `A`. Plain JavaScript always reports `tp: false`: type-only syntax is a syntax error in JavaScript, and the one form that is valid in both (`import type from 'x'`) resolves to the same module specifier, so nothing changes for JavaScript consumers.
+
+Type-only lexing ships in the Wasm build. The asm.js / CSP build (`es-module-lexer/js`) is JavaScript-only and always reports `tp: false`; TypeScript support for it is a follow-up.
+
+This first release supports type-only imports and exports. Type annotations, generics, `as` / `satisfies` and the rest of the erasable surface are not yet handled. Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
+
 ### Import Attributes
 
 The `a` field provides the index of the start of the `{` attributes bracket, or -1 for no attributes.

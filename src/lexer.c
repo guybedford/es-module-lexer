@@ -34,6 +34,10 @@ static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
 static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
 static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
+#ifdef LEX_TS
+// Keep the asm.js keyword dictionary in sync before enabling LEX_TS there.
+static const char16_t YPE[] = {'y', 'p', 'e'};
+#endif
 
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
 // resolves '/' with the exact main-loop logic. Returns true for a comment
@@ -270,6 +274,22 @@ void tryParseImportStatement () {
 
   char16_t ch = commentWhitespace(true);
 
+#ifdef LEX_TS
+  // `import type,` and `import type =` bind a value named `type`.
+  bool typeOnly = false;
+  if (isTsTypeKeyword(pos)) {
+    char16_t* savePos = pos;
+    pos += 4;
+    char16_t nextCh = commentWhitespace(true);
+    if (nextCh != ',' && nextCh != '=') {
+      typeOnly = true;
+      ch = nextCh;
+    } else {
+      pos = savePos;
+    }
+  }
+#endif
+
   char16_t* maybePhasePos = pos;
 
   int phase_keyword = 0;
@@ -405,6 +425,10 @@ void tryParseImportStatement () {
     }
 
     readImportString(startPos, ch, false);
+#ifdef LEX_TS
+    if (typeOnly && import_write_head)
+      import_write_head->type_only = true;
+#endif
   }
   else {
     if (!(ch == '"' || ch == '\'' || ch == '*')) {
@@ -424,6 +448,10 @@ void tryParseImportStatement () {
       ch = *pos;
       if (isQuote(ch)) {
         readImportString(startPos, ch, phase_keyword);
+#ifdef LEX_TS
+        if (typeOnly && import_write_head)
+          import_write_head->type_only = true;
+#endif
         return;
       }
       pos++;
@@ -439,6 +467,16 @@ void tryParseImportStatement () {
 bool isValueChar (char16_t c) {
   return c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_' || c == '$' || c >= 128;
 }
+
+#ifdef LEX_TS
+// True for the contextual `type` token, not identifiers like `typeof`.
+bool isTsTypeKeyword (char16_t* pos) {
+  if (*pos != 't' || memcmp(pos + 1, &YPE[0], 3 * 2) != 0)
+    return false;
+  char16_t after = *(pos + 4);
+  return isBrOrWs(after) || after == '{';
+}
+#endif
 
 // Skips an initializer or default-value expression, returning the depth-0
 // terminator (',' or ';', or an enclosing ')'/']'/'}' that the expression did
@@ -589,10 +627,48 @@ void tryParseExportStatement () {
   export_statement_start = sStartPos;
 #endif
 
+#ifdef LEX_TS
+  // `export type { ... }`, `export type { ... } from` and `export type * as ns
+  // from` are type-only re-exports: every name they introduce is a type. The
+  // `type` keyword is only the modifier when a clause (`{` or `*`) follows; an
+  // identifier after it (`export type T = ...`) is a type alias declaration,
+  // handled separately.
+  bool typeOnlyStatement = false;
+  if (isTsTypeKeyword(pos)) {
+    char16_t* savePos = pos;
+    pos += 4;
+    char16_t nextCh = commentWhitespace(true);
+    if (nextCh == '{' || nextCh == '*') {
+      typeOnlyStatement = true;
+      ch = nextCh;
+    } else {
+      pos = savePos;
+    }
+  }
+#endif
+
   if (ch == '{') {
     pos++;
     ch = commentWhitespace(true);
     while (true) {
+#ifdef LEX_TS
+      // Inline `type` modifier: `export { type A, b }` marks only A. `type` is
+      // the modifier when followed by another identifier; a bare `export { type
+      // }` or `export { type as T }` exports the value named `type`.
+      bool typeOnlySpecifier = typeOnlyStatement;
+      if (!typeOnlyStatement && isTsTypeKeyword(pos)) {
+        char16_t* savePos = pos;
+        pos += 4;
+        char16_t afterCh = commentWhitespace(true);
+        if (afterCh != ',' && afterCh != '}' &&
+            !(afterCh == 'a' && *(pos + 1) == 's' && isBrOrWs(*(pos + 2)))) {
+          typeOnlySpecifier = true;
+          ch = afterCh;
+        } else {
+          pos = savePos;
+        }
+      }
+#endif
       char16_t* startPos = pos;
 
       if (!isQuote(ch)) {
@@ -614,7 +690,14 @@ void tryParseExportStatement () {
 
       char16_t* endPos = pos;
       commentWhitespace(true);
+#ifdef LEX_TS
+      Export* before_export = export_write_head;
+#endif
       ch = readExportAs(startPos, endPos);
+#ifdef LEX_TS
+      if (typeOnlySpecifier && export_write_head && export_write_head != before_export)
+        export_write_head->type_only = true;
+#endif
       // ,
       if (ch == ',') {
         pos++;
@@ -764,10 +847,26 @@ void tryParseExportStatement () {
     }
   }
 
+#ifdef LEX_TS
+  // A statement-level `export type` marks every name it introduced (the brace
+  // and `* as ns` forms reach here); inline per-specifier `type` is marked at
+  // the specifier site instead.
+  if (typeOnlyStatement) {
+    for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next)
+      exprt->type_only = true;
+  }
+#endif
+
   // from ...
   if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true), false);
+#ifdef LEX_TS
+    // `export type { A } from 'm'` re-exports types only, so the module import
+    // it generates is itself type-only.
+    if (typeOnlyStatement && import_write_head)
+      import_write_head->type_only = true;
+#endif
 
     // There were no local names.
     for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
