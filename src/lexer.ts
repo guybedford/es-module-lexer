@@ -127,6 +127,14 @@ export interface ImportSpecifier {
    * // Returns [['type', 'json'], ['integrity', 'sha384-...']]
    */
   readonly at: ReadonlyArray<readonly [string, string]> | null;
+
+  /**
+   * `true` for a TypeScript type-only import (`import type ... from`), elided
+   * from the emitted JavaScript. The Wasm build lexes type-only syntax; the
+   * asm.js / CSP build (`es-module-lexer/js`) is JavaScript-only and always
+   * reports `false`.
+   */
+  readonly tp: boolean;
 }
 
 export interface ExportSpecifier {
@@ -217,6 +225,13 @@ export interface ExportSpecifier {
    * // Returns "export"
    */
   readonly ss: number;
+  /**
+   * `true` for a TypeScript type-only export (`export type { ... }` or an inline
+   * `export { type X }`), elided from the emitted JavaScript. The Wasm build
+   * lexes type-only syntax; the asm.js / CSP build (`es-module-lexer/js`) is
+   * JavaScript-only and always reports `false`.
+   */
+  readonly tp: boolean;
 }
 
 export interface ParseError extends Error {
@@ -280,7 +295,10 @@ export function parse (source: string, name = '@'): readonly [
       }
       if (at.length === 0) at = null;
     }
-    imports.push({ n, t, s, e, ss, se, d, a, at });
+    if (MINIMAL)
+      imports.push({ n, t, s, e, ss, se, d, a, at } as unknown as ImportSpecifier);
+    else
+      imports.push({ n, t, s, e, ss, se, d, a, at, tp: !!wasm.itp() });
   }
   while (wasm.re()) {
     const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
@@ -289,7 +307,7 @@ export function parse (source: string, name = '@'): readonly [
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
     else
-      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln });
+      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln, tp: !!wasm.etp() });
   }
 
   function decode (str: string) {
@@ -346,6 +364,8 @@ let wasm: {
   es(): number;
   /** getExportStatementStart */
   ess(): number;
+  /** getExportTypeOnly */
+  etp(): number;
   /** facade */
   f(): boolean;
   /** hasModuleSyntax */
@@ -356,6 +376,8 @@ let wasm: {
   ie(): number;
   /** getImportSafeString */
   ip(): number;
+  /** getImportTypeOnly */
+  itp(): number;
   /** getImportStart */
   is(): number;
   /** readExport */

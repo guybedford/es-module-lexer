@@ -69,7 +69,11 @@ export function parse (_source, _name = '@') {
       }
       at = at.length > 0 ? at : null;
     }
-    imports.push({ t, n, s, e, ss, se, d, a, at });
+    // JavaScript-only build: mirror the full wasm shape.
+    if (MINIMAL)
+      imports.push({ t, n, s, e, ss, se, d, a, at });
+    else
+      imports.push({ t, n, s, e, ss, se, d, a, at, tp: false });
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
@@ -78,7 +82,7 @@ export function parse (_source, _name = '@') {
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln });
     else
-      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln });
+      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln, tp: false });
   }
 
   return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];
