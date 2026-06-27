@@ -435,6 +435,31 @@ suite('Lexer', () => {
     assert.strictEqual(parse('import(`./a\nb.js`)')[0][0].n, './a\nb.js');
   });
 
+  test(`Method named import is not a dynamic import`, () => {
+    // A method named `import` followed by `{` is a method definition, not a
+    // dynamic import. The `) {` heuristic removes the false positive; a comma
+    // in the parameter list must not defeat it.
+    const sources = [
+      'class Graph {\n\timport(data, merge = false) {\n\t\treturn this;\n\t}\n}',
+      'const o = { import(data, merge = false) { return this; } };',
+      'class G { import(a, b, c) {} }',
+      'class G { static import(a, b) {} }',
+      'class G { import() {} }',
+      'class G { import(a) {} }',
+      'const o = { import(a, b) {}, other() {} };',
+    ];
+    for (const source of sources) {
+      assert.deepStrictEqual(parse(source)[0], [], source);
+    }
+  });
+
+  test(`Method named import does not mask a following dynamic import`, () => {
+    const source = 'class G { import(a, b) {} }\nconst m = await import("graphology");';
+    const [imports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'graphology');
+  });
+
   test(`Simple export destructuring`, () => {
     const source = `
       export const{URI,Utils,...Another}=LIB
