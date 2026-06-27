@@ -129,6 +129,11 @@ node -e "const fs=require('fs');const f='$TARGET';fs.writeFileSync(f,fs.readFile
 '''
 
 [[task]]
+# Full wasm build (-D LEX_TS): lexes the erasable TypeScript syntax Node.js type
+# stripping accepts and exposes the type-only getters (itp/etp). The TS code adds
+# one keyword compare per import/export statement and never diverges from JS on
+# any valid-JS input, so plain-JS consumers pay nothing. The asm.js/CSP build
+# below stays JS-only (no -D LEX_TS) until the fastcomp dictionary is extended.
 target = 'lib/lexer.wasm'
 deps = ['src/lexer.h', 'src/lexer.c']
 env = { PYTHONHOME = '' }
@@ -136,8 +141,8 @@ run = """
 	${{ EMSDK_PATH }}/emsdk install 6.0.0
 	${{ EMSDK_PATH }}/emsdk activate 6.0.0
 
-	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
-	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_ess','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','___heap_base']" \
+	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 -D LEX_TS \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_itp','_se','_ai','_id','_es','_ee','_els','_ele','_ess','_etp','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','___heap_base']" \
 	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 """
 
@@ -256,7 +261,7 @@ run = 'node build/combine-asm.mjs'
 
 [[task]]
 name = 'test'
-deps = ['test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm']
+deps = ['test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm', 'test:ts:wasm']
 
 [[task]]
 name = 'test:js'
@@ -285,6 +290,14 @@ name = 'test:minimal:wasm'
 deps = ['dist/lexer.minimal.js']
 env = { WASM = '1', MINIMAL = '1' }
 run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
+# The TypeScript suites run against the full wasm build only: type-only lexing
+# ships in lib/lexer.wasm (-D LEX_TS), while the asm.js/CSP build stays JS-only.
+name = 'test:ts:wasm'
+deps = ['dist/lexer.js']
+env = { WASM = '1' }
+run = 'mocha -b -u tdd test/typescript/*.cjs'
 
 [[task]]
 target = 'lib/lexer.wat'
