@@ -30,6 +30,137 @@ static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
 static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
 
+// Division / regex ambiguity + comment dispatch, shared so skipExpression
+// resolves '/' with the exact main-loop logic. Returns true for a comment
+// (caller must not update lastTokenPos).
+static inline __attribute__((always_inline)) bool handleSlash () {
+  char16_t next_ch = *(pos + 1);
+  if (next_ch == '/') { lineComment(); return true; }
+  if (next_ch == '*') { blockComment(true); return true; }
+  char16_t lastToken = *lastTokenPos;
+  if (isExpressionPunctuator(lastToken) &&
+      !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
+      !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
+      lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
+      lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
+      isExpressionKeyword(lastTokenPos) ||
+      lastToken == '/' && lastSlashWasDivision ||
+      !lastToken) {
+    regularExpression();
+    lastSlashWasDivision = false;
+  }
+  else if (export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end) {
+    regularExpression();
+    lastSlashWasDivision = false;
+  }
+  else {
+    while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
+    if (isWsNotBr(*lastTokenPos)) {
+      while (lastTokenPos > source && isWsNotBr(*(--lastTokenPos)));
+      if (isBreakOrContinue(lastTokenPos)) { regularExpression(); lastSlashWasDivision = false; return false; }
+    }
+    lastSlashWasDivision = true;
+  }
+  return false;
+}
+
+// Consume one token at the current ch/pos, updating the global tokenizer state.
+// The single source of tokenization: the main loop and skipExpression both call
+// it, so the regex/keyword/import rules never diverge. Comments do not advance
+// lastTokenPos. Returns false on a syntax error so the caller can early-exit;
+// always_inline lets that fold into the hot loop without a per-token has_error
+// load (the comment flag, not an early `return`, keeps the fast-path shape).
+static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
+  bool isComment = false;
+  switch (ch) {
+    case 'e':
+      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0)
+        tryParseExportStatement();
+      break;
+    case 'i':
+      if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
+        tryParseImportStatement();
+      break;
+    case 'c':
+      if (keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5)))
+        nextBraceIsClass = true;
+      break;
+    case '(':
+      openTokenStack[openTokenDepth].token = AnyParen;
+      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      break;
+    case '[':
+      openTokenStack[openTokenDepth].token = AnyBracket;
+      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      break;
+    case ']':
+      if (openTokenDepth == 0) return syntaxError(), false;
+      openTokenDepth--;
+      break;
+    case ',':
+      if (dynamicImportStackDepth > 0 && openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == ImportParen) {
+        Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+        if (cur_dynamic_import->end == 0) {
+          cur_dynamic_import->end = lastTokenPos + 1;
+          pos++;
+          ch = commentWhitespace(true);
+          cur_dynamic_import->attr_index = pos;
+          pos--;
+        }
+      }
+      break;
+    case ')':
+      if (openTokenDepth == 0) return syntaxError(), false;
+      openTokenDepth--;
+      if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
+        Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+        if (cur_dynamic_import->end == 0)
+          cur_dynamic_import->end = lastTokenPos + 1;
+        cur_dynamic_import->statement_end = pos + 1;
+        dynamicImportStackDepth--;
+      }
+      break;
+    case '{':
+      // dynamic import followed by { is not a dynamic import (so remove)
+      // this is a sneaky way to get around { import () {} } v { import () }
+      // block / object ambiguity without a parser (assuming source is valid)
+      // statement_end (the char after the closing paren) identifies that paren;
+      // end is moved before the first comma for import(a, b), so it can't be used here
+      if (*lastTokenPos == ')' && import_write_head && import_write_head->statement_end == lastTokenPos + 1) {
+        import_write_head = import_write_head_last;
+        if (import_write_head)
+          import_write_head->next = NULL;
+        else
+          first_import = NULL;
+      }
+      openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
+      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      nextBraceIsClass = false;
+      break;
+    case '}':
+      if (openTokenDepth == 0) return syntaxError(), false;
+      if (openTokenStack[--openTokenDepth].token == TemplateBrace)
+        templateString();
+      break;
+    case '\'':
+    case '"':
+      stringLiteral(ch);
+      break;
+    case '/':
+      isComment = handleSlash();
+      break;
+    case '`':
+      openTokenStack[openTokenDepth].pos = lastTokenPos;
+      openTokenStack[openTokenDepth++].token = Template;
+      templateString();
+      break;
+  }
+  if (!isComment)
+    lastTokenPos = pos;
+  return true;
+}
+
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
   // stack allocations
@@ -110,144 +241,8 @@ bool parse () {
     if (ch == 32 || ch < 14 && ch > 8)
       continue;
 
-    switch (ch) {
-      case 'e':
-        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0)
-          tryParseExportStatement();
-        break;
-      case 'i':
-        if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
-          tryParseImportStatement();
-        break;
-      case 'c':
-        if (keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5)))
-          nextBraceIsClass = true;
-        break;
-      case '(':
-        openTokenStack[openTokenDepth].token = AnyParen;
-        openTokenStack[openTokenDepth++].pos = lastTokenPos;
-        break;
-      case '[':
-        openTokenStack[openTokenDepth].token = AnyBracket;
-        openTokenStack[openTokenDepth++].pos = lastTokenPos;
-        break;
-      case ']':
-        if (openTokenDepth == 0)
-          return syntaxError(), false;
-        openTokenDepth--;
-        break;
-      case ',':
-        if (dynamicImportStackDepth > 0 && openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == ImportParen) {
-          Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
-          if (cur_dynamic_import->end == 0) {
-            cur_dynamic_import->end = lastTokenPos + 1;
-            pos++;
-            ch = commentWhitespace(true);
-            cur_dynamic_import->attr_index = pos;
-            pos--;
-          }
-        }
-        break;
-      case ')':
-        if (openTokenDepth == 0)
-          return syntaxError(), false;
-        openTokenDepth--;
-        if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
-          Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
-          if (cur_dynamic_import->end == 0)
-            cur_dynamic_import->end = lastTokenPos + 1;
-          cur_dynamic_import->statement_end = pos + 1;
-          dynamicImportStackDepth--;
-        }
-        break;
-      case '{':
-        // dynamic import followed by { is not a dynamic import (so remove)
-        // this is a sneaky way to get around { import () {} } v { import () }
-        // block / object ambiguity without a parser (assuming source is valid)
-        // statement_end (the char after the closing paren) identifies that paren;
-        // end is moved before the first comma for import(a, b), so it can't be used here
-        if (*lastTokenPos == ')' && import_write_head && import_write_head->statement_end == lastTokenPos + 1) {
-          import_write_head = import_write_head_last;
-          if (import_write_head)
-            import_write_head->next = NULL;
-          else
-            first_import = NULL;
-        }
-        openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
-        openTokenStack[openTokenDepth++].pos = lastTokenPos;
-        nextBraceIsClass = false;
-        break;
-      case '}':
-        if (openTokenDepth == 0)
-          return syntaxError(), false;
-        if (openTokenStack[--openTokenDepth].token == TemplateBrace) {
-          templateString();
-        }
-        break;
-      case '\'':
-        stringLiteral(ch);
-        break;
-      case '"':
-        stringLiteral(ch);
-        break;
-      case '/': {
-        char16_t next_ch = *(pos + 1);
-        if (next_ch == '/') {
-          lineComment();
-          // dont update lastToken
-          continue;
-        }
-        else if (next_ch == '*') {
-          blockComment(true);
-          // dont update lastToken
-          continue;
-        }
-        else {
-          // Division / regex ambiguity handling based on checking backtrack analysis of:
-          // - what token came previously (lastToken)
-          // - if a closing brace or paren, what token came before the corresponding
-          //   opening brace or paren (lastOpenTokenIndex)
-          char16_t lastToken = *lastTokenPos;
-          if (isExpressionPunctuator(lastToken) &&
-              !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
-              !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
-              lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-              openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
-              lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
-              isExpressionKeyword(lastTokenPos) ||
-              lastToken == '/' && lastSlashWasDivision ||
-              !lastToken) {
-            regularExpression();
-            lastSlashWasDivision = false;
-          }
-          else if (export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end) {
-            // export default /some-regexp/
-            regularExpression();
-            lastSlashWasDivision = false;
-          }
-          else {
-            // Final check - if the last token was "break x" or "continue x"
-            while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
-            if (isWsNotBr(*lastTokenPos)) {
-              while (lastTokenPos > source && isWsNotBr(*(--lastTokenPos)));
-              if (isBreakOrContinue(lastTokenPos)) {
-                regularExpression();
-                lastSlashWasDivision = false;
-                break;
-              }
-            }
-            lastSlashWasDivision = true;
-          }
-        }
-        break;
-      }
-      case '`':
-        openTokenStack[openTokenDepth].pos = lastTokenPos;
-        openTokenStack[openTokenDepth++].token = Template;
-        templateString();
-        break;
-    }
-    lastTokenPos = pos;
+    if (!consumeToken(ch))
+      return false;
   }
 
   if (openTokenDepth || has_error || dynamicImportStackDepth)
@@ -426,6 +421,143 @@ void tryParseImportStatement () {
   }
 }
 
+// True for a char that can end a value. skipExpression uses this to tell
+// division from a regex: a '/' right after a value is division. Non-ASCII is
+// always an identifier char here (every JS operator is ASCII), so it counts as
+// a value — otherwise `x = π / 2` would read the '/' as a regex.
+bool isValueChar (char16_t c) {
+  return c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_' || c == '$' || c >= 128;
+}
+
+// Skips an initializer or default-value expression, returning the depth-0
+// terminator (',' or ';', or an enclosing ')'/']'/'}' that the expression did
+// not open) and leaving pos AT it. With `asi` set, a line break following a
+// value also terminates, so the statement after an automatic semicolon is never
+// read as another binding. Entry: pos AT the char before the expression (the
+// '=' of an initializer, or the '[' of a computed key).
+char16_t skipExpression (bool asi) {
+  // Rides consumeToken (the single tokenizer) so the regex/keyword/import rules
+  // match the main loop exactly. Ends at a ',' / ';' / enclosing closer at the
+  // entry depth, or - with asi - a line break after a value. Entry: pos AT the
+  // char before the expression (the '=' of an initializer or the '[' of a
+  // computed key); that char is the previous token, so a leading '/' is a regex.
+  uint32_t baseDepth = openTokenDepth;
+  bool lastWasValue = false;
+  lastTokenPos = pos;
+  while (pos++ < end) {
+    char16_t ch = *pos;
+    if (isWsNotBr(ch))
+      continue;
+    if (openTokenDepth == baseDepth) {
+      if (ch == ',' || ch == ';' || ch == ')' || ch == ']' || ch == '}')
+        return ch;
+      if (asi && lastWasValue && isBr(ch))
+        return ch;
+    }
+    if (isBr(ch))
+      continue;
+    char16_t* before = lastTokenPos;
+    consumeToken(ch);
+    if (has_error)
+      return '\0';
+    if (lastTokenPos == before) {
+      // a comment: a line comment can land on the ASI-terminating line break
+      if (asi && openTokenDepth == baseDepth && lastWasValue && isBr(*pos))
+        return *pos;
+    }
+    else {
+      lastWasValue = ch == '/' ? !lastSlashWasDivision
+                   : isValueChar(ch) || ch == ')' || ch == ']' || ch == '}' || ch == '\'' || ch == '"' || ch == '`';
+    }
+  }
+  return '\0';
+}
+
+// pos AT a binding target: an identifier or a nested '{'/'[' destructuring
+// pattern. Adds the bound name(s), then skips trailing whitespace/comments and
+// returns the next significant char with pos AT it. pos is left unchanged when
+// no target is present (malformed input or the end of a binding list).
+char16_t readBindingTarget (char16_t ch) {
+  if (ch == '{' || ch == '[') {
+    readBindingPattern();
+    pos++;
+  } else {
+    char16_t* nameStart = pos;
+    readToWsOrPunctuator(ch);
+    if (pos > nameStart)
+      addExport(nameStart, pos, nameStart, pos);
+  }
+  return commentWhitespace(true);
+}
+
+// pos AT '{' or '['. Adds every identifier bound by the destructuring pattern,
+// resolving aliases ({ a: b } adds b), defaults ({ a = 1 } adds a), rest
+// (...rest adds rest) and arbitrary nesting. Leaves pos AT the matching closer.
+void readBindingPattern () {
+  bool isObject = *pos == '{';
+  char16_t close = isObject ? '}' : ']';
+  pos++;
+  char16_t ch = commentWhitespace(true);
+  while (ch != close && pos <= end) {
+    // ...rest element
+    if (ch == '.' && *(pos + 1) == '.' && *(pos + 2) == '.') {
+      pos += 3;
+      ch = commentWhitespace(true);
+      ch = readBindingTarget(ch);
+      continue;
+    }
+    if (isObject) {
+      char16_t* keyStart = pos;
+      char16_t* keyEnd = pos;
+      if (ch == '[') {
+        skipExpression(false); // computed key: pos AT matching ']'
+        pos++;
+        ch = commentWhitespace(true);
+      } else if (isQuote(ch)) {
+        stringLiteral(ch);
+        pos++;
+        ch = commentWhitespace(true);
+      } else if (ch >= '0' && ch <= '9') {
+        ch = *(++pos);
+        while ((ch >= '0' && ch <= '9') || ch == '.' || ch == '_' ||
+               ch == 'e' || ch == 'E' || ch == 'n' ||
+               ch == 'x' || ch == 'X' || ch == 'b' || ch == 'B' || ch == 'o' || ch == 'O' ||
+               (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') ||
+               ((ch == '+' || ch == '-') && (*(pos - 1) == 'e' || *(pos - 1) == 'E')))
+          ch = *(++pos);
+        ch = commentWhitespace(true);
+      } else {
+        readToWsOrPunctuator(ch);
+        keyEnd = pos;
+        ch = commentWhitespace(true);
+      }
+      // { key: target } binds target; shorthand { key } / { key = default }
+      // binds the key. A computed ([expr]) or string key has no shorthand.
+      if (ch == ':') {
+        pos++;
+        ch = commentWhitespace(true);
+        ch = readBindingTarget(ch);
+      } else if (keyEnd > keyStart) {
+        addExport(keyStart, keyEnd, keyStart, keyEnd);
+      }
+    } else if (ch == ',') { // array elision
+      pos++;
+      ch = commentWhitespace(true);
+      continue;
+    } else {
+      ch = readBindingTarget(ch);
+    }
+    if (ch == '=')
+      ch = skipExpression(false); // default value
+    if (ch == ',') {
+      pos++;
+      ch = commentWhitespace(true);
+    } else {
+      break;
+    }
+  }
+}
+
 void tryParseExportStatement () {
   char16_t* sStartPos = pos;
   Export* prev_export_write_head = export_write_head;
@@ -580,55 +712,32 @@ void tryParseExportStatement () {
         pos += 2;
       // fallthrough
 
-      // export var/let/const name = ...(, name = ...)+
+      // export var/let/const binding (, binding)*  — each binding is an
+      // identifier or a destructuring pattern, optionally `= initializer`.
+      // Initializers and defaults are skipped expression-aware (see
+      // skipExpression) so a comma inside them does not split the binding list,
+      // and the list ends at ';', EOF or an ASI line break — never reading into
+      // the following statement.
       case 'v':
-      case 'l':
-        // simple declaration lexing only handles names. Any syntax after variable equals is skipped
-        // (export var p = function () { ... }, q = 5 skips "q")
+      case 'l': {
         pos += 3;
         facade = false;
         ch = commentWhitespace(true);
-        startPos = pos;
-        ch = readToWsOrPunctuator(ch);
-        // very basic destructuring support only of the singular form:
-        //   export const { a, b, ...c }
-        // without aliasing, nesting or defaults
-        bool destructuring = ch == '{' || ch == '[';
-        const char16_t* destructuringPos = pos;
-        if (destructuring) {
-          pos += 1;
-          ch = commentWhitespace(true);
-          startPos = pos;
-          ch = readToWsOrPunctuator(ch);
-        }
-        do {
-          if (pos == startPos)
+        while (pos <= end) {
+          char16_t* bindingStart = pos;
+          ch = readBindingTarget(ch);
+          if (pos == bindingStart)
             break;
-          addExport(startPos, pos, startPos, pos);
-          ch = commentWhitespace(true);
-          if (destructuring && (ch == '}' || ch == ']')) {
-            destructuring = false;
+          if (ch == '=')
+            ch = skipExpression(true);
+          if (ch != ',')
             break;
-          }
-          if (ch != ',') {
-            pos -= 1;
-            break;
-          }
           pos++;
           ch = commentWhitespace(true);
-          startPos = pos;
-          // internal destructurings unsupported
-          if (ch == '{' || ch == '[') {
-            pos -= 1;
-            break;
-          }
-          ch = readToWsOrPunctuator(ch);
-        } while (true);
-        // if stuck inside destructuring syntax, backtrack
-        if (destructuring) {
-          pos = (char16_t*)destructuringPos - 1;
         }
+        pos--;
         return;
+      }
 
       default:
         return;
