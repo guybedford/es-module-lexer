@@ -48,7 +48,32 @@ Promise.resolve().then(async () => {
 			await init;
 			console.log(`> ${c.bold().green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
 		}
-	
+
+		doRun();
+	}
+
+	if (!process.env.BENCH || process.env.BENCH === 'minimal-js') {
+		console.log('--- JS Build (minimal) ---');
+		console.log('Module load time');
+		{
+			const start = process.hrtime.bigint();
+			var { parse } = await import('../dist/lexer.minimal.asm.js');
+			console.log(`> ${c.bold().green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+		}
+
+		doRun();
+	}
+
+	if (!process.env.BENCH || process.env.BENCH === 'minimal-wasm') {
+		console.log('--- Wasm Build (minimal) ---');
+		console.log('Module load time');
+		{
+			const start = process.hrtime.bigint();
+			var { parse, init } = await import('../dist/lexer.minimal.js');
+			await init;
+			console.log(`> ${c.bold().green(Math.round(Number(process.hrtime.bigint() - start) / 1e6) + 'ms')}`);
+		}
+
 		doRun();
 	}
 

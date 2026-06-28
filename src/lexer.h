@@ -25,6 +25,7 @@ enum ImportType {
   DynamicDeferPhase = 7,
 };
 
+#ifndef LEXER_MIN
 struct Attribute {
   const char16_t* key_start;
   const char16_t* key_end;
@@ -33,6 +34,7 @@ struct Attribute {
   struct Attribute* next;
 };
 typedef struct Attribute Attribute;
+#endif
 
 struct Import {
   const char16_t* start;
@@ -43,7 +45,9 @@ struct Import {
   const char16_t* dynamic;
   bool safe;
   enum ImportType import_ty;
+#ifndef LEXER_MIN
   struct Attribute* attributes;
+#endif
   struct Import* next;
 };
 typedef struct Import Import;
@@ -70,7 +74,9 @@ struct Export {
   const char16_t* end;
   const char16_t* local_start;
   const char16_t* local_end;
+#ifndef LEXER_MIN
   const char16_t* statement_start;
+#endif
   struct Export* next;
 };
 typedef struct Export Export;
@@ -82,12 +88,16 @@ Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
+#ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
+#endif
 void* analysis_base;
 void* analysis_head;
 
 bool facade;
+#ifndef LEXER_MIN
 bool hasModuleSyntax;
+#endif
 bool lastSlashWasDivision;
 uint16_t openTokenDepth;
 char16_t* lastTokenPos;
@@ -151,10 +161,14 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->attr_index = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
+#ifndef LEXER_MIN
   import->attributes = NULL;
+#endif
   import->next = NULL;
+#ifndef LEXER_MIN
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
     hasModuleSyntax = true;
+#endif
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
@@ -169,9 +183,13 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->end = end;
   export->local_start = local_start;
   export->local_end = local_end;
+#ifndef LEXER_MIN
   export->statement_start = export_statement_start;
+#endif
   export->next = NULL;
+#ifndef LEXER_MIN
   hasModuleSyntax = true;
+#endif
 }
 
 // getErr
@@ -232,10 +250,12 @@ int32_t els () {
 int32_t ele () {
   return export_read_head->local_end ? export_read_head->local_end - source : -1;
 }
+#ifndef LEXER_MIN
 // getExportStatementStart
 uint32_t ess () {
   return export_read_head->statement_start - source;
 }
+#endif
 // readImport
 bool ri () {
   if (import_read_head == NULL)
@@ -256,13 +276,16 @@ bool re () {
     return false;
   return true;
 }
+#ifndef LEXER_MIN
 bool f () {
   return facade;
 }
 bool ms () {
   return hasModuleSyntax;
 }
+#endif
 
+#ifndef LEXER_MIN
 Attribute* attribute_read_head = NULL;
 
 // readAttribute
@@ -295,6 +318,7 @@ uint32_t ave () {
 void rsa () {
   attribute_read_head = NULL;
 }
+#endif
 
 bool parse ();
 

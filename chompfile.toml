@@ -10,12 +10,16 @@ WABT_PATH = '../wabt'
 
 [[task]]
 name = 'build'
-deps = ['dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js', 'types/lexer.d.ts']
+deps = [
+  'dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js',
+  'dist/lexer.minimal.js', 'dist/lexer.minimal.cjs', 'dist/lexer.minimal.asm.js',
+  'types/lexer.d.ts', 'types/lexer.minimal.d.ts'
+]
 
 [[task]]
 name = 'bench'
 serial = true
-deps = ['bench:js', 'bench:wasm']
+deps = ['bench:js', 'bench:wasm', 'bench:minimal:js', 'bench:minimal:wasm']
 
 [[task]]
 name = 'bench:js'
@@ -30,6 +34,18 @@ env = { BENCH = 'wasm' }
 run = 'node --expose-gc bench/index.js'
 
 [[task]]
+name = 'bench:minimal:js'
+deps = ['dist/lexer.minimal.asm.js']
+env = { BENCH = 'minimal-js' }
+run = 'node --expose-gc bench/index.js'
+
+[[task]]
+name = 'bench:minimal:wasm'
+deps = ['dist/lexer.minimal.js']
+env = { BENCH = 'minimal-wasm' }
+run = 'node --expose-gc bench/index.js'
+
+[[task]]
 target = 'dist/lexer.asm.js'
 dep = 'lib/lexer.asm.js'
 template = 'terser'
@@ -39,9 +55,23 @@ compress = { ecma = 6, unsafe = true }
 output = { preamble = '/* es-module-lexer #PJSON_VERSION */' }
 
 [[task]]
+target = 'dist/lexer.minimal.asm.js'
+dep = 'lib/lexer.min.asm.js'
+template = 'terser'
+[task.template-options]
+module = true
+compress = { ecma = 6, unsafe = true }
+output = { preamble = '/* es-module-lexer (minimal) #PJSON_VERSION */' }
+
+[[task]]
 target = 'dist/lexer.cjs'
 deps = ['dist/lexer.js']
 run = 'babel dist/lexer.js | terser -c -m -o dist/lexer.cjs'
+
+[[task]]
+target = 'dist/lexer.minimal.cjs'
+deps = ['dist/lexer.minimal.js']
+run = 'babel dist/lexer.minimal.js | terser -c -m -o dist/lexer.minimal.cjs'
 
 [[task]]
 name = 'build:swc'
@@ -69,27 +99,33 @@ run = '''
 '''
 
 [[task]]
+# Minimal build types: shared declarations re-exported from lexer.d.ts, with
+# ExportSpecifier (no ss) and parse() (2-tuple) overridden. See gen-min-dts.mjs.
+target = 'types/lexer.minimal.d.ts'
+deps = ['types/lexer.d.ts', 'build/gen-min-dts.mjs']
+run = 'node build/gen-min-dts.mjs'
+
+[[task]]
 target = 'dist/lexer.js'
 deps = ['src/lexer.js', 'lib/lexer.wasm', 'package.json']
-engine = 'node'
+env = { SRC = 'src/lexer.js', WASM = 'lib/lexer.wasm' }
+run = 'node build/embed-wasm.mjs'
+
+[[task]]
+target = 'dist/lexer.minimal.js'
+deps = ['src/lexer.min.js', 'lib/lexer.min.wasm', 'package.json']
+env = { SRC = 'src/lexer.min.js', WASM = 'lib/lexer.min.wasm' }
+run = 'node build/embed-wasm.mjs'
+
+[[task]]
+name = 'build:swc-min'
+target = 'src/lexer.min.js'
+dep = 'src/lexer.ts'
+# Same swc invocation as build:swc, then flip the build-time MINIMAL flag so
+# terser (in the embed step) drops the full-only reader paths.
 run = '''
-	import { readFileSync, writeFileSync } from 'fs';
-	import { minify } from 'terser';
-
-	const wasmBuffer = readFileSync('lib/lexer.wasm');
-	const jsSource = readFileSync('src/lexer.js', 'utf8');
-	const pjson = JSON.parse(readFileSync('package.json', 'utf8'));
-
-	const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));
-
-	const { code: minified } = await minify(jsSourceProcessed, {
-		module: true,
-		output: {
-			preamble: `/* es-module-lexer ${pjson.version} */`
-		}
-	});
-
-	writeFileSync('dist/lexer.js', minified ? minified : jsSourceProcessed);
+node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAttributes=true
+node -e "const fs=require('fs');const f='$TARGET';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('MINIMAL = false','MINIMAL = true').replace('MINIMAL=false','MINIMAL=true'))"
 '''
 
 [[task]]
@@ -102,6 +138,23 @@ run = """
 
 	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_ess','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','___heap_base']" \
+	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+# Minimal wasm build (-DLEXER_MIN): drops the getters es-module-shims never
+# reads (ip/ess/f/ms + attributes) and the facade fast path. See src/lexer.c.
+# Depends on lib/lexer.wasm so the two upstream-emsdk builds run sequentially
+# rather than racing on the shared emsdk activation.
+target = 'lib/lexer.min.wasm'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.wasm']
+env = { PYTHONHOME = '' }
+run = """
+	${{ EMSDK_PATH }}/emsdk install 6.0.0
+	${{ EMSDK_PATH }}/emsdk activate 6.0.0
+
+	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -DLEXER_MIN -o lib/lexer.min.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','___heap_base']" \
 	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 """
 
@@ -140,115 +193,70 @@ run = """
 """
 
 [[task]]
-# Resolve the wrapper's {{OFFSET}} (dictionary heap address) and {{STATIC_TOP}}
-# (source/stack base, above all static + BSS) from the actual fastcomp layout,
-# rather than hardcoding them. Both shift with optimization/toolchain/source
-# changes (e.g. LTO moves the dictionary); deriving them keeps the build robust.
+# Minimal fastcomp asm.js build (-DLEXER_MIN), mirroring lib/lexer.emcc.asm.js.
+# Chained after the full fastcomp builds (via lib/lexer.layout.js) so the
+# fastcomp emsdk activation is never run concurrently.
+target = 'lib/lexer.min.emcc.asm.js'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.layout.js']
+env = { PYTHONHOME = '' }
+run = """
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
+
+	${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -DLEXER_MIN -o lib/lexer.min.emcc.js -s WASM=0 -Oz --closure 1 \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_setSource']" \
+	-s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+# Minimal closure-disabled layout sidecar (-DLEXER_MIN), mirroring
+# lib/lexer.layout.js. Sequenced after lib/lexer.min.emcc.asm.js to avoid racing
+# on the shared emsdk activation.
+target = 'lib/lexer.min.layout.js'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.min.emcc.asm.js']
+env = { PYTHONHOME = '' }
+run = """
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+	${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
+
+	${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -DLEXER_MIN -o lib/lexer.min.layout.js -s WASM=0 -Oz --closure 0 \
+	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_setSource']" \
+	-s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+	-s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+# Resolve the wrapper's {{OFFSET}}/{{STATIC_TOP}}/{{WORDS}} from the actual
+# fastcomp layout (see build/gen-asm-in.mjs), rather than hardcoding them.
 target = 'lib/lexer.asm.in.js'
-deps = ['src/lexer.asm.js', 'lib/lexer.layout.js']
-engine = 'node'
-run = '''
-	import { readFileSync, writeFileSync } from 'fs';
+deps = ['src/lexer.asm.js', 'lib/lexer.layout.js', 'build/gen-asm-in.mjs']
+env = { SRC = 'src/lexer.asm.js', LAYOUT = 'lib/lexer.layout.js', MINIMAL = '0' }
+run = 'node build/gen-asm-in.mjs'
 
-	// Read the layout constants from the closure-disabled sidecar build.
-	const layout = readFileSync('lib/lexer.layout.js', 'utf8');
-	const constant = name => {
-		const m = layout.match(new RegExp(name + ' ?= ?(\\d+)'));
-		if (!m) throw new Error(`${name} not found in lib/lexer.layout.js`);
-		return +m[1];
-	};
-	const GLOBAL_BASE = constant('GLOBAL_BASE');
-	const STACK_BASE = constant('STACK_BASE');
-
-	// Extract the keyword dictionary directly from the static memory image: it is
-	// the longest run of ascii char16 (printable low byte, zero high byte).
-	const mem = readFileSync('lib/lexer.layout.js.mem');
-	let best = { start: -1, str: '' }, cur = null;
-	for (let i = 0; i + 1 < mem.length; i += 2) {
-		if (mem[i + 1] === 0 && mem[i] >= 0x20 && mem[i] <= 0x7e) {
-			if (!cur) cur = { start: i, str: '' };
-			cur.str += String.fromCharCode(mem[i]);
-			if (cur.str.length > best.str.length) best = cur;
-		} else cur = null;
-	}
-	if (best.start === -1)
-		throw new Error('keyword dictionary not found in lib/lexer.layout.js.mem');
-
-	let words = best.str;
-	// The image drops the trailing zero high byte of the final char16, leaving a
-	// lone printable low byte at the very end of the dictionary.
-	const tail = best.start + words.length * 2;
-	if (tail === mem.length - 1 && mem[tail] >= 0x20 && mem[tail] <= 0x7e)
-		words += String.fromCharCode(mem[tail]);
-
-	const out = readFileSync('src/lexer.asm.js', 'utf8')
-		.replace('{{WORDS}}', words)
-		.replace('{{OFFSET}}', GLOBAL_BASE + best.start)
-		.replace('{{STATIC_TOP}}', STACK_BASE);
-	writeFileSync('lib/lexer.asm.in.js', out);
-'''
+[[task]]
+# Minimal asm.js wrapper prelude: same derivation, against the minimal layout,
+# with the MINIMAL build-time flag flipped on.
+target = 'lib/lexer.min.asm.in.js'
+deps = ['src/lexer.asm.js', 'lib/lexer.min.layout.js', 'build/gen-asm-in.mjs']
+env = { SRC = 'src/lexer.asm.js', LAYOUT = 'lib/lexer.min.layout.js', MINIMAL = '1' }
+run = 'node build/gen-asm-in.mjs'
 
 [[task]]
 target = 'lib/lexer.asm.js'
-deps = ['lib/lexer.emcc.asm.js', 'lib/lexer.asm.in.js']
-engine = 'node'
-run = '''
-	import { readFileSync, writeFileSync } from 'fs';
+deps = ['lib/lexer.emcc.asm.js', 'lib/lexer.asm.in.js', 'build/combine-asm.mjs']
+env = { ASM_IN = 'lib/lexer.asm.in.js', EMCC = 'lib/lexer.emcc.asm.js' }
+run = 'node build/combine-asm.mjs'
 
-	const wrapper_start = readFileSync('lib/lexer.asm.in.js', 'utf8');
-	let source = readFileSync('lib/lexer.emcc.asm.js', 'utf8').trim();
-
-	const endFuncs = 'EMSCRIPTEN_END_FUNCS';
-	const removeFunc = name => [new RegExp(`function ${name}\\([^]+?}\\s*(function|return\\s?{[^{}]+};?\\s*}\\s*$)`), '$1'];
-
-	const replacements = [
-		[/Module\["asm"\]=\s?\(\/\*\* @suppress {uselessCode} \*\/ function\(/, 'function asmInit('],
-		[/\)$/, ''],
-		[/,\s?_(\w+):/g, ',$1:', null, endFuncs],
-		['setSource:', 'ses:', null, endFuncs],
-		['parse:', 'p:', null, endFuncs],
-		[/___errno_location:\s?(\w+),/, '', removeFunc, endFuncs],
-		[/_apply_relocations:\s?(\w+),/, '', removeFunc, endFuncs],
-		[/,\s?free:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?malloc:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?memcpy:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?memset:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackAlloc:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?emscripten_get_sbrk_ptr:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackRestore:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s?stackSave:\s?(\w+)/, '', removeFunc, endFuncs],
-		[/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
-		[/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
-		[/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, ''],
-		[/\s*\/\/ EMSCRIPTEN_END_FUNCS\s*return\{/, `  function su(a, b) {
-		a = a | 0;
-		b = b | 0;
-		v = a + b + 15 & -16;
-		return b;
-	}
-	return {
-		su,`],
-		[/\s*\/\/ EMSCRIPTEN_START_FUNCS\s*/, ''],
-	];
-
-	for (const [from, to, add, after] of replacements) {
-		const [matched, match] = source.match(from) || [];
-		if (!matched) {
-			console.log(source.slice(0, 1000));
-			throw new Error(`Match not found for ${from} -> ${to}${after ? `, after ${after}` : ''}`);
-		}
-		const afterIndex = after ? source.indexOf(after) : 0;
-		const replaced = source.slice(0, afterIndex) + source.slice(afterIndex).replace(from, to);
-		if (add) replacements.push(add(match));
-		source = replaced;
-	}
-
-	writeFileSync(process.env.TARGET, wrapper_start + source);
-'''
+[[task]]
+target = 'lib/lexer.min.asm.js'
+deps = ['lib/lexer.min.emcc.asm.js', 'lib/lexer.min.asm.in.js', 'build/combine-asm.mjs']
+env = { ASM_IN = 'lib/lexer.min.asm.in.js', EMCC = 'lib/lexer.min.emcc.asm.js' }
+run = 'node build/combine-asm.mjs'
 
 [[task]]
 name = 'test'
-deps = ['test:wasm', 'test:asm']
+deps = ['test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm']
 
 [[task]]
 name = 'test:js'
@@ -267,11 +275,23 @@ env = { WASM = '1' }
 run = 'mocha -b -u tdd test/*.cjs'
 
 [[task]]
+name = 'test:minimal:asm'
+deps = ['dist/lexer.minimal.asm.js']
+env = { ASM = '1', MINIMAL = '1' }
+run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
+name = 'test:minimal:wasm'
+deps = ['dist/lexer.minimal.js']
+env = { WASM = '1', MINIMAL = '1' }
+run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
 target = 'lib/lexer.wat'
 dep = 'lib/lexer.wasm'
 run = '${{ WABT_PATH }}/bin/wasm2wat lib/lexer.wasm -o lib/lexer.wat'
 
 [[task]]
 name = 'footprint'
-deps = ['dist/lexer.js', 'dist/lexer.asm.js']
+deps = ['dist/lexer.js', 'dist/lexer.asm.js', 'dist/lexer.minimal.js', 'dist/lexer.minimal.asm.js']
 template = 'footprint'

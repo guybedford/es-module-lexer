@@ -1,16 +1,20 @@
 const assert = require('assert');
 
 let js = false;
+// The minimal builds (MINIMAL=1) drop the fields es-module-shims never reads:
+// dynamic-import `n`, the parsed attribute list `at`, and export `ss`. Tests
+// asserting on those are gated behind `!min`.
+const min = !!process.env.MINIMAL;
 let parse;
 const init = (async () => {
   if (parse) return;
   if (process.env.WASM) {
-    const m = await import('../dist/lexer.js');
+    const m = await import(min ? '../dist/lexer.minimal.js' : '../dist/lexer.js');
     await m.init;
     parse = m.parse;
   }
   else if (process.env.ASM) {
-    ({ parse } = await import('../dist/lexer.asm.js'));
+    ({ parse } = await import(min ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js'));
   }
   else {
     js = true;
@@ -115,7 +119,7 @@ suite('Lexer', () => {
       assert.strictEqual(source.slice(impts[1].s, impts[1].e), './x.js');
       assert.strictEqual(impts[1].d, -1);
       assert.strictEqual(source.slice(impts[1].a, impts[1].se), `{ type: 'css' }`);
-      assert.deepStrictEqual(impts[1].at, [['type', 'css']]);
+      if (!min) assert.deepStrictEqual(impts[1].at, [['type', 'css']]);
 
       assert.strictEqual(impts[2].t, 1);
       assert.strictEqual(source.slice(impts[2].ss, impts[2].se), `import defer from 'x'`);
@@ -133,6 +137,7 @@ suite('Lexer', () => {
   });
  
   test(`Import attributes parsing`, () => {
+    if (min) return; // minimal build drops these fields
     const source = `
       import foo from 'module' with { type: "json" }
       import bar from 'module2' with { type: 'css', integrity: "sha384-abc" }
@@ -170,6 +175,7 @@ suite('Lexer', () => {
   });
 
   test(`Import attributes with quoted keys and escape sequences`, () => {
+    if (min) return; // minimal build drops these fields
     const source = `
       import a from 'a' with { "quoted-key": "value" }
       import b from 'b' with { 'single-quoted': "value" }
@@ -1259,6 +1265,7 @@ function x() {
   });
 
   test('Export statement start', () => {
+    if (min) return; // minimal build drops these fields
     const source = [
       `export const x = 1;`,
       `export function fn () {}`,
@@ -1891,6 +1898,7 @@ function x() {
   });
 
   test('Facade', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`
       export * from 'external';
       import * as ns from 'external2';
@@ -1901,6 +1909,7 @@ function x() {
   });
 
   test('Facade default', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`
       import * as ns from 'external';
       export default ns;
@@ -1909,26 +1918,31 @@ function x() {
   });
 
   test('Facade declaration1', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`export function p () {}`);
     assert.strictEqual(facade, false);
   });
 
   test('Facade declaration2', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`export var p`);
     assert.strictEqual(facade, false);
   });
 
   test('Facade declaration3', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`export {}l`);
     assert.strictEqual(facade, false);
   });
 
   test('Facade declaration4', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`export class Q{}`);
     assert.strictEqual(facade, false);
   });
 
   test('Facade side effect', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,, facade] = parse(`console.log('any non esm syntax')`);
     assert.strictEqual(facade, false);
   });
@@ -1973,31 +1987,38 @@ function x() {
   });
 
   test('hasModuleSyntax import1', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('import foo from "./foo"')
     assert.strictEqual(hasModuleSyntax, true)
   })
   test('hasModuleSyntax import2', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('const foo = "import"')
     assert.strictEqual(hasModuleSyntax, false)
   })
   test('hasModuleSyntax import3', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('import("./foo")')
     // dynamic imports can be used in non-ESM files as well
     assert.strictEqual(hasModuleSyntax, false)
   })
   test('hasModuleSyntax import4', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('import.meta.url')
     assert.strictEqual(hasModuleSyntax, true)
   })
   test('hasModuleSyntax export1', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('export const foo = "foo"')
     assert.strictEqual(hasModuleSyntax, true)
   })
   test('hasModuleSyntax export2', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('export {}')
     assert.strictEqual(hasModuleSyntax, true)
   })
   test('hasModuleSyntax export3', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
     const [,,, hasModuleSyntax] = parse('export * from "./foo"')
     assert.strictEqual(hasModuleSyntax, true)
   })
