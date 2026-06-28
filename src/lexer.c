@@ -164,7 +164,9 @@ bool parse () {
         // dynamic import followed by { is not a dynamic import (so remove)
         // this is a sneaky way to get around { import () {} } v { import () }
         // block / object ambiguity without a parser (assuming source is valid)
-        if (*lastTokenPos == ')' && import_write_head && import_write_head->end == lastTokenPos) {
+        // statement_end (the char after the closing paren) identifies that paren;
+        // end is moved before the first comma for import(a, b), so it can't be used here
+        if (*lastTokenPos == ')' && import_write_head && import_write_head->statement_end == lastTokenPos + 1) {
           import_write_head = import_write_head_last;
           if (import_write_head)
             import_write_head->next = NULL;
