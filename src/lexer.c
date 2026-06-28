@@ -68,9 +68,10 @@ static inline __attribute__((always_inline)) bool handleSlash () {
 // Consume one token at the current ch/pos, updating the global tokenizer state.
 // The single source of tokenization: the main loop and skipExpression both call
 // it, so the regex/keyword/import rules never diverge. Comments do not advance
-// lastTokenPos. always_inline keeps the hot main loop's shape (the comment flag,
-// not a `return`, avoids the codegen regression a returning body caused).
-static inline __attribute__((always_inline)) void consumeToken (char16_t ch) {
+// lastTokenPos. Returns false on a syntax error so the caller can early-exit;
+// always_inline lets that fold into the hot loop without a per-token has_error
+// load (the comment flag, not an early `return`, keeps the fast-path shape).
+static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   bool isComment = false;
   switch (ch) {
     case 'e':
@@ -94,7 +95,7 @@ static inline __attribute__((always_inline)) void consumeToken (char16_t ch) {
       openTokenStack[openTokenDepth++].pos = lastTokenPos;
       break;
     case ']':
-      if (openTokenDepth == 0) { syntaxError(); break; }
+      if (openTokenDepth == 0) return syntaxError(), false;
       openTokenDepth--;
       break;
     case ',':
@@ -110,7 +111,7 @@ static inline __attribute__((always_inline)) void consumeToken (char16_t ch) {
       }
       break;
     case ')':
-      if (openTokenDepth == 0) { syntaxError(); break; }
+      if (openTokenDepth == 0) return syntaxError(), false;
       openTokenDepth--;
       if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
         Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
@@ -138,7 +139,7 @@ static inline __attribute__((always_inline)) void consumeToken (char16_t ch) {
       nextBraceIsClass = false;
       break;
     case '}':
-      if (openTokenDepth == 0) { syntaxError(); break; }
+      if (openTokenDepth == 0) return syntaxError(), false;
       if (openTokenStack[--openTokenDepth].token == TemplateBrace)
         templateString();
       break;
@@ -157,6 +158,7 @@ static inline __attribute__((always_inline)) void consumeToken (char16_t ch) {
   }
   if (!isComment)
     lastTokenPos = pos;
+  return true;
 }
 
 // Note: parsing is based on the _assumption_ that the source is already valid
@@ -239,7 +241,8 @@ bool parse () {
     if (ch == 32 || ch < 14 && ch > 8)
       continue;
 
-    consumeToken(ch);
+    if (!consumeToken(ch))
+      return false;
   }
 
   if (openTokenDepth || has_error || dynamicImportStackDepth)
