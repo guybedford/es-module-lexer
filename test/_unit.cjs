@@ -1258,6 +1258,37 @@ function x() {
     assertExportIs(source, exports[1], { n: 'yy', ln: undefined });
   });
 
+  test('Export statement start', () => {
+    const source = [
+      `export const x = 1;`,
+      `export function fn () {}`,
+      `export class C {}`,
+      `export default 42;`,
+      `export { c, d };`,
+      `export * as ns from './mod';`,
+      `export { e, f as g } from './re';`
+    ].join('\n');
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 9);
+
+    for (const expt of exports)
+      assert.strictEqual(source.slice(expt.ss, expt.ss + 6), 'export');
+
+    // Each specifier reports its statement's start, so the `{ c, d }` names and
+    // the re-exported `e` / `g` each share one `ss`.
+    assert.strictEqual(exports[0].ss, 0);
+    assert.strictEqual(exports[4].ss, exports[5].ss);
+    assert.strictEqual(exports[4].ss, source.indexOf('export { c, d }'));
+    assert.strictEqual(exports[7].ss, exports[8].ss);
+    assert.strictEqual(exports[7].ss, source.indexOf('export { e, f as g }'));
+
+    // Distinct statements resolve to their own offset, not a shared constant.
+    assert.strictEqual(exports[1].ss, source.indexOf('export function'));
+    assert.strictEqual(exports[2].ss, source.indexOf('export class'));
+    assert.strictEqual(exports[3].ss, source.indexOf('export default'));
+    assert.strictEqual(exports[6].ss, source.indexOf('export * as'));
+  });
+
   suite('Import From', () => {
     if (!js)
     test('non-identifier-string as (doubleQuote)', () => {

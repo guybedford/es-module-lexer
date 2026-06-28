@@ -108,6 +108,11 @@ import { init, parse } from 'es-module-lexer';
   source.slice(exports[1].s, exports[1].e);
   // Returns "q"
   source.slice(exports[1].ls, exports[1].le);
+
+  // "ss" = export statement start (only the start is tracked, not the end)
+  // Returns "export"
+  source.slice(exports[0].ss, exports[0].ss + 6);
+
   // Returns "'external name'"
   source.slice(exports[2].s, exports[2].e);
   // Returns -1

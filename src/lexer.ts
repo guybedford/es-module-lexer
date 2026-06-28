@@ -195,6 +195,22 @@ export interface ExportSpecifier {
    * End of local name, or -1.
    */
   readonly le: number;
+
+  /**
+   * Start of the export statement.
+   *
+   * Only the statement start is provided; the statement end is not tracked
+   * (see https://github.com/guybedford/es-module-lexer/issues/112). Every
+   * specifier of a statement reports the same start, so `export { a, b }`
+   * returns the same `ss` for both `a` and `b`.
+   *
+   * @example
+   * const source = `export { a, b } from 'mod'`;
+   * const [imports, exports] = parse(source);
+   * source.slice(exports[0].ss, exports[0].ss + 6);
+   * // Returns "export"
+   */
+  readonly ss: number;
 }
 
 export interface ParseError extends Error {
@@ -250,11 +266,11 @@ export function parse (source: string, name = '@'): readonly [
     imports.push({ n, t, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
   }
   while (wasm.re()) {
-    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
+    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele(), ss = wasm.ess();
     const n = decodeIfQuoted(source.slice(s, e));
     const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
     exports.push({
-      s, e, ls, le,
+      s, e, ls, le, ss,
       n, ln,
     });
   }
@@ -311,6 +327,8 @@ let wasm: {
   els(): number;
   /** getExportStart */
   es(): number;
+  /** getExportStatementStart */
+  ess(): number;
   /** facade */
   f(): boolean;
   /** hasModuleSyntax */
