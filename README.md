@@ -8,7 +8,7 @@ Outputs the list of exports and locations of import specifiers, including dynami
 
 Supports new syntax features including import attributes and source phase imports.
 
-A very small single JS file (4KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~8KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
@@ -271,17 +271,9 @@ Node.js 10+, and [all browsers with Web Assembly support](https://caniuse.com/#f
 
 The lexing approach is designed to deal with the full language grammar including RegEx / division operator ambiguity through backtracking and paren / brace tracking.
 
-The only limitation to the reduced parser is that the "exports" list may not correctly gather all export identifiers in the following edge cases:
+Because it lexes rather than fully parses, the analysis is not a validation pass: valid JS source is always analyzed correctly, but some invalid source is accepted without an error rather than rejected. For example `export const = 1` lexes to an empty exports list instead of throwing. Callers that need to reject invalid source should run a validating parser separately.
 
-```js
-// Only "a" is detected as an export, "q" isn't
-export var a = 'asdf', q = z;
-
-// "b" is not detected as an export
-export var { a: b } = asdf;
-```
-
-The above cases are handled gracefully in that the lexer will keep going fine, it will just not properly detect the export names above.
+Multiple exports per declaration (`export var a = 'asdf', q = z`) and renamed destructured exports (`export var { a: b } = asdf`) are detected correctly; earlier versions missed `q` and `b` in these forms.
 
 ### Benchmarks
 
