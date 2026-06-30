@@ -8,7 +8,7 @@ Outputs the list of exports and locations of import specifiers, including dynami
 
 Supports new syntax features including import attributes and source phase imports.
 
-A very small single JS file (~8KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~7KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
