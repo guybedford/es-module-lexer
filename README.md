@@ -240,7 +240,7 @@ To handle escape sequences in specifier strings, the `.n` field of imported spec
 
 For dynamic import expressions, this field will be empty if not a valid JS string.
 
-When the entire dynamic import argument is a single template literal, `.n` is reported as a glob: each `${...}` substitution is collapsed to a single `*` (for example `` import(`./locales/${locale}.js`) `` yields `./locales/*.js`). A template concatenated with anything else, or any other expression, still resolves to `undefined`.
+When the entire dynamic import argument is a single template literal, `.n` is reported as a glob: each `${...}` substitution is collapsed to a single `*` (for example `` import(`./locales/${locale}.js`) `` yields `./locales/*.js`). A template concatenated with anything else, or any other expression, still resolves to `undefined`. A substitution containing a `/` that could open a regex literal cannot be disambiguated from division without full token context, so the glob is dropped to `undefined` rather than risk a wrong specifier.
 
 ### Facade Detection
 

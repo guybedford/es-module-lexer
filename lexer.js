@@ -49,8 +49,9 @@ function readName (impt) {
 function readDynamicTemplateName (impt) {
   if (source.charCodeAt(impt.s) !== 96/*`*/)
     return;
+  interpolationError = false;
   const n = readString(impt.s + 1, 96/*`*/);
-  if (acornPos === lastTokenPos + 1)
+  if (!interpolationError && acornPos === lastTokenPos + 1)
     impt.n = n;
 }
 
@@ -512,6 +513,11 @@ function tryParseExportStatement () {
  * THE SOFTWARE.
  */
 let acornPos;
+// Set by skipInterpolation when a ${...} substitution contains a "/" that
+// could open a regex literal, which the glob walker cannot disambiguate from
+// division. A regex "}" would close the substitution early and yield a wrong
+// glob, so the caller drops n to undefined instead.
+let interpolationError;
 function readString (start, quote) {
   acornPos = start;
   let out = '', chunkStart = acornPos;
@@ -548,7 +554,11 @@ function readString (start, quote) {
 // `index` is the offset just after a "${" substitution opener. Returns the
 // offset just after the matching "}", tracking brace depth and skipping
 // strings, nested templates and comments so a "}" inside them does not close
-// the substitution early. Regex is not disambiguated (see skipTemplateLiteral).
+// the substitution early. A "/" that opens a regex literal cannot be told
+// apart from division here without the main parser's token context, and a
+// regex may carry a "}" that would close the substitution early; the bare "/"
+// case sets interpolationError so the caller drops the glob to undefined
+// rather than emit a wrong skeleton.
 function skipInterpolation (index) {
   let braceDepth = 1;
   while (index < source.length) {
@@ -574,6 +584,7 @@ function skipInterpolation (index) {
         index = skipComment(index + 2, next === 42/***/);
         continue;
       }
+      interpolationError = true;
     }
     index++;
   }

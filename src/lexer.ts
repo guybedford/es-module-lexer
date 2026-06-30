@@ -321,6 +321,7 @@ export function parse (source: string, name = '@'): readonly [
   function decodeTemplate (str: string) {
     let out = '`', chunkStart = 1, index = 1;
     const last = str.length - 1;
+    interpolationError = false;
     while (index < last) {
       const ch = str.charCodeAt(index);
       if (ch === 92/*\*/) {
@@ -337,7 +338,7 @@ export function parse (source: string, name = '@'): readonly [
       }
       index++;
     }
-    if (str.charCodeAt(last) !== 96/*`*/)
+    if (interpolationError || str.charCodeAt(last) !== 96/*`*/)
       return;
     return decode(out + str.slice(chunkStart, last) + '`');
   }
@@ -345,10 +346,20 @@ export function parse (source: string, name = '@'): readonly [
   return (MINIMAL ? [imports, exports] : [imports, exports, !!wasm.f(), !!wasm.ms()]) as ReturnType<typeof parse>;
 }
 
+// Set by skipInterpolation when a ${...} substitution contains a "/" that could
+// open a regex literal, which the glob walker cannot disambiguate from
+// division. A regex "}" would close the substitution early and yield a wrong
+// glob, so decodeTemplate drops n to undefined instead.
+let interpolationError: boolean;
+
 // `index` is the offset just after a "${" substitution opener within `str`.
 // Returns the offset just after the matching "}", tracking brace depth and
 // skipping strings, nested templates and comments so a "}" inside them does not
-// close the substitution early. Regex is not disambiguated.
+// close the substitution early. A "/" that opens a regex literal cannot be told
+// apart from division here without the main parser's token context, and a regex
+// may carry a "}" that would close the substitution early; the bare "/" case
+// sets interpolationError so decodeTemplate drops the glob to undefined rather
+// than emit a wrong skeleton.
 function skipInterpolation (str: string, index: number): number {
   let braceDepth = 1;
   const len = str.length;
@@ -375,6 +386,7 @@ function skipInterpolation (str: string, index: number): number {
         index = skipComment(str, index + 2, next === 42/***/);
         continue;
       }
+      interpolationError = true;
     }
     index++;
   }
