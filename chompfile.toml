@@ -251,10 +251,6 @@ name = 'test'
 deps = ['test:wasm', 'test:asm']
 
 [[task]]
-name = 'test:js'
-run = 'mocha -b -u tdd test/*.cjs'
-
-[[task]]
 name = 'test:asm'
 deps = ['dist/lexer.asm.js']
 env = { ASM = '1' }

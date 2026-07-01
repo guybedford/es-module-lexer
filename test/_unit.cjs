@@ -1,20 +1,15 @@
 const assert = require('assert');
 
-let js = false;
 let parse;
 const init = (async () => {
   if (parse) return;
-  if (process.env.WASM) {
-    const m = await import('../dist/lexer.js');
-    await m.init;
-    parse = m.parse;
-  }
-  else if (process.env.ASM) {
+  if (process.env.ASM) {
     ({ parse } = await import('../dist/lexer.asm.js'));
   }
   else {
-    js = true;
-    ({ parse } = await import('../lexer.js'));
+    const m = await import('../dist/lexer.js');
+    await m.init;
+    parse = m.parse;
   }
 })();
 
@@ -673,7 +668,6 @@ suite('Lexer', () => {
     parse(source);
   });
 
-  if (!js)
   test('Multiline dynamic import on windows', () => {
     const source = `import(\n"./statehash\\u1011.js"\r)`;
     const [imports] = parse(source);
@@ -682,7 +676,6 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(imports[0].s, imports[0].e), '"./statehash\\u1011.js"');
   });
 
-  if (!js)
   test('Basic nested dynamic import support', () => {
     const source = `await import (await import  ('foo'))`;
     const [imports] = parse(source);
@@ -695,7 +688,6 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(imports[1].s, imports[1].e), '\'foo\'');
   });
 
-  if (!js)
   test('Import attributes', () => {
     const source = `
       import json from "./foo.json" with { type: "json" };
@@ -719,7 +711,6 @@ suite('Lexer', () => {
     assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
   });
 
-  if (!js)
   test('Import attributes', () => {
     const source = `
       import json from "./foo.json" with { type: "json" };
@@ -804,7 +795,6 @@ suite('Lexer', () => {
     assert.deepStrictEqual(exports.map(expt => expt.n), ['default', 'default', 'default', 'default', 'default', 'default']);
   });
 
-  if (!js)
   test('Regexp keyword prefixes', () => {
     const [imports] = parse(`
       x: while (true) {
@@ -1051,7 +1041,6 @@ suite('Lexer', () => {
     assert.strictEqual(imports.length, 0);
   });
 
-  if (!js)
   test('dynamic import edge cases', () => {
     const source = `
       ({
@@ -1140,7 +1129,6 @@ function x() {
     assertExportIs(source, exports[0], { n: 'a', ln: 'a' });
   });
 
-  if (!js)
   test('Strings', () => {
     const source = `
       "";
@@ -1290,7 +1278,6 @@ function x() {
   });
 
   suite('Import From', () => {
-    if (!js)
     test('non-identifier-string as (doubleQuote)', () => {
       const source = `
         import { "~123" as foo0 } from './mod0.js';
@@ -1319,7 +1306,6 @@ function x() {
       assert.strictEqual(imports[8].n, './mod8.js');
     });
 
-    if (!js)
     test('non-identifier-string as (singleQuote)', () => {
       const source = `
         import { '~123' as foo0 } from './mod0.js';
@@ -1346,7 +1332,6 @@ function x() {
       assert.strictEqual(imports[8].n, './mod8.js');
     });
 
-    if (!js)
     test('with-backslash-keywords as (doubleQuote)', () => {
       const source = String.raw`
       import { " slash\\ " as foo0 } from './mod0.js';
@@ -1363,7 +1348,6 @@ function x() {
       assert.strictEqual(imports[3].n, './mod3.js');
     });
 
-    if (!js)
     test('with-backslash-keywords as (singleQuote)', () => {
       const source = String.raw`
       import { ' slash\\ ' as foo0 } from './mod0.js';
@@ -1380,7 +1364,6 @@ function x() {
       assert.strictEqual(imports[3].n, './mod3.js');
     });
 
-    if (!js)
     test('with-emoji as', () => {
       const source = `
         import { "hm🤔" as foo0 } from './mod0.js';
@@ -1393,7 +1376,6 @@ function x() {
       assert.strictEqual(imports[1].n, './mod1.js');
     });
 
-    if (!js)
     test('double-quotes-and-curly-bracket', () => {
       const source = `
         import { asdf as "b} from 'wrong'" } from 'mod0';`;
@@ -1404,7 +1386,6 @@ function x() {
       assert.strictEqual(imports[0].n, 'mod0');
     });
 
-    if (!js)
     test('single-quotes-and-curly-bracket', () => {
       const source = `
         import { asdf as 'b} from "wrong"' } from 'mod0';`;
@@ -1436,7 +1417,6 @@ function x() {
       assertExportIs(source, exports[6], { n: 'LionCombobox', ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string as variable (doubleQuote)', () => {
       const source = `
         export { "~123" as foo0 } from './mod0.js';
@@ -1463,7 +1443,6 @@ function x() {
       assertExportIs(source, exports[8], { n: 'foo8', ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string as variable (singleQuote)', () => {
       const source = `
         export { '~123' as foo0 } from './mod0.js';
@@ -1490,7 +1469,6 @@ function x() {
       assertExportIs(source, exports[8], { n: 'foo8', ln: undefined });
     });
 
-    if (!js)
     test('with-backslash-keywords as variable (doubleQuote)', () => {
       const source = String.raw`
         export { " slash\\ " as foo0 } from './mod0.js';
@@ -1507,7 +1485,6 @@ function x() {
       assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
     });
 
-    if (!js)
     test('with-backslash-keywords as variable (singleQuote)', () => {
       const source = String.raw`
         export { ' slash\\ ' as foo0 } from './mod0.js';
@@ -1524,7 +1501,6 @@ function x() {
       assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
     });
 
-    if (!js)
     test('with-emoji as', () => {
       const source = `
         export { "hm🤔" as foo0 } from './mod0.js';
@@ -1537,7 +1513,6 @@ function x() {
       assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string (doubleQuote)', () => {
       const source = `
         export { "~123" } from './mod0.js';
@@ -1564,7 +1539,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string (singleQuote)', () => {
       const source = `
         export { '~123' } from './mod0.js';
@@ -1591,7 +1565,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('with-backslash-keywords (doubleQuote)', () => {
       const source = String.raw`
         export { " slash\\ " } from './mod0.js';
@@ -1608,7 +1581,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
-    if (!js)
     test('with-backslash-keywords (singleQuote)', () => {
       const source = String.raw`
         export { ' slash\\ ' } from './mod0.js';
@@ -1625,7 +1597,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
-    if (!js)
     test('variable as non-identifier-string (doubleQuote)', () => {
       const source = `
         export { foo0 as "~123" } from './mod0.js';
@@ -1652,7 +1623,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('variable as non-identifier-string (singleQuote)', () => {
       const source = `
         export { foo0 as '~123' } from './mod0.js';
@@ -1679,7 +1649,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('variable as with-backslash-keywords (doubleQuote)', () => {
       const source = String.raw`
       export { foo0 as " slash\\ " } from './mod0.js';
@@ -1696,7 +1665,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
-    if (!js)
     test('variable as with-backslash-keywords (singleQuote)', () => {
       const source = String.raw`
       export { foo0 as ' slash\\ ' } from './mod0.js';
@@ -1713,7 +1681,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string as non-identifier-string (doubleQuote)', () => {
       const source = `
         export { "~123" as "~123" } from './mod0.js';
@@ -1740,7 +1707,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('non-identifier-string as non-identifier-string (singleQuote)', () => {
       const source = `
         export { '~123' as '~123' } from './mod0.js';
@@ -1767,7 +1733,6 @@ function x() {
       assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
-    if (!js)
     test('with-backslash-keywords as with-backslash-keywords (doubleQuote)', () => {
       const source = String.raw`
       export { " slash\\ " as " slash\\ " } from './mod0.js';
@@ -1784,7 +1749,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined, a: true});
     });
 
-    if (!js)
     test('with-backslash-keywords as with-backslash-keywords (singleQuote)', () => {
       const source = String.raw`
       export { ' slash\\ ' as ' slash\\ ' } from './mod0.js';
@@ -1801,7 +1765,6 @@ function x() {
       assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
-    if (!js)
     test('curly-brace (doubleQuote)', () => {
       const source = `
         export { " right-curlybrace} " } from './mod0.js';
@@ -1822,7 +1785,6 @@ function x() {
       assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
-    if (!js)
     test('* as curly-brace (doubleQuote)', () => {
       const source = `
         export { foo as " right-curlybrace} " } from './mod0.js';
@@ -1843,7 +1805,6 @@ function x() {
       assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
-    if (!js)
     test('curly-brace as curly-brace (doubleQuote)', () => {
       const source = `
         export { " right-curlybrace} " as " right-curlybrace} " } from './mod0.js';
@@ -1864,7 +1825,6 @@ function x() {
       assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
-    if (!js)
     test('complex & edge cases', () => {
       const source = `
         export {
