@@ -172,6 +172,14 @@ For a version that works with CSP eval disabled, use the `es-module-lexer/js` bu
 import { parse } from 'es-module-lexer/js';
 ```
 
+CommonJS is also supported:
+
+```js
+const { parse } = require('es-module-lexer/js');
+```
+
+Like the main entry point, the asm.js build is synchronous, so there is no `init` to await.
+
 Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
 
 ### Import Attributes

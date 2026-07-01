@@ -20,7 +20,7 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 const words = '{{WORDS}}';
 
 let source, name;
-export function parse (_source, _name = '@') {
+function parse (_source, _name = '@') {
   source = _source;
   name = _name;
   // 2 bytes per string code point
@@ -229,5 +229,12 @@ function isBr (c) {
 function syntaxError () {
   throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
 }
+
+// This file is emitted as a single side-effecting script (dist/lexer.asm.core.cjs)
+// that is loaded by both the ESM and CJS `es-module-lexer/js` wrappers, so the
+// heavy asm.js payload only ships once. Instead of exporting, publish `parse`
+// on a shared realm-global keyed by a well-known symbol; the wrappers read it
+// back and re-expose it under their respective module systems.
+(typeof globalThis !== 'undefined' ? globalThis : self)[Symbol.for('es-module-lexer/js')] = { parse };
 
 // function asmInit () { ... } from lib/lexer.asm.js is concatenated at the end here

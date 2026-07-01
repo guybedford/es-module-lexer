@@ -10,7 +10,7 @@ WABT_PATH = '../wabt'
 
 [[task]]
 name = 'build'
-deps = ['dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js', 'types/lexer.d.ts']
+deps = ['dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.core.cjs', 'dist/lexer.asm.js', 'dist/lexer.asm.cjs', 'types/lexer.d.ts']
 
 [[task]]
 name = 'bench'
@@ -29,14 +29,31 @@ deps = ['dist/lexer.js']
 env = { BENCH = 'wasm' }
 run = 'node --expose-gc bench/index.js'
 
+# The CSP-safe asm.js payload. Emitted once as a side-effecting script that
+# publishes `parse` on a shared realm-global (see src/lexer.asm.js). Both the
+# ESM (dist/lexer.asm.js) and CJS (dist/lexer.asm.cjs) `es-module-lexer/js`
+# entry points are thin wrappers over this single file, so the ~22KB payload is
+# never duplicated. It has no import/export, so the same bytes are valid under
+# both module systems; the .cjs extension makes `require` treat it as CommonJS.
 [[task]]
-target = 'dist/lexer.asm.js'
+target = 'dist/lexer.asm.core.cjs'
 dep = 'lib/lexer.asm.js'
 template = 'terser'
 [task.template-options]
-module = true
 compress = { ecma = 6, unsafe = true }
 output = { preamble = '/* es-module-lexer #PJSON_VERSION */' }
+
+# The `es-module-lexer/js` entry-point wrappers are committed as source (they
+# never contain the payload) and copied verbatim into dist/ next to the core.
+[[task]]
+target = 'dist/lexer.asm.js'
+deps = ['src/lexer.asm.wrapper.js', 'dist/lexer.asm.core.cjs']
+run = 'cp src/lexer.asm.wrapper.js $TARGET'
+
+[[task]]
+target = 'dist/lexer.asm.cjs'
+deps = ['src/lexer.asm.wrapper.cjs', 'dist/lexer.asm.core.cjs']
+run = 'cp src/lexer.asm.wrapper.cjs $TARGET'
 
 [[task]]
 target = 'dist/lexer.cjs'
