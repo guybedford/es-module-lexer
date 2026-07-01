@@ -23,6 +23,7 @@ enum ImportType {
   DynamicSourcePhase = 5,
   StaticDeferPhase = 6,
   DynamicDeferPhase = 7,
+  StaticReexportStar = 8,
 };
 
 #ifndef LEXER_MIN
