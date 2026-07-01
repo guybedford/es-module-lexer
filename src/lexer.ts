@@ -33,6 +33,15 @@ export enum ImportType {
    *   import.defer('module')
    */
   DynamicDeferPhase = 7,
+  /**
+   * The specifier of a star re-export
+   *   export * from 'module'
+   *
+   * Reported as an import because it is a module dependency, but typed
+   * separately so it is not confused with a side-effect `import 'module'`.
+   * The matching export is reported with the name `*`.
+   */
+  StaticReexportStar = 8,
 }
 
 export interface ImportSpecifier {
@@ -138,6 +147,14 @@ export interface ExportSpecifier {
    * const [imports, exports] = parse(source);
    * exports[0].n;
    * // Returns "asdf"
+   *
+   * @example
+   * // A star re-export reports the name "*"; the re-exported specifier is the
+   * // matching import (ImportType.StaticReexportStar) sharing the statement range.
+   * const source = `export * from './core'`;
+   * const [imports, exports] = parse(source);
+   * exports[0].n;
+   * // Returns "*"
    */
   readonly n: string;
 

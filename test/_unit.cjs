@@ -1258,6 +1258,76 @@ function x() {
     assertExportIs(source, exports[1], { n: 'yy', ln: undefined });
   });
 
+  test('Export star reexport', () => {
+    const source = `
+      export * from './core';
+      export*from'minified';
+      export * as ns from './named';
+      export { a as b } from './picked';
+    `;
+    const [imports, exports] = parse(source);
+
+    // Every re-export still records its specifier as an import edge.
+    assert.strictEqual(imports.length, 4);
+    assert.strictEqual(imports[0].n, './core');
+    assert.strictEqual(imports[1].n, 'minified');
+    assert.strictEqual(imports[2].n, './named');
+    assert.strictEqual(imports[3].n, './picked');
+
+    // The two `export *` specifiers are typed StaticReexportStar (8), so they
+    // are distinguishable from a side-effect `import './core'` (which is 1).
+    assert.strictEqual(imports[0].t, 8);
+    assert.strictEqual(imports[1].t, 8);
+    // `export * as ns` and `export { a } from` keep the plain Static type.
+    assert.strictEqual(imports[2].t, 1);
+    assert.strictEqual(imports[3].t, 1);
+
+    // Plain `export *` now surfaces on the export side as the name "*".
+    // `ns` and `b` are the named re-exports as before.
+    assert.deepStrictEqual(exports.map(expt => expt.n), ['*', '*', 'ns', 'b']);
+    assertExportIs(source, exports[0], { n: '*', ln: undefined });
+    assertExportIs(source, exports[1], { n: '*', ln: undefined });
+    assertExportIs(source, exports[2], { n: 'ns', ln: undefined });
+    assertExportIs(source, exports[3], { n: 'b', ln: undefined });
+
+    // The star export's name span points at the literal `*`, and its statement
+    // range matches the import's, so the two halves correlate.
+    assert.strictEqual(source.slice(exports[0].s, exports[0].e), '*');
+    assert.strictEqual(imports[0].ss, source.indexOf(`export * from './core'`));
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].se), `export * from './core'`);
+  });
+
+  test('Export star reexport with comments between tokens', () => {
+    const source = `export /* a */ * /* b */ from './core'`;
+    const [imports, exports] = parse(source);
+
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].t, 8);
+    assert.strictEqual(imports[0].n, './core');
+    assert.deepStrictEqual(exports.map(expt => expt.n), ['*']);
+    assert.strictEqual(source.slice(imports[0].ss, imports[0].se), source);
+  });
+
+  test('Export star reexport is distinct from side-effect import', () => {
+    const [imports, exports] = parse(`import './core'`);
+
+    assert.strictEqual(imports.length, 1);
+    // A side-effect import stays a plain Static import and contributes no
+    // export, so it never collides with a `export * from` star re-export.
+    assert.strictEqual(imports[0].t, 1);
+    assert.strictEqual(exports.length, 0);
+  });
+
+  test('Export star reexport is module syntax', () => {
+    const [,,, hasModuleSyntax] = parse(`export * from './core'`);
+    assert.strictEqual(hasModuleSyntax, true);
+  });
+
+  test('Export star reexport facade', () => {
+    const [,, facade] = parse(`export * from './core'`);
+    assert.strictEqual(facade, true);
+  });
+
   test('Export statement start', () => {
     const source = [
       `export const x = 1;`,

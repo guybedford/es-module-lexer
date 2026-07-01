@@ -223,6 +223,32 @@ To handle escape sequences in specifier strings, the `.n` field of imported spec
 
 For dynamic import expressions, this field will be empty if not a valid JS string.
 
+### Star Re-exports
+
+`export * from 'module'` is both a dependency on `module` and a re-export of its
+names. It is reported on both sides:
+
+```js
+const [imports, exports] = parse(`export * from './core'`);
+
+// The exported name is "*"
+exports[0].n;
+// Returns "*"
+
+// The specifier is an import, typed StaticReexportStar (8) so it is not
+// confused with a side-effect `import './core'` (which is type 1).
+imports[0].t === 8;
+imports[0].n;
+// Returns "./core"
+
+// The two halves share the same statement range.
+source.slice(imports[0].ss, imports[0].se);
+// Returns "export * from './core'"
+```
+
+`export * as ns from 'module'` is unchanged: it already reports the namespace
+name `ns` as the export, with the specifier as a normal static import.
+
 ### Facade Detection
 
 Facade modules that only use import / export syntax can be detected via the third return value:

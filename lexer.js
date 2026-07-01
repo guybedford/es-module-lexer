@@ -446,9 +446,15 @@ function tryParseExportStatement () {
     // export *
     // export * as X
     case 42/***/:
+      const starPos = pos;
       pos++;
       commentWhitespace(true);
+      const prevStarExport = exports.length;
       ch = readExportAs(pos, pos);
+      // A plain `export *` (no `as`) has no exported name to report, so record
+      // the star itself as the export name "*". `export * as X` already added X.
+      if (exports.length === prevStarExport)
+        addExport(starPos, starPos + 1, -1, -1);
       ch = commentWhitespace(true);
     break;
   }
