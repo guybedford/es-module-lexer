@@ -138,7 +138,7 @@ run = """
 
 	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_ess','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','___heap_base']" \
-	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
+	-s SUPPORT_LONGJMP=0 -s ALLOW_MEMORY_GROWTH=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 """
 
 [[task]]
