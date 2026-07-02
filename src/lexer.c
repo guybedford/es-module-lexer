@@ -572,6 +572,7 @@ void readBindingPattern () {
 void tryParseExportStatement () {
   char16_t* sStartPos = pos;
   Export* prev_export_write_head = export_write_head;
+  bool reexportStar = false;
 
   pos += 6;
 
@@ -636,9 +637,17 @@ void tryParseExportStatement () {
   // export *
   // export * as X
   else if (ch == '*') {
+    char16_t* starPos = pos;
     pos++;
     commentWhitespace(true);
+    Export* prevStarExport = export_write_head;
     ch = readExportAs(pos, pos);
+    // A plain `export *` (no `as`) has no exported name to report, so record
+    // the star itself as the export name "*". `export * as X` already added X.
+    if (export_write_head == prevStarExport) {
+      addExport(starPos, starPos + 1, NULL, NULL);
+      reexportStar = true;
+    }
     ch = commentWhitespace(true);
   }
   else {
@@ -768,6 +777,11 @@ void tryParseExportStatement () {
   if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true), false);
+
+    // Mark the specifier of a plain `export * from` so it is distinguishable
+    // from a side-effect `import 'x'`, which is otherwise the same shape.
+    if (reexportStar)
+      import_write_head->import_ty = StaticReexportStar;
 
     // There were no local names.
     for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
