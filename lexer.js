@@ -16,7 +16,8 @@ let source, pos, end,
   name;
 
 function addImport (ss, s, e, d) {
-  const impt = { ss, se: d === -2 ? e : d === -1 ? e + 1 : 0, s, e, d, a: -1, n: undefined, at: null };
+  // JavaScript-only build: mirror the full wasm shape.
+  const impt = { ss, se: d === -2 ? e : d === -1 ? e + 1 : 0, s, e, d, a: -1, n: undefined, at: null, tp: false };
   imports.push(impt);
   return impt;
 }
@@ -29,7 +30,8 @@ function addExport (s, e, ls, le) {
     le,
     ss: exportStatementStart,
     n: s[0] === '"' ? readString(s, '"') : s[0] === "'" ? readString(s, "'") : source.slice(s, e),
-    ln: ls[0] === '"' ? readString(ls, '"') : ls[0] === "'" ? readString(ls, "'") : source.slice(ls, le)
+    ln: ls[0] === '"' ? readString(ls, '"') : ls[0] === "'" ? readString(ls, "'") : source.slice(ls, le),
+    tp: false
   });
 }
 
