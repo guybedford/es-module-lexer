@@ -416,12 +416,45 @@ suite('Lexer', () => {
 
   test(`Dynamic import no-substitution template specifier`, () => {
     // A no-substitution template literal is a constant string, so n is set the
-    // same as for the quoted forms; an interpolated template has no constant
-    // value, so n stays undefined.
+    // same as for the quoted forms.
     assert.strictEqual(parse('import("./x.js")')[0][0].n, './x.js');
     assert.strictEqual(parse("import('./x.js')")[0][0].n, './x.js');
     assert.strictEqual(parse('import(`./x.js`)')[0][0].n, './x.js');
-    assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, undefined);
+  });
+
+  test(`Dynamic import interpolated template specifier glob`, () => {
+    // An interpolated template literal has no constant value, but its static
+    // skeleton is a useful glob: each ${...} collapses to a single "*".
+    assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, './a*.js');
+    assert.strictEqual(parse('import(`./p/${x}/${y}.js`)')[0][0].n, './p/*/*.js');
+    assert.strictEqual(parse('import(`${x}`)')[0][0].n, '*');
+    assert.strictEqual(parse('import(`${x}/tail`)')[0][0].n, '*/tail');
+    // The substitution body may itself contain braces, strings, templates and
+    // comments without closing the glob early.
+    assert.strictEqual(parse('import(`a${ {y:1} }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ `n${z}` }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse("import(`a${ obj['}'] }b`)")[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ x /* } */ }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ x // }\n }b`)')[0][0].n, 'a*b');
+    // A "/" inside the substitution may open a regex literal, which the glob
+    // walker cannot tell apart from division without the parser's token
+    // context. A regex "}" would otherwise close the substitution early and
+    // produce a wrong skeleton, so n drops to undefined rather than guess.
+    assert.strictEqual(parse('import(`a${ /x}y/g }b`)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(`a${ /x/g }b`)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(`a${ b/c }d`)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(`a${ `n${ /x}/g }` }b`)')[0][0].n, undefined);
+    // A "/" inside a string or comment is an ordinary character and keeps the
+    // glob.
+    assert.strictEqual(parse("import(`a${ x['/}'] }b`)")[0][0].n, 'a*b');
+    // A glob is still reported when an import-attributes argument follows.
+    assert.strictEqual(parse('import(`./p/${x}.js`, { with: { type: "json" } })')[0][0].n, './p/*.js');
+    // Only a lone template literal globs; a concatenation has no static
+    // skeleton, so n stays undefined.
+    assert.strictEqual(parse('import(`a` + b)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(`a${x}` + `b${y}`)')[0][0].n, undefined);
+    assert.strictEqual(parse('import("a" + x)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(x)')[0][0].n, undefined);
   });
 
   test(`Dynamic import template specifier with escapes and attributes`, () => {

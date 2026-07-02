@@ -50,6 +50,11 @@ export interface ImportSpecifier {
    * For dynamic import expressions, this field will be empty if not a valid JS string.
    * For static import expressions, this field will always be populated.
    *
+   * A dynamic import whose entire argument is a single template literal is
+   * reported as a glob: each `${...}` substitution is collapsed to a single
+   * `*`. Other expressions (including a template concatenated with anything
+   * else) remain undefined.
+   *
    * @example
    * const [imports1, exports1] = parse(String.raw`import './\u0061\u0062.js'`);
    * imports1[0].n;
@@ -62,6 +67,10 @@ export interface ImportSpecifier {
    * const [imports3, exports3] = parse(`import("./" + "ab.js")`);
    * imports3[0].n;
    * // Returns undefined
+   *
+   * const [imports4, exports4] = parse('import(`./locales/${locale}.js`)');
+   * imports4[0].n;
+   * // Returns "./locales/*.js"
    */
   readonly n: string | undefined;
   /**
@@ -263,6 +272,8 @@ export function parse (source: string, name = '@'): readonly [
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
+    else if (d !== -1 && source[s] === '`')
+      n = decodeTemplate(source.slice(s, e));
     let at: Array<[string, string]> | null = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -302,7 +313,124 @@ export function parse (source: string, name = '@'): readonly [
     return str;
   }
 
+  // `str` spans the whole dynamic-import argument including the backticks. A
+  // lone template literal is reported as a glob with each ${...} substitution
+  // collapsed to a single "*"; the substituted source is then evaluated so the
+  // static parts are cooked. Anything else (e.g. `a` + b) closes before the end
+  // and returns undefined.
+  function decodeTemplate (str: string) {
+    let out = '`', chunkStart = 1, index = 1;
+    const last = str.length - 1;
+    interpolationError = false;
+    while (index < last) {
+      const ch = str.charCodeAt(index);
+      if (ch === 92/*\*/) {
+        index += 2;
+        continue;
+      }
+      if (ch === 96/*`*/)
+        return;
+      if (ch === 36/*$*/ && str.charCodeAt(index + 1) === 123/*{*/) {
+        out += str.slice(chunkStart, index) + '*';
+        index = skipInterpolation(str, index + 2);
+        chunkStart = index;
+        continue;
+      }
+      index++;
+    }
+    if (interpolationError || str.charCodeAt(last) !== 96/*`*/)
+      return;
+    return decode(out + str.slice(chunkStart, last) + '`');
+  }
+
   return (MINIMAL ? [imports, exports] : [imports, exports, !!wasm.f(), !!wasm.ms()]) as ReturnType<typeof parse>;
+}
+
+// Set by skipInterpolation when a ${...} substitution contains a "/" that could
+// open a regex literal, which the glob walker cannot disambiguate from
+// division. A regex "}" would close the substitution early and yield a wrong
+// glob, so decodeTemplate drops n to undefined instead.
+let interpolationError: boolean;
+
+// `index` is the offset just after a "${" substitution opener within `str`.
+// Returns the offset just after the matching "}", tracking brace depth and
+// skipping strings, nested templates and comments so a "}" inside them does not
+// close the substitution early. A "/" that opens a regex literal cannot be told
+// apart from division here without the main parser's token context, and a regex
+// may carry a "}" that would close the substitution early; the bare "/" case
+// sets interpolationError so decodeTemplate drops the glob to undefined rather
+// than emit a wrong skeleton.
+function skipInterpolation (str: string, index: number): number {
+  let braceDepth = 1;
+  const len = str.length;
+  while (index < len) {
+    const ch = str.charCodeAt(index);
+    if (ch === 92/*\*/) {
+      index += 2;
+      continue;
+    }
+    if (ch === 123/*{*/) {
+      braceDepth++;
+    }
+    else if (ch === 125/*}*/) {
+      if (--braceDepth === 0)
+        return index + 1;
+    }
+    else if (ch === 39/*'*/ || ch === 34/*"*/ || ch === 96/*`*/) {
+      index = skipQuoted(str, index + 1, ch);
+      continue;
+    }
+    else if (ch === 47/*/*/) {
+      const next = str.charCodeAt(index + 1);
+      if (next === 47/*/*/ || next === 42/***/) {
+        index = skipComment(str, index + 2, next === 42/***/);
+        continue;
+      }
+      interpolationError = true;
+    }
+    index++;
+  }
+  return index;
+}
+
+// `index` is the offset just after the opening quote `quote`. Returns the
+// offset just after the closing quote. A backtick run recurses through its own
+// ${...} substitutions.
+function skipQuoted (str: string, index: number, quote: number): number {
+  const len = str.length;
+  while (index < len) {
+    const ch = str.charCodeAt(index);
+    if (ch === 92/*\*/) {
+      index += 2;
+      continue;
+    }
+    if (ch === quote)
+      return index + 1;
+    if (quote === 96/*`*/ && ch === 36/*$*/ && str.charCodeAt(index + 1) === 123/*{*/) {
+      index = skipInterpolation(str, index + 2);
+      continue;
+    }
+    index++;
+  }
+  return index;
+}
+
+// `index` is the offset just after "//" or "/*". Returns the offset just after
+// the comment.
+function skipComment (str: string, index: number, block: boolean): number {
+  const len = str.length;
+  while (index < len) {
+    const ch = str.charCodeAt(index);
+    if (block) {
+      if (ch === 42/***/ && str.charCodeAt(index + 1) === 47/*/*/)
+        return index + 2;
+    }
+    else if (ch === 10/*\n*/ || ch === 13/*\r*/) {
+      return index;
+    }
+    index++;
+  }
+  return index;
 }
 
 function copyBE (src: string, outBuf16: Uint16Array) {

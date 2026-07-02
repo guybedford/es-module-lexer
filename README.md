@@ -137,7 +137,8 @@ import { init, parse } from 'es-module-lexer';
   source.slice(imports[3].a, imports[3].se - 1);
 
   // For non-string dynamic import expressions:
-  // - n will be undefined
+  // - n will be undefined, except for a lone template literal: import(`./a/${x}.js`)
+  //   reports n as a glob with each ${...} collapsed to "*" (e.g. "./a/*.js")
   // - a is currently -1 even if there is an import attribute
   // - e is currently the character before the closing )
 
@@ -238,6 +239,8 @@ imports[1].at;
 To handle escape sequences in specifier strings, the `.n` field of imported specifiers will be provided where possible.
 
 For dynamic import expressions, this field will be empty if not a valid JS string.
+
+When the entire dynamic import argument is a single template literal, `.n` is reported as a glob: each `${...}` substitution is collapsed to a single `*` (for example `` import(`./locales/${locale}.js`) `` yields `./locales/*.js`). A template concatenated with anything else, or any other expression, still resolves to `undefined`. A substitution containing a `/` that could open a regex literal cannot be disambiguated from division without full token context, so the glob is dropped to `undefined` rather than risk a wrong specifier.
 
 ### Facade Detection
 
