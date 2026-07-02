@@ -1,3 +1,8 @@
+// LEXER_MIN (defined via -DLEXER_MIN): stripped build for es-module-shims, which
+// only consumes imports (n,s,e,ss,se,d,t,a) and exports (n,s,e,ls,le,ln). Drops
+// the fields/getters/paths it never reads: the parsed attribute list (Attribute
+// + ra/aks/ake/avs/ave), export statement_start/ess(), the facade f()/
+// hasModuleSyntax ms() flags, and the module-only facade fast path.
 #include "lexer.h"
 #include <stdio.h>
 #include <string.h>
@@ -170,7 +175,9 @@ bool parse () {
   Import* dynamicImportStack_[512];
 
   facade = true;
+#ifndef LEXER_MIN
   hasModuleSyntax = false;
+#endif
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
@@ -185,6 +192,7 @@ bool parse () {
   char16_t ch = '\0';
   end = pos + sourceLen;
 
+#ifndef LEXER_MIN
   // start with a pure "module-only" parser
   while (pos++ < end) {
     ch = *pos;
@@ -235,7 +243,10 @@ bool parse () {
   if (has_error)
     return false;
 
-  mainparse: while (pos++ < end) {
+  // the minimal build has no facade fast-path; everything goes through mainparse
+  mainparse:
+#endif
+  while (pos++ < end) {
     ch = *pos;
 
     if (ch == 32 || ch < 14 && ch > 8)
@@ -568,13 +579,15 @@ void tryParseExportStatement () {
 
   char16_t ch = commentWhitespace(true);
 
-  // Only commit the statement start once this is a real export: skipExpression
-  // re-enters here for an `export`-prefixed identifier (e.g. `exports`) in an
-  // initializer, which would otherwise clobber the start for later bindings.
   if (pos == curPos && !isPunctuator(ch))
     return;
 
+#ifndef LEXER_MIN
+  // Only commit the statement start once this is a real export: skipExpression
+  // re-enters here for an `export`-prefixed identifier (e.g. `exports`) in an
+  // initializer, which would otherwise clobber the start for later bindings.
   export_statement_start = sStartPos;
+#endif
 
   if (ch == '{') {
     pos++;
@@ -614,7 +627,9 @@ void tryParseExportStatement () {
       if (pos > end)
         return syntaxError();
     }
+#ifndef LEXER_MIN
     hasModuleSyntax = true; // to handle "export {}"
+#endif
     pos++;
     ch = commentWhitespace(true);
   }
@@ -829,8 +844,10 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     return;
   }
   const char16_t* attrStart = pos;
+#ifndef LEXER_MIN
   Attribute* attr_write_head = NULL;
   Attribute* attr_write_head_last = NULL;
+#endif
   do {
     pos++;
     ch = commentWhitespace(true);
@@ -877,6 +894,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       pos = attrIndex;
       return;
     }
+#ifndef LEXER_MIN
     Attribute* attr = (Attribute*)(analysis_head);
     analysis_head = analysis_head + sizeof(Attribute);
     attr->key_start = key_start;
@@ -890,6 +908,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       attr_write_head->next = attr;
     attr_write_head_last = attr_write_head;
     attr_write_head = attr;
+#endif
     pos++;
     ch = commentWhitespace(true);
     if (ch == ',') {

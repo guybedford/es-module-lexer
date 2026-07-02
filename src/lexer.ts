@@ -1,3 +1,9 @@
+// Build-time variant flag. The minimal build (dist/lexer.minimal.js) rewrites
+// this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
+// ms/attributes), matching the stripped LEXER_MIN wasm exports. `as boolean`
+// keeps both branches type-checked rather than narrowed to the false literal.
+const MINIMAL = false as boolean;
+
 export enum ImportType {
   /**
    * A normal static using any syntax variations
@@ -257,22 +263,28 @@ export function parse (source: string, name = '@'): readonly [
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
-    const at: Array<[string, string]> = [];
-    wasm.rsa();
-    while (wasm.ra()) {
-      const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
-      at.push([decodeIfQuoted(source.slice(aks, ake)), decodeIfQuoted(source.slice(avs, ave))]);
+    let at: Array<[string, string]> | null = null;
+    // minimal build drops the parsed attribute list; es-module-shims reads the
+    // assertion via source.slice(a, se - 1) instead
+    if (!MINIMAL) {
+      at = [];
+      wasm.rsa();
+      while (wasm.ra()) {
+        const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
+        at.push([decodeIfQuoted(source.slice(aks, ake)), decodeIfQuoted(source.slice(avs, ave))]);
+      }
+      if (at.length === 0) at = null;
     }
-    imports.push({ n, t, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
+    imports.push({ n, t, s, e, ss, se, d, a, at });
   }
   while (wasm.re()) {
-    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele(), ss = wasm.ess();
-    const n = decodeIfQuoted(source.slice(s, e));
+    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
     const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
-    exports.push({
-      s, e, ls, le, ss,
-      n, ln,
-    });
+    const n = decodeIfQuoted(source.slice(s, e));
+    if (MINIMAL)
+      exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
+    else
+      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln });
   }
 
   function decode (str: string) {
@@ -290,7 +302,7 @@ export function parse (source: string, name = '@'): readonly [
     return str;
   }
 
-  return [imports, exports, !!wasm.f(), !!wasm.ms()];
+  return (MINIMAL ? [imports, exports] : [imports, exports, !!wasm.f(), !!wasm.ms()]) as ReturnType<typeof parse>;
 }
 
 function copyBE (src: string, outBuf16: Uint16Array) {

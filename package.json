@@ -15,6 +15,16 @@
     "./js": {
       "types": "./types/lexer.d.ts",
       "default": "./dist/lexer.asm.js"
+    },
+    "./minimal": {
+      "types": "./types/lexer.minimal.d.ts",
+      "module": "./dist/lexer.minimal.js",
+      "import": "./dist/lexer.minimal.js",
+      "require": "./dist/lexer.minimal.cjs"
+    },
+    "./minimal/js": {
+      "types": "./types/lexer.minimal.d.ts",
+      "default": "./dist/lexer.minimal.asm.js"
     }
   },
   "scripts": {

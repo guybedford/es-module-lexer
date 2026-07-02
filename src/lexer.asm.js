@@ -1,3 +1,8 @@
+// Build-time variant flag. The minimal build (lib/lexer.min.asm.in.js) rewrites
+// this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
+// ms/attributes), matching the stripped LEXER_MIN wasm/asm exports.
+const MINIMAL = false;
+
 let asm, asmBuffer, allocSize = 2<<19, addr;
 
 const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (src, outBuf16) {
@@ -52,27 +57,31 @@ export function parse (_source, _name = '@') {
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
-    const at = [];
-    asm.rsa();
-    while (asm.ra()) {
-      const aks = asm.aks(), ake = asm.ake(), avs = asm.avs(), ave = asm.ave();
-      const attrKey = decodeIfQuoted(aks, ake);
-      const attrValue = decodeIfQuoted(avs, ave);
-      at.push([attrKey, attrValue]);
+    let at = null;
+    // minimal build drops the parsed attribute list; es-module-shims reads the
+    // assertion via source.slice(a, se - 1) instead
+    if (!MINIMAL) {
+      at = [];
+      asm.rsa();
+      while (asm.ra()) {
+        const aks = asm.aks(), ake = asm.ake(), avs = asm.avs(), ave = asm.ave();
+        at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
+      }
+      at = at.length > 0 ? at : null;
     }
-    imports.push({ t, n, s, e, ss, se, d, a, at: at.length > 0 ? at : null });
+    imports.push({ t, n, s, e, ss, se, d, a, at });
   }
   while (asm.re()) {
-    const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele(), ss = asm.ess();
-    const n = decodeIfQuoted(s, e);
+    const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
     const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
-    exports.push({
-      s, e, ls, le, ss,
-      n, ln,
-    });
+    const n = decodeIfQuoted(s, e);
+    if (MINIMAL)
+      exports.push({ s, e, ls, le, n, ln });
+    else
+      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln });
   }
 
-  return [imports, exports, !!asm.f(), !!asm.ms()];
+  return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];
 
   function decodeIfQuoted (pos, end) {
     const ch = source.charCodeAt(pos);

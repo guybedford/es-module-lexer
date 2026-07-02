@@ -4,6 +4,8 @@ dist
 package-lock.json
 yarn.lock
 src/lexer.js
+src/lexer.min.js
 types/lexer.d.ts
+types/lexer.minimal.d.ts
 src/*.mem
 src/lexer.js.map
