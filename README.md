@@ -174,11 +174,27 @@ import { parse } from 'es-module-lexer/js';
 
 Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
 
+### Minimal Build
+
+For size-sensitive embedders, the `es-module-lexer/minimal` build drops certain features to reduce the binary size. This is used for example by [es-module-shims](https://github.com/guybedford/es-module-shims):
+
+```js
+import { parse } from 'es-module-lexer/minimal';
+```
+
+Compared to the full build:
+
+* `parse` returns a two-element `[imports, exports]` tuple only - the third and fourth facade and `hasModuleSyntax` booleans are dropped.
+* Imports drop the parsed attribute list `at` (the attribute source remains recoverable via the `a` attributes index).
+* Exports drop the statement start `ss`.
+
+All other fields are identical to the full build. For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
+
 ### Import Attributes
 
 The `a` field provides the index of the start of the `{` attributes bracket, or -1 for no attributes.
 
-The list of attribute key and value pairs are provided on the `at` field:
+The list of attribute key and value pairs are provided on the `at` field (full build only):
 
 ```js
 const [imports] = parse(`
@@ -225,7 +241,7 @@ For dynamic import expressions, this field will be empty if not a valid JS strin
 
 ### Facade Detection
 
-Facade modules that only use import / export syntax can be detected via the third return value:
+Facade modules that only use import / export syntax can be detected via the third return value (full build only):
 
 ```js
 const [,, facade] = parse(`
@@ -239,7 +255,7 @@ facade === true;
 
 ### ESM Detection
 
-Modules that uses ESM syntaxes can be detected via the fourth return value:
+Modules that uses ESM syntaxes can be detected via the fourth return value (full build only):
 
 ```js
 const [,,, hasModuleSyntax] = parse(`
