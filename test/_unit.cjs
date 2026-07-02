@@ -2,8 +2,8 @@ const assert = require('assert');
 
 let js = false;
 // The minimal builds (MINIMAL=1) drop the fields es-module-shims never reads:
-// dynamic-import `n`, the parsed attribute list `at`, and export `ss`. Tests
-// asserting on those are gated behind `!min`.
+// the parsed attribute list `at`, export `ss`, and the facade/hasModuleSyntax
+// flags. Tests asserting on those are gated behind `!min`.
 const min = !!process.env.MINIMAL;
 let parse;
 const init = (async () => {

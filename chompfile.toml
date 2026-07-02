@@ -143,7 +143,7 @@ run = """
 
 [[task]]
 # Minimal wasm build (-DLEXER_MIN): drops the getters es-module-shims never
-# reads (ip/ess/f/ms + attributes) and the facade fast path. See src/lexer.c.
+# reads (ess/f/ms + attributes) and the facade fast path. See src/lexer.c.
 # Depends on lib/lexer.wasm so the two upstream-emsdk builds run sequentially
 # rather than racing on the shared emsdk activation.
 target = 'lib/lexer.min.wasm'
@@ -155,7 +155,7 @@ run = """
 
 	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -DLEXER_MIN -o lib/lexer.min.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','___heap_base']" \
-	-s SUPPORT_LONGJMP=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
+	-s SUPPORT_LONGJMP=0 -s ALLOW_MEMORY_GROWTH=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 """
 
 [[task]]
