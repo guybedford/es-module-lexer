@@ -2051,4 +2051,13 @@ export { d as a, p as b, z as c, r as d, q }`;
       assert.strictEqual(err.idx, 11);
     }
   });
+
+  test('Large source', () => {
+    const source = `import 'a';\nconst x = "${'a'.repeat(5 * 1024 * 1024)}";\nexport { x }`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'a');
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].n, 'x');
+  });
 });
