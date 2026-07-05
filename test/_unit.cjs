@@ -436,14 +436,13 @@ suite('Lexer', () => {
     assert.strictEqual(parse("import(`a${ obj['}'] }b`)")[0][0].n, 'a*b');
     assert.strictEqual(parse('import(`a${ x /* } */ }b`)')[0][0].n, 'a*b');
     assert.strictEqual(parse('import(`a${ x // }\n }b`)')[0][0].n, 'a*b');
-    // A "/" inside the substitution may open a regex literal, which the glob
-    // walker cannot tell apart from division without the parser's token
-    // context. A regex "}" would otherwise close the substitution early and
-    // produce a wrong skeleton, so n drops to undefined rather than guess.
-    assert.strictEqual(parse('import(`a${ /x}y/g }b`)')[0][0].n, undefined);
-    assert.strictEqual(parse('import(`a${ /x/g }b`)')[0][0].n, undefined);
-    assert.strictEqual(parse('import(`a${ b/c }d`)')[0][0].n, undefined);
-    assert.strictEqual(parse('import(`a${ `n${ /x}/g }` }b`)')[0][0].n, undefined);
+    // A "/" inside the substitution is disambiguated by the parser's own
+    // tokenizer, so a regex literal carrying a "}" no longer closes the
+    // substitution early: the whole ${...} still collapses to a single "*".
+    assert.strictEqual(parse('import(`a${ /x}y/g }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ /x/g }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ b/c }d`)')[0][0].n, 'a*d');
+    assert.strictEqual(parse('import(`a${ `n${ /x}/g }` }b`)')[0][0].n, 'a*b');
     // A "/" inside a string or comment is an ordinary character and keeps the
     // glob.
     assert.strictEqual(parse("import(`a${ x['/}'] }b`)")[0][0].n, 'a*b');

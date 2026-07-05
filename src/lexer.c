@@ -145,8 +145,24 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       break;
     case '}':
       if (openTokenDepth == 0) return syntaxError(), false;
-      if (openTokenStack[--openTokenDepth].token == TemplateBrace)
+      if (openTokenStack[--openTokenDepth].token == TemplateBrace) {
+        // A top-level ${...} of the specifier template just closed: record the
+        // position after "}" so the decoders splice a "*" for it. Only the
+        // specifier's own substitutions qualify (openTokenDepth back at the
+        // Template's depth + 1), never a nested or concatenated template's.
+        if (templateSpanImport != NULL && openTokenDepth == specifierTemplateDepth + 1) {
+          TemplateSpan* span = (TemplateSpan*)(analysis_head);
+          analysis_head = analysis_head + sizeof(TemplateSpan);
+          span->end = pos + 1;
+          span->next = NULL;
+          if (template_span_write_head == NULL)
+            templateSpanImport->template_spans = span;
+          else
+            template_span_write_head->next = span;
+          template_span_write_head = span;
+        }
         templateString();
+      }
       break;
     case '\'':
     case '"':
@@ -156,6 +172,17 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       isComment = handleSlash();
       break;
     case '`':
+      // A backtick that is the first token of an open dynamic import's argument
+      // opens the specifier template: record its top-level ${...} spans so the
+      // decoders can glob it without re-tokenizing (see struct TemplateSpan).
+      if (dynamicImportStackDepth > 0 && openTokenDepth > 0 &&
+          openTokenStack[openTokenDepth - 1].token == ImportParen &&
+          lastTokenPos == openTokenStack[openTokenDepth - 1].pos &&
+          dynamicImportStack[dynamicImportStackDepth - 1]->end == 0) {
+        templateSpanImport = dynamicImportStack[dynamicImportStackDepth - 1];
+        specifierTemplateDepth = openTokenDepth;
+        template_span_write_head = NULL;
+      }
       openTokenStack[openTokenDepth].pos = lastTokenPos;
       openTokenStack[openTokenDepth++].token = Template;
       templateString();
@@ -180,6 +207,7 @@ bool parse () {
 #endif
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
+  templateSpanImport = NULL;
   lastTokenPos = (char16_t*)EMPTY_CHAR;
   lastSlashWasDivision = false;
   parse_error = 0;
@@ -956,6 +984,10 @@ void templateString () {
     if (ch == '`') {
       if (openTokenStack[--openTokenDepth].token != Template)
         syntaxError();
+      // The specifier template just closed. Stop recording so a following
+      // concatenated template (`a${x}` + `b${y}`) never appends its spans.
+      if (templateSpanImport != NULL && openTokenDepth == specifierTemplateDepth)
+        templateSpanImport = NULL;
       return;
     }
     if (ch == '\\')

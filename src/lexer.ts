@@ -273,7 +273,7 @@ export function parse (source: string, name = '@'): readonly [
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
     else if (d !== -1 && source[s] === '`')
-      n = decodeTemplate(source.slice(s, e));
+      n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -313,124 +313,39 @@ export function parse (source: string, name = '@'): readonly [
     return str;
   }
 
-  // `str` spans the whole dynamic-import argument including the backticks. A
-  // lone template literal is reported as a glob with each ${...} substitution
-  // collapsed to a single "*"; the substituted source is then evaluated so the
-  // static parts are cooked. Anything else (e.g. `a` + b) closes before the end
-  // and returns undefined.
-  function decodeTemplate (str: string) {
-    let out = '`', chunkStart = 1, index = 1;
-    const last = str.length - 1;
-    interpolationError = false;
+  // `[s, e)` spans the dynamic-import template argument, backticks included. The
+  // parser records each top-level ${...} substitution's end position (see struct
+  // TemplateSpan in lexer.c), which already resolves the regex-vs-division
+  // ambiguity the decoder cannot. This walks the static parts, emits a single
+  // "*" per substitution, and jumps its body via the recorded end, then cooks
+  // the skeleton by evaluating it. A concatenation such as `a${x}` + b records
+  // only its first template's spans, so the skeleton misses the argument end
+  // (its closing backtick is not at e - 1) and it drops to undefined.
+  function decodeTemplate (s: number, e: number) {
+    let out = '`', chunkStart = s + 1, index = s + 1;
+    const last = e - 1;
+    wasm.rts();
     while (index < last) {
-      const ch = str.charCodeAt(index);
+      const ch = source.charCodeAt(index);
       if (ch === 92/*\*/) {
         index += 2;
         continue;
       }
       if (ch === 96/*`*/)
         return;
-      if (ch === 36/*$*/ && str.charCodeAt(index + 1) === 123/*{*/) {
-        out += str.slice(chunkStart, index) + '*';
-        index = skipInterpolation(str, index + 2);
-        chunkStart = index;
+      if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && wasm.rt()) {
+        out += source.slice(chunkStart, index) + '*';
+        index = chunkStart = wasm.te();
         continue;
       }
       index++;
     }
-    if (interpolationError || str.charCodeAt(last) !== 96/*`*/)
+    if (source.charCodeAt(last) !== 96/*`*/)
       return;
-    return decode(out + str.slice(chunkStart, last) + '`');
+    return decode(out + source.slice(chunkStart, last) + '`');
   }
 
   return (MINIMAL ? [imports, exports] : [imports, exports, !!wasm.f(), !!wasm.ms()]) as ReturnType<typeof parse>;
-}
-
-// Set by skipInterpolation when a ${...} substitution contains a "/" that could
-// open a regex literal, which the glob walker cannot disambiguate from
-// division. A regex "}" would close the substitution early and yield a wrong
-// glob, so decodeTemplate drops n to undefined instead.
-let interpolationError: boolean;
-
-// `index` is the offset just after a "${" substitution opener within `str`.
-// Returns the offset just after the matching "}", tracking brace depth and
-// skipping strings, nested templates and comments so a "}" inside them does not
-// close the substitution early. A "/" that opens a regex literal cannot be told
-// apart from division here without the main parser's token context, and a regex
-// may carry a "}" that would close the substitution early; the bare "/" case
-// sets interpolationError so decodeTemplate drops the glob to undefined rather
-// than emit a wrong skeleton.
-function skipInterpolation (str: string, index: number): number {
-  let braceDepth = 1;
-  const len = str.length;
-  while (index < len) {
-    const ch = str.charCodeAt(index);
-    if (ch === 92/*\*/) {
-      index += 2;
-      continue;
-    }
-    if (ch === 123/*{*/) {
-      braceDepth++;
-    }
-    else if (ch === 125/*}*/) {
-      if (--braceDepth === 0)
-        return index + 1;
-    }
-    else if (ch === 39/*'*/ || ch === 34/*"*/ || ch === 96/*`*/) {
-      index = skipQuoted(str, index + 1, ch);
-      continue;
-    }
-    else if (ch === 47/*/*/) {
-      const next = str.charCodeAt(index + 1);
-      if (next === 47/*/*/ || next === 42/***/) {
-        index = skipComment(str, index + 2, next === 42/***/);
-        continue;
-      }
-      interpolationError = true;
-    }
-    index++;
-  }
-  return index;
-}
-
-// `index` is the offset just after the opening quote `quote`. Returns the
-// offset just after the closing quote. A backtick run recurses through its own
-// ${...} substitutions.
-function skipQuoted (str: string, index: number, quote: number): number {
-  const len = str.length;
-  while (index < len) {
-    const ch = str.charCodeAt(index);
-    if (ch === 92/*\*/) {
-      index += 2;
-      continue;
-    }
-    if (ch === quote)
-      return index + 1;
-    if (quote === 96/*`*/ && ch === 36/*$*/ && str.charCodeAt(index + 1) === 123/*{*/) {
-      index = skipInterpolation(str, index + 2);
-      continue;
-    }
-    index++;
-  }
-  return index;
-}
-
-// `index` is the offset just after "//" or "/*". Returns the offset just after
-// the comment.
-function skipComment (str: string, index: number, block: boolean): number {
-  const len = str.length;
-  while (index < len) {
-    const ch = str.charCodeAt(index);
-    if (block) {
-      if (ch === 42/***/ && str.charCodeAt(index + 1) === 47/*/*/)
-        return index + 2;
-    }
-    else if (ch === 10/*\n*/ || ch === 13/*\r*/) {
-      return index;
-    }
-    index++;
-  }
-  return index;
 }
 
 function copyBE (src: string, outBuf16: Uint16Array) {
@@ -503,6 +418,12 @@ let wasm: {
   avs(): number;
   /** getAttributeValueEnd */
   ave(): number;
+  /** readTemplateSpan */
+  rt(): boolean;
+  /** getTemplateSpanEnd */
+  te(): number;
+  /** resetTemplateSpans */
+  rts(): void;
 };
 
 const getWasmBytes = () => (

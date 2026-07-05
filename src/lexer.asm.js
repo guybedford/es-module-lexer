@@ -57,17 +57,8 @@ export function parse (_source, _name = '@') {
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
-    else if (d !== -1 && source.charCodeAt(s) === 96/*`*/) {
-      // A dynamic-import template specifier with substitutions has no constant
-      // value, but its static skeleton is a useful glob (each ${...} -> "*").
-      // Only a lone template literal qualifies: readString stops at the
-      // template's own closing backtick, which is the whole argument's end (e)
-      // for a glob, but not for a concatenation such as `a` + `b`.
-      interpolationError = false;
-      const glob = readString(s + 1, 96/*`*/);
-      if (!interpolationError && acornPos === e)
-        n = glob;
-    }
+    else if (d !== -1 && source.charCodeAt(s) === 96/*`*/)
+      n = decodeTemplate(s, e);
     let at = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -128,11 +119,6 @@ export function parse (_source, _name = '@') {
  * THE SOFTWARE.
  */
 let acornPos;
-// Set by skipInterpolation when a ${...} substitution contains a "/" that
-// could open a regex literal, which the glob walker cannot disambiguate from
-// division. A regex "}" would close the substitution early and yield a wrong
-// glob, so the caller drops n to undefined instead.
-let interpolationError;
 function readString (start, quote) {
   acornPos = start;
   let out = '', chunkStart = acornPos;
@@ -143,13 +129,6 @@ function readString (start, quote) {
     if (ch === 92) { // '\'
       out += source.slice(chunkStart, acornPos);
       out += readEscapedChar();
-      chunkStart = acornPos;
-    }
-    else if (quote === 96/*`*/ && ch === 36/*$*/ && source.charCodeAt(acornPos + 1) === 123/*{*/) {
-      // Glob a dynamic-import template specifier: each ${...} substitution
-      // collapses to a single "*" wildcard.
-      out += source.slice(chunkStart, acornPos) + '*';
-      acornPos = skipInterpolation(acornPos + 2);
       chunkStart = acornPos;
     }
     else if (ch === 0x2028 || ch === 0x2029) {
@@ -164,82 +143,40 @@ function readString (start, quote) {
   return out;
 }
 
-// `index` is the offset just after a "${" substitution opener. Returns the
-// offset just after the matching "}", tracking brace depth and skipping
-// strings, nested templates and comments so a "}" inside them does not close
-// the substitution early. A "/" that opens a regex literal cannot be told
-// apart from division here without the main parser's token context, and a
-// regex may carry a "}" that would close the substitution early; the bare "/"
-// case sets interpolationError so the caller drops the glob to undefined
-// rather than emit a wrong skeleton.
-function skipInterpolation (index) {
-  let braceDepth = 1;
-  while (index < source.length) {
-    const ch = source.charCodeAt(index);
+// `[s, e)` spans the dynamic-import template argument, backticks included. The
+// parser records each top-level ${...} substitution's end position (see struct
+// TemplateSpan in lexer.c), which already resolves the regex-vs-division
+// ambiguity the decoder cannot. This cooks the static parts (escapes and all,
+// via readString's machinery), emits a single "*" per substitution and jumps
+// its body via the recorded end. A concatenation such as `a${x}` + b records
+// only its first template's spans, so the walk never reaches the argument end
+// (its closing backtick is not at e - 1) and n stays undefined.
+function decodeTemplate (s, e) {
+  const last = e - 1;
+  if (source.charCodeAt(last) !== 96/*`*/)
+    return;
+  asm.rts();
+  acornPos = s + 1;
+  let out = '', chunkStart = acornPos;
+  while (acornPos < last) {
+    const ch = source.charCodeAt(acornPos);
     if (ch === 92/*\*/) {
-      index += 2;
-      continue;
+      out += source.slice(chunkStart, acornPos);
+      out += readEscapedChar();
+      chunkStart = acornPos;
     }
-    if (ch === 123/*{*/) {
-      braceDepth++;
+    else if (ch === 96/*`*/) {
+      return;
     }
-    else if (ch === 125/*}*/) {
-      if (--braceDepth === 0)
-        return index + 1;
+    else if (ch === 36/*$*/ && source.charCodeAt(acornPos + 1) === 123/*{*/ && asm.rt()) {
+      out += source.slice(chunkStart, acornPos) + '*';
+      acornPos = chunkStart = asm.te();
     }
-    else if (ch === 39/*'*/ || ch === 34/*"*/ || ch === 96/*`*/) {
-      index = skipQuoted(index + 1, ch);
-      continue;
+    else {
+      ++acornPos;
     }
-    else if (ch === 47/*/*/) {
-      const next = source.charCodeAt(index + 1);
-      if (next === 47/*/*/ || next === 42/***/) {
-        index = skipComment(index + 2, next === 42/***/);
-        continue;
-      }
-      interpolationError = true;
-    }
-    index++;
   }
-  return index;
-}
-
-// `index` is the offset just after the opening quote `quote`. Returns the
-// offset just after the closing quote. A backtick run recurses through its own
-// ${...} substitutions.
-function skipQuoted (index, quote) {
-  while (index < source.length) {
-    const ch = source.charCodeAt(index);
-    if (ch === 92/*\*/) {
-      index += 2;
-      continue;
-    }
-    if (ch === quote)
-      return index + 1;
-    if (quote === 96/*`*/ && ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/) {
-      index = skipInterpolation(index + 2);
-      continue;
-    }
-    index++;
-  }
-  return index;
-}
-
-// `index` is the offset just after "//" or "/*". Returns the offset just after
-// the comment.
-function skipComment (index, block) {
-  while (index < source.length) {
-    const ch = source.charCodeAt(index);
-    if (block) {
-      if (ch === 42/***/ && source.charCodeAt(index + 1) === 47/*/*/)
-        return index + 2;
-    }
-    else if (ch === 10/*\n*/ || ch === 13/*\r*/) {
-      return index;
-    }
-    index++;
-  }
-  return index;
+  return out + source.slice(chunkStart, last);
 }
 
 // Used to read escaped characters
