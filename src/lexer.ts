@@ -130,9 +130,8 @@ export interface ImportSpecifier {
 
   /**
    * `true` for a TypeScript type-only import (`import type ... from`), elided
-   * from the emitted JavaScript. The Wasm build lexes type-only syntax; the
-   * asm.js / CSP build (`es-module-lexer/js`) is JavaScript-only and always
-   * reports `false`.
+   * from the emitted JavaScript. Both the Wasm and asm.js / CSP builds lex
+   * TypeScript; the minimal build (`es-module-lexer/minimal`) omits this field.
    */
   readonly tp: boolean;
 }
@@ -226,10 +225,10 @@ export interface ExportSpecifier {
    */
   readonly ss: number;
   /**
-   * `true` for a TypeScript type-only export (`export type { ... }` or an inline
-   * `export { type X }`), elided from the emitted JavaScript. The Wasm build
-   * lexes type-only syntax; the asm.js / CSP build (`es-module-lexer/js`) is
-   * JavaScript-only and always reports `false`.
+   * `true` for a TypeScript type-only export: `export type { ... }`, an inline
+   * `export { type X }`, or a directly-exported `export type`/`export interface`
+   * declaration. Elided from the emitted JavaScript. Both the Wasm and asm.js /
+   * CSP builds lex TypeScript; the minimal build omits this field.
    */
   readonly tp: boolean;
 }

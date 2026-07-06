@@ -25,10 +25,30 @@ suite('TS type-only imports', () => {
     assert.strictEqual(imports[0].tp, true);
   });
 
-  test('import type from binds the name `from` and stays type-only', () => {
-    // `from` is the default binding name here; Node strips the whole import.
+  test('import type from is a value import of the default binding named type', () => {
+    // `type` is the default binding, `from` the keyword. Node keeps it verbatim,
+    // so it is a runtime import that must stay a JS-superset value import.
     const [imports] = parse(`import type from 'm';`);
     assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'm');
+    assert.strictEqual(imports[0].tp, false);
+  });
+
+  test('import type from from is type-only (default binding named from)', () => {
+    const [imports] = parse(`import type from from 'm';`);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'm');
+    assert.strictEqual(imports[0].tp, true);
+  });
+
+  test('import type/*c*/{ A } from is type-only', () => {
+    const [imports] = parse(`import type/*c*/{ A } from 'm';`);
+    assert.strictEqual(imports[0].n, 'm');
+    assert.strictEqual(imports[0].tp, true);
+  });
+
+  test('import type* as ns from is type-only', () => {
+    const [imports] = parse(`import type* as ns from 'm';`);
     assert.strictEqual(imports[0].n, 'm');
     assert.strictEqual(imports[0].tp, true);
   });

@@ -1,13 +1,17 @@
-// Shared loader for the TypeScript suites. They run against the full wasm build
-// (test:ts:wasm, WASM=1), which lexes type-only syntax; the asm.js / CSP build
-// is JavaScript-only and is not exercised here.
+// Shared loader for the TypeScript suites. The full wasm (WASM=1) and asm.js
+// (ASM=1) builds both lex TypeScript, so the suites run against whichever the
+// job selects, mirroring the WASM/ASM switch of the legacy test/*.cjs suites.
 let parse;
 
 const init = (async () => {
   if (parse) return;
-  const m = await import('../../dist/lexer.js');
-  await m.init;
-  parse = m.parse;
+  if (process.env.ASM) {
+    ({ parse } = await import('../../dist/lexer.asm.js'));
+  } else {
+    const m = await import('../../dist/lexer.js');
+    await m.init;
+    parse = m.parse;
+  }
 })();
 
 module.exports = {

@@ -21,8 +21,9 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 
 // Keyword dictionary, extracted from the fastcomp static memory image at build
 // time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
-// keyword tables in lexer.c automatically.
-const words = '{{WORDS}}';
+// keyword tables in lexer.c automatically. Injected as a JSON string literal so
+// NUL gap bytes and any quote / backslash / line terminator stay valid JS.
+const words = {{WORDS}};
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -69,11 +70,10 @@ export function parse (_source, _name = '@') {
       }
       at = at.length > 0 ? at : null;
     }
-    // JavaScript-only build: mirror the full wasm shape.
     if (MINIMAL)
       imports.push({ t, n, s, e, ss, se, d, a, at });
     else
-      imports.push({ t, n, s, e, ss, se, d, a, at, tp: false });
+      imports.push({ t, n, s, e, ss, se, d, a, at, tp: !!asm.itp() });
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
@@ -82,7 +82,7 @@ export function parse (_source, _name = '@') {
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln });
     else
-      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln, tp: false });
+      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln, tp: !!asm.etp() });
   }
 
   return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];

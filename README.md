@@ -192,7 +192,7 @@ All other fields are identical to the full build. For CSP eval disabled support,
 
 ### TypeScript
 
-The default `parse` lexes the erasable TypeScript syntax that [Node.js type stripping](https://nodejs.org/api/typescript.html#type-stripping) accepts, so the same lexer that handles your JavaScript also handles your TypeScript without a separate transform step:
+The default `parse` lexes the type-only import and export syntax that [Node.js type stripping](https://nodejs.org/api/typescript.html#type-stripping) erases, so the same lexer that handles your JavaScript also handles those TypeScript edges without a separate transform step:
 
 ```js
 const [imports, exports] = parse(`
@@ -211,11 +211,13 @@ imports[0].tp; // true
 imports[1].tp; // false
 ```
 
-`tp` is present on every import and export specifier. Inline modifiers are tracked per specifier, so `export { type A, b }` marks only `A`. Plain JavaScript always reports `tp: false`: type-only syntax is a syntax error in JavaScript, and the one form that is valid in both (`import type from 'x'`) resolves to the same module specifier, so nothing changes for JavaScript consumers.
+`tp` is present on every import and export specifier. Inline modifiers are tracked per specifier, so `export { type A, b }` marks only `A`, and directly-exported `export type Foo = ...` / `export interface Foo {}` declarations are marked too. Plain JavaScript always reports `tp: false`: every type-only form is a syntax error in JavaScript except `import type from 'x'`, which is a value import of the default binding named `type` and keeps its runtime edge, so nothing changes for JavaScript consumers.
 
-Type-only lexing ships in the Wasm build. The asm.js / CSP build (`es-module-lexer/js`) is JavaScript-only and always reports `tp: false`; TypeScript support for it is a follow-up.
+Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The minimal build (`es-module-lexer/minimal`) lexes JavaScript only and omits `tp`.
 
-This first release supports type-only imports and exports. Type annotations, generics, `as` / `satisfies` and the rest of the erasable surface are not yet handled. Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
+`type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import.
+
+This increment covers type-only imports and exports and `type` / `interface` declarations. Type annotations on values and generic type arguments in value positions are not yet handled: an `import(...)` type there (`const x: import('m').T`, `f<import('m').T>()`) is still reported as a runtime import, since telling a type argument from a `<` comparison needs full type context. `as` / `satisfies` and the rest of the erasable surface also follow later. Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
 
 ### Import Attributes
 

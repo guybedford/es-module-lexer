@@ -50,6 +50,18 @@ suite('TS type-only exports', () => {
     assert.strictEqual(exports[0].tp, false);
   });
 
+  test('export { type as/*c*/T } exports the value named type aliased to T', () => {
+    const [, exports] = parse(`const type = 1;\nexport { type as/*c*/T };`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['T']);
+    assert.strictEqual(exports[0].tp, false);
+  });
+
+  test('export { type as as X } is a type-only export of the value named as', () => {
+    const [, exports] = parse(`const as = 1;\nexport { type as as X };`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['X']);
+    assert.strictEqual(exports[0].tp, true);
+  });
+
   test('export type * as ns from is type-only', () => {
     const [imports, exports] = parse(`export type * as ns from './t';`);
     assert.deepStrictEqual(exports.map(e => e.n), ['ns']);

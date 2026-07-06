@@ -44,7 +44,9 @@ struct Import {
   const char16_t* attr_index;
   const char16_t* dynamic;
   bool safe;
+#ifdef LEX_TS
   bool type_only;
+#endif
   enum ImportType import_ty;
 #ifndef LEXER_MIN
   struct Attribute* attributes;
@@ -78,7 +80,9 @@ struct Export {
 #ifndef LEXER_MIN
   const char16_t* statement_start;
 #endif
+#ifdef LEX_TS
   bool type_only;
+#endif
   struct Export* next;
 };
 typedef struct Export Export;
@@ -163,7 +167,9 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->attr_index = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
+#ifdef LEX_TS
   import->type_only = false;
+#endif
 #ifndef LEXER_MIN
   import->attributes = NULL;
 #endif
@@ -189,7 +195,9 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
 #ifndef LEXER_MIN
   export->statement_start = export_statement_start;
 #endif
+#ifdef LEX_TS
   export->type_only = false;
+#endif
   export->next = NULL;
 #ifndef LEXER_MIN
   hasModuleSyntax = true;
@@ -238,10 +246,12 @@ uint32_t id () {
 uint32_t ip () {
   return import_read_head->safe;
 }
+#ifdef LEX_TS
 // getImportTypeOnly
 uint32_t itp () {
   return import_read_head->type_only;
 }
+#endif
 // getExportStart
 uint32_t es () {
   return export_read_head->start - source;
@@ -264,10 +274,12 @@ uint32_t ess () {
   return export_read_head->statement_start - source;
 }
 #endif
+#ifdef LEX_TS
 // getExportTypeOnly
 uint32_t etp () {
   return export_read_head->type_only;
 }
+#endif
 // readImport
 bool ri () {
   if (import_read_head == NULL)
@@ -347,9 +359,14 @@ bool isValueChar (char16_t c);
 
 #ifdef LEX_TS
 // pos AT the start of a `type` token candidate. Returns true when it is the
-// contextual `type` keyword followed by whitespace (so `type T`, `type {`),
+// contextual `type` keyword whose follower begins an import/export clause,
 // not an identifier whose prefix is "type" (typeof, typed, ...).
 bool isTsTypeKeyword (char16_t* pos);
+bool isTsIdentifierStart (char16_t c);
+bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd);
+bool tryTsTypeDeclaration (bool bare);
+bool skipTsTrivia (char16_t ch);
+void skipTsBalanced ();
 #endif
 
 char16_t commentWhitespace (bool br);
