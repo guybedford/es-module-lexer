@@ -418,6 +418,11 @@ suite('Lexer', () => {
   });
 
   test(`Dynamic import interpolated template specifier glob`, () => {
+    // Glob n is a full-build-only feature; the minimal build reports undefined.
+    if (min) {
+      assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, undefined);
+      return;
+    }
     // An interpolated template literal has no constant value, but its static
     // skeleton is a useful glob: each ${...} collapses to a single "*".
     assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, './a*.js');
@@ -449,6 +454,51 @@ suite('Lexer', () => {
     assert.strictEqual(parse('import(`a${x}` + `b${y}`)')[0][0].n, undefined);
     assert.strictEqual(parse('import("a" + x)')[0][0].n, undefined);
     assert.strictEqual(parse('import(x)')[0][0].n, undefined);
+  });
+
+  test(`Dynamic import interpolated template glob edge cases`, () => {
+    // The glob is a full-build-only feature; the minimal build never reports it.
+    if (min) {
+      assert.strictEqual(parse('import(`./a/${x}.js`)')[0][0].n, undefined);
+      return;
+    }
+    // A substitution is never evaluated: expressions with side effects collapse
+    // to "*" like any other, so parse() cannot execute source (a regression for
+    // the Wasm build cooking its skeleton with eval).
+    globalThis.__templateGlobEvalRan = false;
+    assert.strictEqual(parse('import( `${(globalThis.__templateGlobEvalRan = true, "x")}.js`)')[0][0].n, '*.js');
+    assert.strictEqual(globalThis.__templateGlobEvalRan, false);
+    delete globalThis.__templateGlobEvalRan;
+    // Whitespace around the argument does not change the glob, and matches the
+    // no-whitespace form (a cross-build divergence regression).
+    assert.strictEqual(parse('import(`./a/${x}.js` )')[0][0].n, './a/*.js');
+    assert.strictEqual(parse('import( `./a/${x}.js`)')[0][0].n, './a/*.js');
+    assert.strictEqual(parse('import(\t`./a/${x}.js`\n)')[0][0].n, './a/*.js');
+    // Static parts are raw source: CR/CRLF is not normalized and a literal "*"
+    // is emitted verbatim next to substitution wildcards.
+    assert.strictEqual(parse('import(`a\r\nb${x}`)')[0][0].n, 'a\r\nb*');
+    assert.strictEqual(parse('import(`a\\*${x}.js`)')[0][0].n, 'a\\**.js');
+    // More top-level ${...} than the parser could ever record must not loop or
+    // reuse a stale span (a regression for the rt() reload / decoder hang).
+    assert.strictEqual(parse('import(`${a}${b}${c}${d}` + x)')[0][0].n, undefined);
+    // A nested dynamic import inside a substitution keeps the outer glob and is
+    // itself detected, whether the inner import closes through the constant fast
+    // path (a quoted/no-substitution specifier) or the main loop's ")".
+    assert.strictEqual(parse('import(`a${ import("b.js") }c`)')[0][0].n, 'a*c');
+    assert.strictEqual(parse('import(`a${x}${ import(`y`) }${w}`)')[0][0].n, 'a***');
+    // A nested import that closes through the main loop must restore the outer
+    // import so its end and glob survive.
+    const [[outerId, innerId]] = parse('import(`a${ import(x) }c`)');
+    assert.strictEqual(outerId.n, 'a*c');
+    assert.notStrictEqual(outerId.e, 0);
+    assert.notStrictEqual(outerId.se, 0);
+    assert.strictEqual(innerId.n, undefined);
+    // The same holds when the inner import's own specifier is an interpolated
+    // template: both builds report the outer glob and the inner glob.
+    const [[outerTmpl, innerTmpl]] = parse('import(`a${ import(`b${y}`) }c`)');
+    assert.strictEqual(innerTmpl.n, 'b*');
+    assert.strictEqual(outerTmpl.n, 'a*c');
+    assert.notStrictEqual(outerTmpl.e, 0);
   });
 
   test(`Dynamic import template specifier with escapes and attributes`, () => {

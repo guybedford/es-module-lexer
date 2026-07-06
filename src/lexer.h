@@ -36,16 +36,19 @@ struct Attribute {
 typedef struct Attribute Attribute;
 #endif
 
-// A ${...} substitution inside a dynamic-import template specifier. `end` is
-// the source position just after the closing "}". The decoders replace the
+#ifndef LEXER_MIN
+// A ${...} substitution inside a lone dynamic-import template specifier. `end`
+// is the source position just after the closing "}". The decoders replace the
 // whole substitution with a single "*" glob wildcard, so they only need where
 // each one ends. Recorded here (in the parser, which already disambiguates
-// regex from division) so the decoders never re-tokenize the body.
+// regex from division) so the decoders never re-tokenize the body. Glob `n` is
+// a full-build-only feature; es-module-shims reads specifiers via source.slice.
 struct TemplateSpan {
   const char16_t* end;
   struct TemplateSpan* next;
 };
 typedef struct TemplateSpan TemplateSpan;
+#endif
 
 struct Import {
   const char16_t* start;
@@ -58,11 +61,20 @@ struct Import {
   enum ImportType import_ty;
 #ifndef LEXER_MIN
   struct Attribute* attributes;
-#endif
-  // Top-level ${...} substitution end positions for a lone template-literal
-  // specifier, in source order. NULL for any non-template dynamic import. See
-  // struct TemplateSpan.
+  // Top-level ${...} substitution end positions, in source order, iff the
+  // argument is a lone interpolated template literal (so a non-empty list is
+  // itself the "this is a glob" signal). NULL otherwise. `template_span_tail`
+  // and `specifier_template_depth` are recording scratch, valid only while the
+  // specifier template is open; kept per-import so a nested import(`...`) in a
+  // substitution cannot corrupt an enclosing import's list.
   struct TemplateSpan* template_spans;
+  struct TemplateSpan* template_span_tail;
+  // Position of the specifier template's closing backtick, once seen. The
+  // argument is a lone template glob iff this is the last token before ")" or
+  // ",", so a concatenation (`a${x}` + b) is rejected at finalization.
+  const char16_t* template_close;
+  uint16_t specifier_template_depth;
+#endif
   struct Import* next;
 };
 typedef struct Import Import;
@@ -122,13 +134,6 @@ OpenToken* openTokenStack;
 uint16_t dynamicImportStackDepth;
 Import** dynamicImportStack;
 bool nextBraceIsClass;
-// While a dynamic import's argument is a lone template literal, this points at
-// that import and specifierTemplateDepth records the openTokenStack depth of
-// the specifier's Template token, so only its own top-level ${...} spans are
-// recorded (not those of a nested or concatenated template). NULL otherwise.
-Import* templateSpanImport;
-uint16_t specifierTemplateDepth;
-TemplateSpan* template_span_write_head;
 
 // Memory Structure:
 // -> source
@@ -185,8 +190,11 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->safe = dynamic == STANDARD_IMPORT;
 #ifndef LEXER_MIN
   import->attributes = NULL;
-#endif
   import->template_spans = NULL;
+  import->template_span_tail = NULL;
+  import->template_close = NULL;
+  import->specifier_template_depth = 0;
+#endif
   import->next = NULL;
 #ifndef LEXER_MIN
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
@@ -258,15 +266,24 @@ uint32_t ip () {
   return import_read_head->safe;
 }
 
-TemplateSpan* template_span_read_head = NULL;
+#ifndef LEXER_MIN
+// The last span node rt() returned. template_span_started distinguishes "not
+// started" from "exhausted": once exhausted rt() stays false rather than
+// reloading the first span, which would make the decoder jump backward and
+// loop. rts() re-arms both for the next import.
+TemplateSpan* template_span_read_head;
+bool template_span_started;
 
-// readTemplateSpan: advance to the next ${...} substitution of the current
-// import's template specifier. False once the list is exhausted.
+// readTemplateSpan: advance to the next ${...} substitution end of the current
+// import's lone template specifier. False once exhausted, and stays false.
 bool rt () {
-  if (template_span_read_head == NULL)
+  if (!template_span_started) {
+    template_span_started = true;
     template_span_read_head = import_read_head->template_spans;
-  else
+  }
+  else if (template_span_read_head != NULL) {
     template_span_read_head = template_span_read_head->next;
+  }
   return template_span_read_head != NULL;
 }
 // getTemplateSpanEnd: source offset just after the current substitution's "}".
@@ -276,7 +293,9 @@ uint32_t te () {
 // resetTemplateSpans
 void rts () {
   template_span_read_head = NULL;
+  template_span_started = false;
 }
+#endif
 
 // getExportStart
 uint32_t es () {
