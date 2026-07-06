@@ -4,6 +4,7 @@ let source, pos, end,
   openTokenPosStack,
   openClassPosStack,
   curDynamicImport,
+  dynamicImportStack,
   templateStackDepth,
   facade,
   lastSlashWasDivision,
@@ -13,17 +14,19 @@ let source, pos, end,
   imports,
   exports,
   exportStatementStart,
-  // While a dynamic import's argument is a lone template literal, this holds
-  // that import and specifierTemplateDepth the openTokenDepth of its Template
-  // level, so only its own top-level ${...} spans are recorded. undefined
-  // otherwise. This reuses the real tokenizer's regex/division disambiguation
-  // (the main loop below), which a standalone ${...} skimmer cannot do.
-  templateSpanImport,
-  specifierTemplateDepth,
+  // Maps a dynamic import to its glob-recording scratch, kept off the public
+  // import objects so the JS result shape stays identical to the wasm build's.
+  // The scratch is { ends, close, depth }: `ends` collects each top-level ${...}
+  // end, `close` the specifier's closing backtick, `depth` the openTokenDepth
+  // its top-level substitutions close at. Per-import, so a nested import(`...`)
+  // records against its own entry and never corrupts an enclosing one. Reuses
+  // the real tokenizer's regex/division disambiguation, which a standalone
+  // ${...} skimmer cannot do.
+  templateGlobs,
   name;
 
 function addImport (ss, s, e, d) {
-  const impt = { ss, se: d === -2 ? e : d === -1 ? e + 1 : 0, s, e, d, a: -1, n: undefined, at: null, spans: undefined };
+  const impt = { ss, se: d === -2 ? e : d === -1 ? e + 1 : 0, s, e, d, a: -1, n: undefined, at: null };
   imports.push(impt);
   return impt;
 }
@@ -55,41 +58,52 @@ function readName (impt) {
 // only splices a "*" per substitution and cooks the static parts. A
 // concatenation such as import(`a` + b) records no specifier spans and its
 // walk hits an inner backtick before the argument end, so n stays undefined.
-function readDynamicTemplateName (impt) {
-  const spans = impt.spans;
-  if (spans === undefined || source.charCodeAt(impt.s) !== 96/*`*/)
+// At dynamic-import finalization: build the glob only when the specifier
+// template's closing backtick was the last token of the argument, so a recorded
+// span list means "lone template glob". A concatenation (`a${x}` + b) or a
+// trailing operator recorded spans for its first template but does not end on
+// that backtick, so it yields undefined. Each span is the end of one top-level
+// ${...}; walking from the opening backtick, each becomes a single "*" and is
+// skipped, static runs are copied raw so the result matches the wasm/asm builds
+// byte-for-byte, and the walk ends at the specifier's unescaped closing
+// backtick. Mirrors dropUncommittedGlob + decodeTemplate in src/lexer.c / .ts.
+function finalizeDynamicTemplate (impt) {
+  // Anchor on the last token before ")"/"," (lastTokenPos), not impt.e, so
+  // whitespace or a comment before the paren does not drop the glob and the
+  // result matches the wasm/asm builds (which anchor the same way).
+  const glob = templateGlobs.get(impt);
+  if (glob === undefined || glob.close !== lastTokenPos)
     return;
-  const last = impt.e - 1;
-  if (source.charCodeAt(last) !== 96/*`*/)
-    return;
-  acornPos = impt.s + 1;
-  let out = '', chunkStart = acornPos, spanIndex = 0;
-  while (acornPos < last) {
-    const ch = source.charCodeAt(acornPos);
+  const spans = glob.ends;
+  const e = impt.e;
+  let out = '', chunkStart = impt.s + 1, index = impt.s + 1, spanIndex = 0, spanEnd = spans[0];
+  // `e` bounds the walk defensively; the parser guarantees an unescaped closing
+  // backtick within it for a committed glob.
+  while (index < e) {
+    const ch = source.charCodeAt(index);
+    if (ch === 96/*`*/)
+      break;
     if (ch === 92/*\*/) {
-      out += source.slice(chunkStart, acornPos);
-      out += readEscapedChar();
-      chunkStart = acornPos;
+      index += 2;
+      continue;
     }
-    else if (ch === 96/*`*/) {
-      return;
+    if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
+      out += source.slice(chunkStart, index) + '*';
+      index = chunkStart = spanEnd;
+      spanEnd = ++spanIndex < spans.length ? spans[spanIndex] : -1;
+      continue;
     }
-    else if (ch === 36/*$*/ && source.charCodeAt(acornPos + 1) === 123/*{*/ && spanIndex < spans.length) {
-      out += source.slice(chunkStart, acornPos) + '*';
-      acornPos = chunkStart = spans[spanIndex++];
-    }
-    else {
-      ++acornPos;
-    }
+    index++;
   }
-  impt.n = out + source.slice(chunkStart, last);
+  impt.n = out + source.slice(chunkStart, index);
 }
 
 // Note: parsing is based on the _assumption_ that the source is already valid
 export function parse (_source, _name) {
   openTokenDepth = 0;
   curDynamicImport = null;
-  templateSpanImport = undefined;
+  dynamicImportStack = [];
+  templateGlobs = new WeakMap();
   templateDepth = -1;
   lastTokenPos = -1;
   lastSlashWasDivision = false;
@@ -185,7 +199,7 @@ export function parse (_source, _name) {
         if (curDynamicImport && curDynamicImport.d === openTokenPosStack[openTokenDepth]) {
           if (curDynamicImport.e === 0) {
             curDynamicImport.e = pos;
-            readDynamicTemplateName(curDynamicImport);
+            finalizeDynamicTemplate(curDynamicImport);
           }
           curDynamicImport.se = pos;
           curDynamicImport = null;
@@ -202,7 +216,7 @@ export function parse (_source, _name) {
       case 44/*,*/:
         if (curDynamicImport && curDynamicImport.e === 0 && curDynamicImport.d === openTokenPosStack[openTokenDepth - 1]) {
           curDynamicImport.e = lastTokenPos + 1;
-          readDynamicTemplateName(curDynamicImport);
+          finalizeDynamicTemplate(curDynamicImport);
           pos++;
           commentWhitespace(true);
           curDynamicImport.a = pos;
@@ -226,10 +240,11 @@ export function parse (_source, _name) {
           syntaxError();
         if (openTokenDepth-- === templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
-          // A top-level ${...} of the specifier template just closed: record the
-          // position after "}" for readDynamicTemplateName to splice a "*".
-          if (templateSpanImport !== undefined && openTokenDepth === specifierTemplateDepth)
-            templateSpanImport.spans.push(pos + 1);
+          // A top-level ${...} of the recording import's specifier template just
+          // closed: note the position after "}" for a "*" splice.
+          const glob = curDynamicImport && templateGlobs.get(curDynamicImport);
+          if (glob && openTokenDepth + 1 === glob.depth)
+            glob.ends.push(pos + 1);
           templateString();
         }
         else {
@@ -285,13 +300,10 @@ export function parse (_source, _name) {
       }
       case 96/*`*/:
         // A backtick that is the first token of an open dynamic import's
-        // argument opens the specifier template: record its top-level ${...}
-        // spans so readDynamicTemplateName can glob it without re-tokenizing.
-        if (curDynamicImport && curDynamicImport.e === 0 && pos === curDynamicImport.s) {
-          templateSpanImport = curDynamicImport;
-          templateSpanImport.spans = [];
-          specifierTemplateDepth = openTokenDepth;
-        }
+        // argument opens the specifier template: start recording its top-level
+        // ${...} spans so the glob can be built without re-tokenizing.
+        if (curDynamicImport && curDynamicImport.e === 0 && pos === curDynamicImport.s)
+          templateGlobs.set(curDynamicImport, { ends: [], close: -1, depth: openTokenDepth + 1 });
         templateString();
         break;
     }
@@ -324,6 +336,11 @@ function tryParseImportStatement () {
       // The specifier start is recorded after leading whitespace/comments so it
       // points at the literal, matching the C lexer (src/lexer.c).
       const impt = addImport(startPos, pos, 0, startPos);
+      // Stack the enclosing dynamic import so a nested import(...) inside an
+      // argument restores it on close; without this the outer import's end/se
+      // (and template-glob recording) are lost. Popped at both finalization
+      // sites: the constant path just below and the main-loop ")".
+      dynamicImportStack.push(curDynamicImport);
       curDynamicImport = impt;
       if (ch === 39/*'*/ || ch === 34/*"*/) {
         stringLiteral(ch);
@@ -353,6 +370,7 @@ function tryParseImportStatement () {
         impt.e = pos;
         impt.se = pos;
         readName(impt);
+        curDynamicImport = dynamicImportStack.pop();
       }
       else {
         pos--;
@@ -800,10 +818,14 @@ function templateString () {
       return;
     }
     if (ch === 96/*`*/) {
-      // The specifier template just closed. Stop recording so a following
-      // concatenated template (`a${x}` + `b${y}`) never appends its spans.
-      if (templateSpanImport !== undefined && openTokenDepth === specifierTemplateDepth)
-        templateSpanImport = undefined;
+      // The specifier template just closed. Note its closing backtick and stop
+      // recording; finalizeDynamicTemplate keeps the spans only if this backtick
+      // is the last token of the argument.
+      const glob = curDynamicImport && templateGlobs.get(curDynamicImport);
+      if (glob && openTokenDepth + 1 === glob.depth) {
+        glob.close = pos;
+        glob.depth = 0;
+      }
       return;
     }
     if (ch === 92/*\*/)

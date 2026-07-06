@@ -57,7 +57,7 @@ export function parse (_source, _name = '@') {
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
-    else if (d !== -1 && source.charCodeAt(s) === 96/*`*/)
+    else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
       n = decodeTemplate(s, e);
     let at = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
@@ -143,40 +143,38 @@ function readString (start, quote) {
   return out;
 }
 
-// `[s, e)` spans the dynamic-import template argument, backticks included. The
-// parser records each top-level ${...} substitution's end position (see struct
-// TemplateSpan in lexer.c), which already resolves the regex-vs-division
-// ambiguity the decoder cannot. This cooks the static parts (escapes and all,
-// via readString's machinery), emits a single "*" per substitution and jumps
-// its body via the recorded end. A concatenation such as `a${x}` + b records
-// only its first template's spans, so the walk never reaches the argument end
-// (its closing backtick is not at e - 1) and n stays undefined.
+// Glob for a lone interpolated-template specifier starting at `s`. The parser
+// commits a ${...} span list only for that shape (see lexer.c), so a first rt()
+// of false means "not a glob" (a concatenation such as `a${x}` + b, or a nested
+// template) and yields undefined. Walking from the opening backtick, each
+// top-level ${...} becomes a single "*" and is skipped via its recorded end;
+// static runs are copied raw so the three ports agree byte-for-byte. The walk
+// ends at the specifier's unescaped closing backtick. Kept identical to the
+// wasm build's decodeTemplate (src/lexer.ts).
 function decodeTemplate (s, e) {
-  const last = e - 1;
-  if (source.charCodeAt(last) !== 96/*`*/)
-    return;
   asm.rts();
-  acornPos = s + 1;
-  let out = '', chunkStart = acornPos;
-  while (acornPos < last) {
-    const ch = source.charCodeAt(acornPos);
+  if (!asm.rt())
+    return;
+  let out = '', chunkStart = s + 1, index = s + 1, spanEnd = asm.te();
+  // `e` bounds the walk defensively; the parser guarantees an unescaped closing
+  // backtick within it for a committed glob.
+  while (index < e) {
+    const ch = source.charCodeAt(index);
+    if (ch === 96/*`*/)
+      break;
     if (ch === 92/*\*/) {
-      out += source.slice(chunkStart, acornPos);
-      out += readEscapedChar();
-      chunkStart = acornPos;
+      index += 2;
+      continue;
     }
-    else if (ch === 96/*`*/) {
-      return;
+    if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
+      out += source.slice(chunkStart, index) + '*';
+      index = chunkStart = spanEnd;
+      spanEnd = asm.rt() ? asm.te() : -1;
+      continue;
     }
-    else if (ch === 36/*$*/ && source.charCodeAt(acornPos + 1) === 123/*{*/ && asm.rt()) {
-      out += source.slice(chunkStart, acornPos) + '*';
-      acornPos = chunkStart = asm.te();
-    }
-    else {
-      ++acornPos;
-    }
+    index++;
   }
-  return out + source.slice(chunkStart, last);
+  return out + source.slice(chunkStart, index);
 }
 
 // Used to read escaped characters

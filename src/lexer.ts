@@ -52,8 +52,9 @@ export interface ImportSpecifier {
    *
    * A dynamic import whose entire argument is a single template literal is
    * reported as a glob: each `${...}` substitution is collapsed to a single
-   * `*`. Other expressions (including a template concatenated with anything
-   * else) remain undefined.
+   * `*` (full build only; the minimal build reports undefined). Other
+   * expressions (including a template concatenated with anything else) remain
+   * undefined.
    *
    * @example
    * const [imports1, exports1] = parse(String.raw`import './\u0061\u0062.js'`);
@@ -272,7 +273,7 @@ export function parse (source: string, name = '@'): readonly [
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
-    else if (d !== -1 && source[s] === '`')
+    else if (!MINIMAL && d !== -1 && source[s] === '`')
       n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
@@ -313,36 +314,37 @@ export function parse (source: string, name = '@'): readonly [
     return str;
   }
 
-  // `[s, e)` spans the dynamic-import template argument, backticks included. The
-  // parser records each top-level ${...} substitution's end position (see struct
-  // TemplateSpan in lexer.c), which already resolves the regex-vs-division
-  // ambiguity the decoder cannot. This walks the static parts, emits a single
-  // "*" per substitution, and jumps its body via the recorded end, then cooks
-  // the skeleton by evaluating it. A concatenation such as `a${x}` + b records
-  // only its first template's spans, so the skeleton misses the argument end
-  // (its closing backtick is not at e - 1) and it drops to undefined.
+  // Glob for a lone interpolated-template specifier starting at `s`. The parser
+  // commits a ${...} span list only for that shape (see lexer.c), so a first
+  // rt() of false means "not a glob" (a concatenation such as `a${x}` + b, or a
+  // nested template) and yields undefined. Walking from the opening backtick,
+  // each top-level ${...} becomes a single "*" and is skipped via its recorded
+  // end; static runs are copied raw so the three ports agree byte-for-byte. The
+  // walk ends at the specifier's unescaped closing backtick.
   function decodeTemplate (s: number, e: number) {
-    let out = '`', chunkStart = s + 1, index = s + 1;
-    const last = e - 1;
     wasm.rts();
-    while (index < last) {
+    if (!wasm.rt())
+      return;
+    let out = '', chunkStart = s + 1, index = s + 1, spanEnd = wasm.te();
+    // `e` bounds the walk defensively; the parser guarantees an unescaped
+    // closing backtick within it for a committed glob.
+    while (index < e) {
       const ch = source.charCodeAt(index);
+      if (ch === 96/*`*/)
+        break;
       if (ch === 92/*\*/) {
         index += 2;
         continue;
       }
-      if (ch === 96/*`*/)
-        return;
-      if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && wasm.rt()) {
+      if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
         out += source.slice(chunkStart, index) + '*';
-        index = chunkStart = wasm.te();
+        index = chunkStart = spanEnd;
+        spanEnd = wasm.rt() ? wasm.te() : -1;
         continue;
       }
       index++;
     }
-    if (source.charCodeAt(last) !== 96/*`*/)
-      return;
-    return decode(out + source.slice(chunkStart, last) + '`');
+    return out + source.slice(chunkStart, index);
   }
 
   return (MINIMAL ? [imports, exports] : [imports, exports, !!wasm.f(), !!wasm.ms()]) as ReturnType<typeof parse>;
