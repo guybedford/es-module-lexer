@@ -67,6 +67,41 @@ suite('TS type declarations', () => {
     assert.deepStrictEqual(exports.map(e => e.tp), [true, false]);
   });
 
+  test('template-literal type ending in a substitution does not swallow the next statement', () => {
+    // The `${...}` skipper left pos after the `}`; without a step back the loop
+    // skipped the closing backtick and ran into the following statement, so the
+    // trailing runtime edge went missing (fuzzer-found).
+    const cases = [
+      { src: 'export type S = `${import(\'m\').T}`;\nexport const y = 1;', names: ['S', 'y'], tp: [true, false] },
+      { src: 'export type S = `pre${import(\'m\').T}`;\nexport const y = 1;', names: ['S', 'y'], tp: [true, false] },
+      { src: 'export interface Foo { x: `${import(\'m\').T}` }\nexport const y = 1;', names: ['Foo', 'y'], tp: [true, false] },
+      { src: 'export type S = `${import(\'m\').T}${import(\'n\').U}`;\nexport const y = 1;', names: ['S', 'y'], tp: [true, false] },
+    ];
+    for (const { src, names, tp } of cases) {
+      const [imports, exports] = parse(src);
+      assert.deepStrictEqual(imports.map(i => i.n), [], src);
+      assert.deepStrictEqual(exports.map(e => e.n), names, src);
+      assert.deepStrictEqual(exports.map(e => e.tp), tp, src);
+    }
+  });
+
+  test('bare template-literal type ending in a substitution keeps the following runtime import', () => {
+    const [imports, exports] = parse('type S = `${import(\'t\').T}`;\nimport { v } from \'runtime\';');
+    assert.deepStrictEqual(imports.map(i => i.n), ['runtime']);
+    assert.strictEqual(imports[0].tp, false);
+    assert.deepStrictEqual(exports.map(e => e.n), []);
+  });
+
+  test('multi-substitution template type followed by an object type does not throw', () => {
+    // Two substitutions then a balanced `{...}` type used to desync the scanner
+    // and throw a parse error on input Node strips cleanly (fuzzer-found).
+    const [imports, exports] = parse('export type A = `pre${[A, string]}mid${typeof x}` & { a: string };\nimport { A } from \'runtime\';');
+    assert.deepStrictEqual(imports.map(i => i.n), ['runtime']);
+    assert.strictEqual(imports[0].tp, false);
+    assert.deepStrictEqual(exports.map(e => e.n), ['A']);
+    assert.strictEqual(exports[0].tp, true);
+  });
+
   test('interface extends type-argument brace is not the body', () => {
     // The `{` inside `Bar<{ ... }>` must not end the heritage scan early; the
     // real body follows and its import() member stays erased.

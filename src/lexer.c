@@ -577,7 +577,12 @@ bool skipTsTrivia (char16_t ch) {
         pos++;
       } else if (c == '$' && *(pos + 1) == '{') {
         pos++;
+        // skipTsBalanced leaves pos AT the char after the matching '}'; step
+        // back so the loop's ++pos re-reads it. Otherwise a substitution at the
+        // very end (`\`${T}\``) skips the closing backtick and the scan runs
+        // past the template into the following code.
         skipTsBalanced();
+        pos--;
       }
     }
     return true;
