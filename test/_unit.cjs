@@ -2082,3 +2082,85 @@ export { d as a, p as b, z as c, r as d, q }`;
     assert.strictEqual(exports[0].n, 'x');
   });
 });
+
+suite('Detached re-export of an imported binding', () => {
+  setup(async () => await init);
+
+  test('Named import re-exported without a local name', () => {
+    const source = `import { x } from './m'; export { x }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'x', ln: undefined });
+  });
+
+  test('Aliased named import re-exported by its local binding', () => {
+    const source = `import { x as y } from './m'; export { y }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'y', ln: undefined });
+  });
+
+  test('Named import re-exported under a new external name', () => {
+    // `export { x as z }` where x is imported: the exported name is z, but the
+    // local x is imported, so no local name is reported.
+    const source = `import { x } from './m'; export { x as z }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'z', ln: undefined });
+  });
+
+  test('Default import re-exported without a local name', () => {
+    const source = `import d from './m'; export { d }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'd', ln: undefined });
+  });
+
+  test('Namespace import re-exported without a local name', () => {
+    const source = `import * as ns from './m'; export { ns }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'ns', ln: undefined });
+  });
+
+  test('Genuine local export keeps its local name', () => {
+    const source = `const x = 1; export { x }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
+  });
+
+  test('Side-effect import does not blank a same-named local export', () => {
+    // `import 'x'` introduces no bindings, so a local x is still a genuine
+    // local export.
+    const source = `import 'x'; const x = 1; export { x }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
+  });
+
+  test('Detached export mixing an imported and a local binding', () => {
+    const source = `import { a } from './m'; const b = 1; export { a, b }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assertExportIs(source, exports[0], { n: 'a', ln: undefined });
+    assertExportIs(source, exports[1], { n: 'b', ln: 'b' });
+  });
+
+  test('export { x } from keeps reporting no local name', () => {
+    const source = `export { x as y } from './m'`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'y', ln: undefined });
+  });
+
+  test('Import after a detached export is not resolved (single pass)', () => {
+    // A single-pass lexer finalizes the export before it sees the later import,
+    // so the local name is still reported. Documented limitation.
+    const source = `export { x }; import { x } from './m'`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
+  });
+});

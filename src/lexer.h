@@ -81,13 +81,25 @@ struct Export {
 };
 typedef struct Export Export;
 
+// Local binding names introduced by import statements, recorded so a detached
+// `export { x }` can tell an imported binding (a re-export) from a genuine
+// local. Never read from JS; internal to the export finalization only.
+struct ImportName {
+  const char16_t* start;
+  const char16_t* end;
+  struct ImportName* next;
+};
+typedef struct ImportName ImportName;
+
 Import* first_import = NULL;
 Export* first_export = NULL;
+ImportName* first_import_name = NULL;
 Import* import_read_head = NULL;
 Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
+ImportName* import_name_write_head = NULL;
 #ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
 #endif
@@ -131,6 +143,8 @@ const char16_t* sa (uint32_t utf16Len) {
   first_export = NULL;
   export_write_head = NULL;
   export_read_head = NULL;
+  first_import_name = NULL;
+  import_name_write_head = NULL;
   return source;
 }
 
@@ -190,6 +204,19 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
 #ifndef LEXER_MIN
   hasModuleSyntax = true;
 #endif
+}
+
+void addImportName (const char16_t* start, const char16_t* end) {
+  ImportName* import_name = (ImportName*)(analysis_head);
+  analysis_head = analysis_head + sizeof(ImportName);
+  if (import_name_write_head == NULL)
+    first_import_name = import_name;
+  else
+    import_name_write_head->next = import_name;
+  import_name_write_head = import_name;
+  import_name->start = start;
+  import_name->end = end;
+  import_name->next = NULL;
 }
 
 // getErr
@@ -326,6 +353,8 @@ void tryParseImportStatement ();
 void tryParseExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
+void readImportBinding (char16_t ch);
+bool isImportBinding (const char16_t* start, const char16_t* end);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t readBindingTarget (char16_t ch);
