@@ -487,17 +487,24 @@ suite('Lexer', () => {
     // reuse a stale span (a regression for the rt() reload / decoder hang).
     assert.strictEqual(parse('import(`${a}${b}${c}${d}` + x)')[0][0].n, undefined);
     // A nested dynamic import inside a substitution keeps the outer glob and is
-    // itself detected.
+    // itself detected, whether the inner import closes through the constant fast
+    // path (a quoted/no-substitution specifier) or the main loop's ")".
     assert.strictEqual(parse('import(`a${ import("b.js") }c`)')[0][0].n, 'a*c');
     assert.strictEqual(parse('import(`a${x}${ import(`y`) }${w}`)')[0][0].n, 'a***');
-    // A nested import whose own specifier is an interpolated template is a
-    // documented pure-JS-port limitation: the outer glob (and its end) are not
-    // recovered there, while the Wasm and asm.js builds report both.
-    const [nestedImports] = parse('import(`a${ import(`b${y}`) }c`)');
-    assert.strictEqual(nestedImports[1].n, 'b*');
-    assert.strictEqual(nestedImports[0].n, js ? undefined : 'a*c');
-    if (!js)
-      assert.notStrictEqual(nestedImports[0].e, 0);
+    // A nested import that closes through the main loop must restore the outer
+    // import so its end/glob survive (a regression for the pure-JS-port losing
+    // e/se/n on any non-constant nested import).
+    const [[outerId, innerId]] = parse('import(`a${ import(x) }c`)');
+    assert.strictEqual(outerId.n, 'a*c');
+    assert.notStrictEqual(outerId.e, 0);
+    assert.notStrictEqual(outerId.se, 0);
+    assert.strictEqual(innerId.n, undefined);
+    // The same holds when the inner import's own specifier is an interpolated
+    // template: all three builds report the outer glob and the inner glob.
+    const [[outerTmpl, innerTmpl]] = parse('import(`a${ import(`b${y}`) }c`)');
+    assert.strictEqual(innerTmpl.n, 'b*');
+    assert.strictEqual(outerTmpl.n, 'a*c');
+    assert.notStrictEqual(outerTmpl.e, 0);
   });
 
   test(`Dynamic import template specifier with escapes and attributes`, () => {

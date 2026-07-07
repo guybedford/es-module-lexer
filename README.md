@@ -242,7 +242,7 @@ For dynamic import expressions, this field will be empty if not a valid JS strin
 
 When the entire dynamic import argument is a single template literal, `.n` is reported as a glob: each `${...}` substitution is collapsed to a single `*` (for example `` import(`./locales/${locale}.js`) `` yields `./locales/*.js`). This is a full-build-only feature; the minimal build reports `undefined`. A template concatenated with anything else, or any other expression, resolves to `undefined`. Substitutions are matched by the parser itself, so a `/` inside one is correctly disambiguated as regex or division and does not affect the glob.
 
-The static parts are the raw specifier source: escape sequences are not cooked, and a literal `*` in the specifier is emitted as-is, so a consumer treating `.n` as a glob has to apply its own escaping. As a known limitation, a nested dynamic import whose own specifier is an interpolated template, inside an outer template substitution, yields `undefined` in the `es-module-lexer/js` build where the Wasm and asm.js builds report the glob.
+The static parts are the raw specifier source: escape sequences are not cooked, and a literal `*` in the specifier is emitted as-is, so a consumer treating `.n` as a glob has to apply its own escaping.
 
 ### Facade Detection
 

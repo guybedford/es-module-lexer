@@ -50,27 +50,21 @@ function readName (impt) {
   impt.n = readString(s, source.charCodeAt(s - 1));
 }
 
-// A dynamic import whose whole argument is a single template literal has no
-// constant value, but its static skeleton is a useful glob: each ${...} is
-// collapsed to a "*" wildcard (import(`./p/${x}.js`) -> "./p/*.js"). The parser
-// records each top-level ${...} substitution's end (impt.spans) as it goes,
-// using the real tokenizer to resolve the regex/division ambiguity, so this
-// only splices a "*" per substitution and cooks the static parts. A
-// concatenation such as import(`a` + b) records no specifier spans and its
-// walk hits an inner backtick before the argument end, so n stays undefined.
-// At dynamic-import finalization: build the glob only when the specifier
-// template's closing backtick was the last token of the argument, so a recorded
-// span list means "lone template glob". A concatenation (`a${x}` + b) or a
-// trailing operator recorded spans for its first template but does not end on
-// that backtick, so it yields undefined. Each span is the end of one top-level
-// ${...}; walking from the opening backtick, each becomes a single "*" and is
-// skipped, static runs are copied raw so the result matches the wasm/asm builds
-// byte-for-byte, and the walk ends at the specifier's unescaped closing
-// backtick. Mirrors dropUncommittedGlob + decodeTemplate in src/lexer.c / .ts.
+// A dynamic import whose whole argument is a lone template literal globs its
+// static skeleton, collapsing each top-level ${...} to a "*" (import(`./p/${x}.js`)
+// -> "./p/*.js"). The parser records each substitution's end as it goes, reusing
+// the real tokenizer's regex/division disambiguation, so this only splices "*"
+// per span. Mirrors dropUncommittedGlob + decodeTemplate in src/lexer.c / .ts.
 function finalizeDynamicTemplate (impt) {
-  // Anchor on the last token before ")"/"," (lastTokenPos), not impt.e, so
-  // whitespace or a comment before the paren does not drop the glob and the
-  // result matches the wasm/asm builds (which anchor the same way).
+  // Only a backtick-led argument can be a glob, so gate on it before the WeakMap
+  // lookup: import(x)/import(fn())/import(a + b) close here too and never recorded
+  // one. The glob is committed only when the specifier template's closing backtick
+  // was the last token of the argument (glob.close === lastTokenPos), so a
+  // concatenation (`a${x}` + b) or a trailing operator yields undefined. Anchoring
+  // on lastTokenPos, not impt.e, keeps trailing whitespace/comments from dropping
+  // the glob and matches the wasm/asm builds.
+  if (source.charCodeAt(impt.s) !== 96/*`*/)
+    return;
   const glob = templateGlobs.get(impt);
   if (glob === undefined || glob.close !== lastTokenPos)
     return;
@@ -202,7 +196,7 @@ export function parse (_source, _name) {
             finalizeDynamicTemplate(curDynamicImport);
           }
           curDynamicImport.se = pos;
-          curDynamicImport = null;
+          curDynamicImport = dynamicImportStack.pop();
         }
         break;
       case 91/*[*/:
@@ -241,10 +235,14 @@ export function parse (_source, _name) {
         if (openTokenDepth-- === templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
           // A top-level ${...} of the recording import's specifier template just
-          // closed: note the position after "}" for a "*" splice.
-          const glob = curDynamicImport && templateGlobs.get(curDynamicImport);
-          if (glob && openTokenDepth + 1 === glob.depth)
-            glob.ends.push(pos + 1);
+          // closed: note the position after "}" for a "*" splice. The backtick
+          // gate skips the WeakMap lookup unless the current import's argument
+          // starts with a backtick (the only shape that ever records a glob).
+          if (curDynamicImport && source.charCodeAt(curDynamicImport.s) === 96/*`*/) {
+            const glob = templateGlobs.get(curDynamicImport);
+            if (glob && openTokenDepth + 1 === glob.depth)
+              glob.ends.push(pos + 1);
+          }
           templateString();
         }
         else {
@@ -820,11 +818,14 @@ function templateString () {
     if (ch === 96/*`*/) {
       // The specifier template just closed. Note its closing backtick and stop
       // recording; finalizeDynamicTemplate keeps the spans only if this backtick
-      // is the last token of the argument.
-      const glob = curDynamicImport && templateGlobs.get(curDynamicImport);
-      if (glob && openTokenDepth + 1 === glob.depth) {
-        glob.close = pos;
-        glob.depth = 0;
+      // is the last token of the argument. The backtick gate skips the WeakMap
+      // lookup for the common non-template dynamic-import argument.
+      if (curDynamicImport && source.charCodeAt(curDynamicImport.s) === 96/*`*/) {
+        const glob = templateGlobs.get(curDynamicImport);
+        if (glob && openTokenDepth + 1 === glob.depth) {
+          glob.close = pos;
+          glob.depth = 0;
+        }
       }
       return;
     }
