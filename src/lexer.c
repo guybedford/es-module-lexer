@@ -399,7 +399,7 @@ void tryParseImportStatement () {
         nameEnd = pos;
       }
       ch = commentWhitespace(true);
-      if (ch == 'a' && *(pos + 1) == 's' && isBrOrWs(*(pos + 2))) {
+      if (ch == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
         pos += 2;
         ch = commentWhitespace(true);
         // `as` target: a binding identifier, or (only in malformed input, since
@@ -881,7 +881,7 @@ void readImportBinding (char16_t ch) {
   if (ch == '*') {
     pos++;
     ch = commentWhitespace(true);
-    if (ch == 'a' && *(pos + 1) == 's' && isBrOrWs(*(pos + 2))) {
+    if (ch == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
       pos += 2;
       ch = commentWhitespace(true);
       char16_t* nameStart = pos;

@@ -366,7 +366,7 @@ function readImportBinding (ch) {
         nameEnd = pos;
       }
       ch = commentWhitespace(true);
-      if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWs(source.charCodeAt(pos + 2))) {
+      if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWsOrPunctuatorNotDot(source.charCodeAt(pos + 2))) {
         pos += 2;
         ch = commentWhitespace(true);
         // `as` target: a binding identifier, or (only in malformed input, since
@@ -400,7 +400,7 @@ function readImportBinding (ch) {
   if (ch === 42/***/) {
     pos++;
     ch = commentWhitespace(true);
-    if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWs(source.charCodeAt(pos + 2))) {
+    if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWsOrPunctuatorNotDot(source.charCodeAt(pos + 2))) {
       pos += 2;
       ch = commentWhitespace(true);
       const nameStart = pos;

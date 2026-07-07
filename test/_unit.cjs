@@ -2100,6 +2100,14 @@ suite('Detached re-export of an imported binding', () => {
     assertExportIs(source, exports[0], { n: 'y', ln: undefined });
   });
 
+  test('Aliased named import with comment after as records the target binding', () => {
+    const source = `import { x as/*c*/ y } from './m'; const as = 1; export { as, y }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assertExportIs(source, exports[0], { n: 'as', ln: 'as' });
+    assertExportIs(source, exports[1], { n: 'y', ln: undefined });
+  });
+
   test('Named import re-exported under a new external name', () => {
     // `export { x as z }` where x is imported: the exported name is z, but the
     // local x is imported, so no local name is reported.
@@ -2121,6 +2129,23 @@ suite('Detached re-export of an imported binding', () => {
     const [, exports] = parse(source);
     assert.strictEqual(exports.length, 1);
     assertExportIs(source, exports[0], { n: 'ns', ln: undefined });
+  });
+
+  test('Namespace import with comment after as records the namespace binding', () => {
+    const source = `import * as/*c*/ ns from './m'; const as = 1; export { as, ns }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assertExportIs(source, exports[0], { n: 'as', ln: 'as' });
+    assertExportIs(source, exports[1], { n: 'ns', ln: undefined });
+  });
+
+  test('Default and namespace import with comment after as records both bindings', () => {
+    const source = `import d, * as/*c*/ ns from './m'; const as = 1; export { as, d, ns }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 3);
+    assertExportIs(source, exports[0], { n: 'as', ln: 'as' });
+    assertExportIs(source, exports[1], { n: 'd', ln: undefined });
+    assertExportIs(source, exports[2], { n: 'ns', ln: undefined });
   });
 
   test('Genuine local export keeps its local name', () => {
