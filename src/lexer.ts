@@ -252,7 +252,12 @@ export function parse (source: string, name = '@'): readonly [
     wasm.memory.grow(Math.ceil(extraMem / 65536));
 
   const addr = wasm.sa(len - 1);
-  (isLE ? copyLE : copyBE)(source, new Uint16Array(wasm.memory.buffer, addr, len));
+  // Node's Buffer blits UTF-16 straight into Wasm memory ~10x faster than the
+  // charCodeAt fallback, in explicit LE matching Wasm regardless of host.
+  if (typeof Buffer !== 'undefined')
+    Buffer.from(wasm.memory.buffer, addr, (len - 1) * 2).write(source, 'utf16le');
+  else
+    (isLE ? copyLE : copyBE)(source, new Uint16Array(wasm.memory.buffer, addr, len));
 
   if (!wasm.parse())
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
