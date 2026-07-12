@@ -88,7 +88,7 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         tryParseImportStatement();
       break;
     case 'c':
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5)))
+      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, &LASS[1], 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       break;
     case '(':
