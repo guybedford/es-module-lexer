@@ -9,7 +9,7 @@
 
 // NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION (via lexer.emcc.js base64 decoding)
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
-static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
+static const char16_t PORT[] = { 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
 static const char16_t ROM[] = { 'r', 'o', 'm' };
 static const char16_t ETA[] = { 'e', 't', 'a' };
@@ -84,11 +84,11 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         tryParseExportStatement();
       break;
     case 'i':
-      if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
+      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
         tryParseImportStatement();
       break;
     case 'c':
-      if (keywordStart(pos) && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5)))
+      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, &LASS[1], 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       break;
     case '(':
@@ -212,7 +212,7 @@ bool parse () {
         }
         break;
       case 'i':
-        if (keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
+        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
           tryParseImportStatement();
         break;
       case ';':
@@ -1071,7 +1071,9 @@ bool isWsNotBr (char16_t c) {
 }
 
 bool isBrOrWs (char16_t c) {
-  return c > 8 && c < 14 || c == 32 || c == 160;
+  // (c - 9) < 5 is the 9..13 range as one unsigned compare: fewer wasm ops than
+  // `c > 8 && c < 14` at every inlined copy of this hot helper.
+  return (char16_t)(c - 9) < 5 || c == 32 || c == 160;
 }
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
