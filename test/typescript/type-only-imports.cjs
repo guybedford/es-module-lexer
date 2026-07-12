@@ -34,6 +34,15 @@ suite('TS type-only imports', () => {
     assert.strictEqual(imports[0].tp, false);
   });
 
+  test('import type from without whitespace before the specifier is a value import', () => {
+    for (const src of [`import type from'm';`, `import type from/*c*/'m';`]) {
+      const [imports] = parse(src);
+      assert.strictEqual(imports.length, 1, src);
+      assert.strictEqual(imports[0].n, 'm', src);
+      assert.strictEqual(imports[0].tp, false, src);
+    }
+  });
+
   test('import type from from is type-only (default binding named from)', () => {
     const [imports] = parse(`import type from from 'm';`);
     assert.strictEqual(imports.length, 1);

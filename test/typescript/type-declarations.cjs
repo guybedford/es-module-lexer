@@ -187,6 +187,20 @@ suite('TS type declarations', () => {
     }
   });
 
+  test('nested type / interface declarations do not leak an import edge', () => {
+    for (const { src, expected } of [
+      { src: `function f() { type X = import('m').T; }`, expected: [] },
+      { src: `if (true) { interface A { m(): import('m').T } }`, expected: [] },
+      {
+        src: `{ type X = import('m').T; interface A { m(): import('n').T } }\nimport 'runtime';`,
+        expected: ['runtime']
+      }
+    ]) {
+      const [imports] = parse(src);
+      assert.deepStrictEqual(imports.map(i => i.n), expected, src);
+    }
+  });
+
   test('a value import alongside a bare type declaration is preserved', () => {
     const [imports] = parse(`type X = import('t').T;\nimport { v } from 'runtime';`);
     assert.deepStrictEqual(imports.map(i => i.n), ['runtime']);
@@ -202,6 +216,9 @@ suite('TS type declarations', () => {
     assert.deepStrictEqual(parse(`let interface = 1;`)[1].map(e => e.n), []);
     // Property access, not a declaration.
     assert.deepStrictEqual(parse(`foo.type = import('m');`)[0].map(i => i.n), ['m']);
+    // The same ASI and property guards apply inside a block.
+    assert.deepStrictEqual(parse(`function f() { type\nx = import('m'); }`)[0].map(i => i.n), ['m']);
+    assert.deepStrictEqual(parse(`function f() { foo.type = import('m'); }`)[0].map(i => i.n), ['m']);
   });
 
   test('ASI still ends the alias after a complete type on the next line', () => {

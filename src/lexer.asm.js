@@ -21,8 +21,7 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 
 // Keyword dictionary, extracted from the fastcomp static memory image at build
 // time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
-// keyword tables in lexer.c automatically. Injected as a JSON string literal so
-// NUL gap bytes and any quote / backslash / line terminator stay valid JS.
+// contiguous keyword table in lexer.c automatically.
 const words = {{WORDS}};
 
 let source, name;

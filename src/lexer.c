@@ -7,40 +7,86 @@
 #include <stdio.h>
 #include <string.h>
 
-// The asm.js keyword dictionary is auto-extracted from the fastcomp memory
-// image at build time (build/gen-asm-in.mjs, the lib/lexer.asm.in.js task), so
-// adding or changing a keyword table here propagates to the asm build with no
-// manual dictionary edit.
-static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
-static const char16_t PORT[] = { 'p', 'o', 'r', 't' };
-static const char16_t LASS[] = { 'l', 'a', 's', 's' };
-static const char16_t ROM[] = { 'r', 'o', 'm' };
-static const char16_t ETA[] = { 'e', 't', 'a' };
-static const char16_t VO[] = { 'v', 'o' };
-static const char16_t YIE[] = { 'y', 'i', 'e' };
-static const char16_t DELE[] = { 'd', 'e', 'l', 'e' };
-static const char16_t INSTAN[] = { 'i', 'n', 's', 't', 'a', 'n' };
-static const char16_t TY[] = { 't', 'y' };
-static const char16_t RETUR[] = { 'r', 'e', 't', 'u', 'r' };
-static const char16_t DEBUGGE[] = { 'd', 'e', 'b', 'u', 'g', 'g', 'e' };
-static const char16_t AWAI[] = { 'a', 'w', 'a', 'i' };
-static const char16_t THR[] = { 't', 'h', 'r' };
-static const char16_t WHILE[] = { 'w', 'h', 'i', 'l', 'e' };
-static const char16_t FOR[] = { 'f', 'o', 'r' };
-static const char16_t IF[] = { 'i', 'f' };
-static const char16_t CATC[] = { 'c', 'a', 't', 'c' };
-static const char16_t FINALL[] = { 'f', 'i', 'n', 'a', 'l', 'l' };
-static const char16_t ELS[] = { 'e', 'l', 's' };
-static const char16_t BREA[] = { 'b', 'r', 'e', 'a' };
-static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
-static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
-static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
-static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
-static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
+// Keep the keyword tails in one object so the fastcomp memory image is
+// contiguous and build/gen-asm-in.mjs can extract it without spanning gaps.
+static const char16_t KEYWORDS[] = {
+  'x', 'p', 'o', 'r', 't',
+  'p', 'o', 'r', 't',
+  'l', 'a', 's', 's',
+  'r', 'o', 'm',
+  'e', 't', 'a',
+  'v', 'o',
+  'y', 'i', 'e',
+  'd', 'e', 'l', 'e',
+  'i', 'n', 's', 't', 'a', 'n',
+  't', 'y',
+  'r', 'e', 't', 'u', 'r',
+  'd', 'e', 'b', 'u', 'g', 'g', 'e',
+  'a', 'w', 'a', 'i',
+  't', 'h', 'r',
+  'w', 'h', 'i', 'l', 'e',
+  'f', 'o', 'r',
+  'i', 'f',
+  'c', 'a', 't', 'c',
+  'f', 'i', 'n', 'a', 'l', 'l',
+  'e', 'l', 's',
+  'b', 'r', 'e', 'a',
+  'c', 'o', 'n', 't', 'i', 'n',
+  's', 'y', 'n', 'c',
+  'u', 'n', 'c', 't', 'i', 'o', 'n',
+  'o', 'u', 'r', 'c', 'e',
+  'e', 'f', 'e', 'r',
 #ifdef LEX_TS
-// `type` and `interface` keyword tails (the leading letter is the switch case).
-static const char16_t YPE[] = {'y', 'p', 'e'};
-static const char16_t NTERFACE[] = {'n', 't', 'e', 'r', 'f', 'a', 'c', 'e'};
+  'y', 'p', 'e',
+  'n', 't', 'e', 'r', 'f', 'a', 'c', 'e',
+  'n', 'e', 'w',
+  'k', 'e', 'y', 'o', 'f',
+  'i', 'n', 'f', 'e', 'r',
+  't', 'y', 'p', 'e', 'o', 'f',
+  'u', 'n', 'i', 'q', 'u', 'e',
+  'i', 'm', 'p', 'o', 'r', 't',
+  'r', 'e', 'a', 'd', 'o', 'n', 'l', 'y',
+  'a', 'b', 's', 't', 'r', 'a', 'c', 't',
+#endif
+};
+
+#define XPORT KEYWORDS
+#define PORT (XPORT + 5)
+#define LASS (PORT + 4)
+#define ROM (LASS + 4)
+#define ETA (ROM + 3)
+#define VO (ETA + 3)
+#define YIE (VO + 2)
+#define DELE (YIE + 3)
+#define INSTAN (DELE + 4)
+#define TY (INSTAN + 6)
+#define RETUR (TY + 2)
+#define DEBUGGE (RETUR + 5)
+#define AWAI (DEBUGGE + 7)
+#define THR (AWAI + 4)
+#define WHILE (THR + 3)
+#define FOR (WHILE + 5)
+#define IF (FOR + 3)
+#define CATC (IF + 2)
+#define FINALL (CATC + 4)
+#define ELS (FINALL + 6)
+#define BREA (ELS + 3)
+#define CONTIN (BREA + 4)
+#define SYNC (CONTIN + 6)
+#define UNCTION (SYNC + 4)
+#define OURCE (UNCTION + 7)
+#define EFER (OURCE + 5)
+#ifdef LEX_TS
+#define YPE (EFER + 4)
+#define NTERFACE (YPE + 3)
+#define NEW (NTERFACE + 8)
+#define KEYOF (NEW + 3)
+#define INFER (KEYOF + 5)
+#define TYPEOF (INFER + 5)
+#define UNIQUE (TYPEOF + 6)
+#define IMPORT (UNIQUE + 6)
+#define READONLY (IMPORT + 6)
+#define ABSTRACT (READONLY + 8)
 #endif
 
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
@@ -55,7 +101,7 @@ static inline __attribute__((always_inline)) bool handleSlash () {
       !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
       !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
       lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, &FOR[0], 3) ||
+      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
       lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
       isExpressionKeyword(lastTokenPos) ||
       lastToken == '/' && lastSlashWasDivision ||
@@ -94,13 +140,13 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   bool isComment = false;
   switch (ch) {
     case 'e':
-      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0) {
+      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, XPORT, 5 * 2) == 0) {
         tryParseExportStatement();
         break;
       }
       goto skipTokenRun;
     case 'i':
-      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0) {
+      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, PORT, 4 * 2) == 0) {
         tryParseImportStatement();
         break;
       }
@@ -108,21 +154,21 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       // Bare `interface Foo { ... }` (no `export`): skip it opaquely so a
       // member type like `m(): import('m')` is not lexed as a runtime edge. The
       // `n` pre-check keeps `if` / `in` / `instanceof` off the memcmp path.
-      else if (*(pos + 1) == 'n' && openTokenDepth == 0 && keywordStart(pos))
+      else if (*(pos + 1) == 'n' && keywordStart(pos))
         tryTsTypeDeclaration(true);
 #endif
       goto skipTokenRun;
     case 'c':
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, &LASS[1], 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
+      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       goto skipTokenRun;
 #ifdef LEX_TS
     case 't':
       // Bare `type Foo = ...` (no `export`): skip the erased RHS so a buried
       // `import('m')` type records no runtime edge. tryTsTypeDeclaration only
-      // commits when it is really `type <name> =` at statement position. The
-      // `y` pre-check keeps `this` / `throw` / `try` / `typeof` off that path.
-      if (*(pos + 1) == 'y' && openTokenDepth == 0 && keywordStart(pos))
+      // commits when it is really `type <name> =`. The `y` pre-check keeps
+      // `this` / `throw` / `try` / `typeof` off that path.
+      if (*(pos + 1) == 'y' && keywordStart(pos))
         tryTsTypeDeclaration(true);
       goto skipTokenRun;
 #endif
@@ -242,7 +288,7 @@ bool parse () {
 
     switch (ch) {
       case 'e':
-        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0) {
+        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, XPORT, 5 * 2) == 0) {
           tryParseExportStatement();
           // export might have been a non-pure declaration
           if (!facade) {
@@ -252,7 +298,7 @@ bool parse () {
         }
         break;
       case 'i':
-        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0) {
+        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, PORT, 4 * 2) == 0) {
           tryParseImportStatement();
           break;
         }
@@ -260,7 +306,7 @@ bool parse () {
         // A bare `interface` is a non-import statement: leave the facade fast
         // path like any other token so the main parser skips its body (where a
         // member type must not be lexed as a runtime edge).
-        if (keywordStart(pos) && memcmp(pos + 1, &NTERFACE[0], 8 * 2) == 0 && isBrOrWs(*(pos + 9))) {
+        if (keywordStart(pos) && memcmp(pos + 1, NTERFACE, 8 * 2) == 0 && isBrOrWs(*(pos + 9))) {
           facade = false;
           pos--;
           goto mainparse;
@@ -336,7 +382,8 @@ void tryParseImportStatement () {
     // `import type from ...`: `from` is the keyword and `type` the default
     // binding only when a string follows; `import type from from 'x'` binds
     // `from` and stays type-only.
-    if (!typeIsBinding && nextCh == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0 && isBrOrWs(*(pos + 4))) {
+    if (!typeIsBinding && nextCh == 'f' && memcmp(pos + 1, ROM, 3 * 2) == 0 &&
+        (isBrOrWs(*(pos + 4)) || isQuote(*(pos + 4)) || *(pos + 4) == '/')) {
       char16_t* fromPos = pos;
       pos += 4;
       typeIsBinding = isQuote(commentWhitespace(true));
@@ -360,16 +407,16 @@ void tryParseImportStatement () {
     pos++;
     ch = commentWhitespace(true);
     // import.meta indicated by d == -2
-    if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    if (ch == 'm' && memcmp(pos + 1, ETA, 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
     }
-    else if (ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    else if (ch == 's' && memcmp(pos + 1, OURCE, 5 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       phase_keyword = 1;
       pos += 6;
       ch = commentWhitespace(true);
     }
-    else if (ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    else if (ch == 'd' && memcmp(pos + 1, EFER, 4 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       phase_keyword = 2;
       pos += 5;
       ch = commentWhitespace(true);
@@ -378,17 +425,17 @@ void tryParseImportStatement () {
       return;
     }
   }
-  else if (pos > startPos + 6 && ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
+  else if (pos > startPos + 6 && ch == 's' && memcmp(pos + 1, OURCE, 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
     phase_keyword = 1;
     pos += 6;
     ch = commentWhitespace(true);
     // need a space after the source keyword, and must not be followed by from keyword
-    if (pos == maybePhasePos + 6 || ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 4))) {
+    if (pos == maybePhasePos + 6 || ch == 'f' && memcmp(pos + 1, ROM, 3 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 4))) {
       pos = maybePhasePos;
       phase_keyword = 0;
     }
   }
-  else if (pos > startPos + 5 && ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5))) {
+  else if (pos > startPos + 5 && ch == 'd' && memcmp(pos + 1, EFER, 4 * 2) == 0 && isBrOrWs(*(pos + 5))) {
     phase_keyword = 2;
     pos += 5;
     ch = commentWhitespace(true);
@@ -473,7 +520,7 @@ void tryParseImportStatement () {
     }
 
     ch = commentWhitespace(true);
-    if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
+    if (ch == 'f' && memcmp(pos + 1, ROM, 3 * 2) != 0) {
       syntaxError();
       return;
     }
@@ -534,7 +581,7 @@ bool isValueChar (char16_t c) {
 // follower begins an import/export clause: whitespace (`type T`, `type from`),
 // `{` (`type{`), `*` (`type* as ns`) or `/` (a `type/*c*/{ ... }` comment).
 bool isTsTypeKeyword (char16_t* pos) {
-  if (*pos != 't' || memcmp(pos + 1, &YPE[0], 3 * 2) != 0)
+  if (*pos != 't' || memcmp(pos + 1, YPE, 3 * 2) != 0)
     return false;
   char16_t after = *(pos + 4);
   return isBrOrWs(after) || after == '{' || after == '*' || after == '/';
@@ -657,7 +704,7 @@ bool tryTsTypeDeclaration (bool bare) {
   bool isInterface = *pos == 'i';
   int keywordLen;
   if (isInterface) {
-    if (memcmp(pos + 1, &NTERFACE[0], 8 * 2) != 0 || !isBrOrWs(*(pos + 9)))
+    if (memcmp(pos + 1, NTERFACE, 8 * 2) != 0 || !isBrOrWs(*(pos + 9)))
       return false;
     keywordLen = 9;
   }
@@ -796,20 +843,12 @@ bool tryTsTypeDeclaration (bool bare) {
 // continues the type, so the erased alias RHS must not end there. Matched on
 // exact length + memcmp so `newish` / `imports` (longer words) do not qualify.
 bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd) {
-  static const char16_t NEW[] = {'n', 'e', 'w'};
-  static const char16_t KEYOF[] = {'k', 'e', 'y', 'o', 'f'};
-  static const char16_t INFER[] = {'i', 'n', 'f', 'e', 'r'};
-  static const char16_t TYPEOF[] = {'t', 'y', 'p', 'e', 'o', 'f'};
-  static const char16_t UNIQUE[] = {'u', 'n', 'i', 'q', 'u', 'e'};
-  static const char16_t IMPORT[] = {'i', 'm', 'p', 'o', 'r', 't'};
-  static const char16_t READONLY[] = {'r', 'e', 'a', 'd', 'o', 'n', 'l', 'y'};
-  static const char16_t ABSTRACT[] = {'a', 'b', 's', 't', 'r', 'a', 'c', 't'};
   switch (afterEnd - start) {
-    case 3: return memcmp(start, &NEW[0], 3 * 2) == 0;
-    case 5: return memcmp(start, &KEYOF[0], 5 * 2) == 0 || memcmp(start, &INFER[0], 5 * 2) == 0;
-    case 6: return memcmp(start, &TYPEOF[0], 6 * 2) == 0 || memcmp(start, &UNIQUE[0], 6 * 2) == 0 ||
-                   memcmp(start, &IMPORT[0], 6 * 2) == 0;
-    case 8: return memcmp(start, &READONLY[0], 8 * 2) == 0 || memcmp(start, &ABSTRACT[0], 8 * 2) == 0;
+    case 3: return memcmp(start, NEW, 3 * 2) == 0;
+    case 5: return memcmp(start, KEYOF, 5 * 2) == 0 || memcmp(start, INFER, 5 * 2) == 0;
+    case 6: return memcmp(start, TYPEOF, 6 * 2) == 0 || memcmp(start, UNIQUE, 6 * 2) == 0 ||
+                   memcmp(start, IMPORT, 6 * 2) == 0;
+    case 8: return memcmp(start, READONLY, 8 * 2) == 0 || memcmp(start, ABSTRACT, 8 * 2) == 0;
     default: return false;
   }
 }
@@ -1086,7 +1125,7 @@ void tryParseExportStatement () {
         switch (ch) {
           // export default async? function*? name? (){}
           case 'a':
-            if (memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
+            if (memcmp(pos + 1, SYNC, 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
               pos += 5;
               ch = commentWhitespace(false);
             }
@@ -1095,7 +1134,7 @@ void tryParseExportStatement () {
             }
           // fallthrough
           case 'f':
-            if (memcmp(pos + 1, &UNCTION[0], 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
+            if (memcmp(pos + 1, UNCTION, 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
               pos += 8;
               ch = commentWhitespace(true);
               if (ch == '*') {
@@ -1110,7 +1149,7 @@ void tryParseExportStatement () {
             break;
           case 'c':
             // export default class name? {}
-            if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
+            if (memcmp(pos + 1, LASS, 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
               pos += 5;
               ch = commentWhitespace(true);
               if (ch == '{') {
@@ -1153,7 +1192,7 @@ void tryParseExportStatement () {
 
       // export class name ...
       case 'c':
-        if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+        if (memcmp(pos + 1, LASS, 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
           pos += 5;
           ch = commentWhitespace(true);
           const char16_t* startPos = pos;
@@ -1208,7 +1247,7 @@ void tryParseExportStatement () {
 #endif
 
   // from ...
-  if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
+  if (ch == 'f' && memcmp(pos + 1, ROM, 3 * 2) == 0) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true), false);
 #ifdef LEX_TS
@@ -1578,10 +1617,10 @@ bool isExpressionKeyword (char16_t* pos) {
       switch (*(pos - 1)) {
         case 'i':
           // void
-          return readPrecedingKeywordn(pos - 2, &VO[0], 2);
+          return readPrecedingKeywordn(pos - 2, VO, 2);
         case 'l':
           // yield
-          return readPrecedingKeywordn(pos - 2, &YIE[0], 3);
+          return readPrecedingKeywordn(pos - 2, YIE, 3);
         default:
           return false;
       }
@@ -1600,10 +1639,10 @@ bool isExpressionKeyword (char16_t* pos) {
           }
         case 't':
           // delete
-          return readPrecedingKeywordn(pos - 2, &DELE[0], 4);
+          return readPrecedingKeywordn(pos - 2, DELE, 4);
         case 'u':
           // continue
-          return readPrecedingKeywordn(pos - 2, &CONTIN[0], 6);
+          return readPrecedingKeywordn(pos - 2, CONTIN, 6);
         default:
           return false;
       }
@@ -1613,28 +1652,28 @@ bool isExpressionKeyword (char16_t* pos) {
       switch (*(pos - 3)) {
         case 'c':
           // instanceof
-          return readPrecedingKeywordn(pos - 4, &INSTAN[0], 6);
+          return readPrecedingKeywordn(pos - 4, INSTAN, 6);
         case 'p':
           // typeof
-          return readPrecedingKeywordn(pos - 4, &TY[0], 2);
+          return readPrecedingKeywordn(pos - 4, TY, 2);
         default:
           return false;
       }
     case 'k':
       // break
-      return readPrecedingKeywordn(pos - 1, &BREA[0], 4);
+      return readPrecedingKeywordn(pos - 1, BREA, 4);
     case 'n':
       // in, return
-      return readPrecedingKeyword1(pos - 1, 'i') || readPrecedingKeywordn(pos - 1, &RETUR[0], 5);
+      return readPrecedingKeyword1(pos - 1, 'i') || readPrecedingKeywordn(pos - 1, RETUR, 5);
     case 'o':
       // do
       return readPrecedingKeyword1(pos - 1, 'd');
     case 'r':
       // debugger
-      return readPrecedingKeywordn(pos - 1, &DEBUGGE[0], 7);
+      return readPrecedingKeywordn(pos - 1, DEBUGGE, 7);
     case 't':
       // await
-      return readPrecedingKeywordn(pos - 1, &AWAI[0], 4);
+      return readPrecedingKeywordn(pos - 1, AWAI, 4);
     case 'w':
       switch (*(pos - 1)) {
         case 'e':
@@ -1642,7 +1681,7 @@ bool isExpressionKeyword (char16_t* pos) {
           return readPrecedingKeyword1(pos - 2, 'n');
         case 'o':
           // throw
-          return readPrecedingKeywordn(pos - 2, &THR[0], 3);
+          return readPrecedingKeywordn(pos - 2, THR, 3);
         default:
           return false;
       }
@@ -1651,9 +1690,9 @@ bool isExpressionKeyword (char16_t* pos) {
 }
 
 bool isParenKeyword (char16_t* curPos) {
-  return readPrecedingKeywordn(curPos, &WHILE[0], 5) ||
-      readPrecedingKeywordn(curPos, &FOR[0], 3) ||
-      readPrecedingKeywordn(curPos, &IF[0], 2);
+  return readPrecedingKeywordn(curPos, WHILE, 5) ||
+      readPrecedingKeywordn(curPos, FOR, 3) ||
+      readPrecedingKeywordn(curPos, IF, 2);
 }
 
 bool isPunctuator (char16_t ch) {
@@ -1674,10 +1713,10 @@ bool isExpressionPunctuator (char16_t ch) {
 bool isBreakOrContinue (char16_t* curPos) {
   switch (*curPos) {
     case 'k':
-      return readPrecedingKeywordn(curPos - 1, &BREA[0], 4);
+      return readPrecedingKeywordn(curPos - 1, BREA, 4);
     case 'e':
       if (*(curPos - 1) == 'u')
-        return readPrecedingKeywordn(curPos - 2, &CONTIN[0], 6);
+        return readPrecedingKeywordn(curPos - 2, CONTIN, 6);
   }
   return false;
 }
@@ -1693,11 +1732,11 @@ bool isExpressionTerminator (char16_t* curPos) {
     case ')':
       return true;
     case 'h':
-      return readPrecedingKeywordn(curPos - 1, &CATC[0], 4);
+      return readPrecedingKeywordn(curPos - 1, CATC, 4);
     case 'y':
-      return readPrecedingKeywordn(curPos - 1, &FINALL[0], 6);
+      return readPrecedingKeywordn(curPos - 1, FINALL, 6);
     case 'e':
-      return readPrecedingKeywordn(curPos - 1, &ELS[0], 3);
+      return readPrecedingKeywordn(curPos - 1, ELS, 3);
   }
   return false;
 }

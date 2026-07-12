@@ -160,7 +160,7 @@ const FORMS = {
   'import-type-default': () => `import${requiredWs()}type${requiredWs()}${pick(NAME)} from ${pick(SPEC)};`,
   'import-type-ns': () => `import${requiredWs()}type${requiredWs()}* as ${pick(NAME)} from ${pick(SPEC)};`,
   'import-inline-type': () => `import { ${maybe() ? 'type ' : ''}${pick(NAME)}, ${pick(NAME)} } from ${pick(SPEC)};`,
-  'import-type-from': () => `import${requiredWs()}type from ${pick(SPEC)};`,
+  'import-type-from': () => `import${requiredWs()}type from${w()}${pick(SPEC)};`,
   'import-type-from-from': () => `import${requiredWs()}type from from ${pick(SPEC)};`,
   'import-default': () => `import ${pick(NAME)} from ${pick(SPEC)};`,
   'import-side-effect': () => `import ${pick(SPEC)};`,
@@ -173,6 +173,8 @@ const FORMS = {
   // a bare `type\nName`, making it a value expression (unlike `export type`).
   'bare-type': () => `type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${aliasTerminator()}`,
   'bare-interface': () => `interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`,
+  'nested-type': () => `function f() { type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${aliasTerminator()} }`,
+  'nested-interface': () => `if (true) { interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()} }`,
   'const-annot': () => `export const ${pick(NAME)}${maybe() ? ': ' + typeExpr(1) : ''} = ${maybe() ? 'import(' + pick(SPEC) + ')' : '1'};`,
   'dynamic-import': () => `const x = import(${pick(SPEC)});`,
   'export-default': () => `export default ${maybe() ? 'import(' + pick(SPEC) + ')' : '1'};`,
