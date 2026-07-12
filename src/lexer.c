@@ -70,6 +70,12 @@ static inline __attribute__((always_inline)) bool handleSlash () {
   return false;
 }
 
+static inline __attribute__((always_inline)) bool isTokenRunChar (char16_t ch) {
+  // Fold ASCII case; NBSP is the only non-ASCII whitespace recognized here.
+  return (char16_t)((ch | 32) - 'a') < 26 || (char16_t)(ch - '0') < 10 ||
+    ch == '$' || ch == '_' || ch == '\\' || (ch > 127 && ch != 160);
+}
+
 // Consume one token at the current ch/pos, updating the global tokenizer state.
 // The single source of tokenization: the main loop and skipExpression both call
 // it, so the regex/keyword/import rules never diverge. Comments do not advance
@@ -80,17 +86,21 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   bool isComment = false;
   switch (ch) {
     case 'e':
-      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0)
+      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0) {
         tryParseExportStatement();
-      break;
+        break;
+      }
+      goto skipTokenRun;
     case 'i':
-      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
+      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0) {
         tryParseImportStatement();
-      break;
+        break;
+      }
+      goto skipTokenRun;
     case 'c':
       if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, &LASS[1], 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
-      break;
+      goto skipTokenRun;
     case '(':
       openTokenStack[openTokenDepth].token = AnyParen;
       openTokenStack[openTokenDepth++].pos = lastTokenPos;
@@ -160,6 +170,12 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       openTokenStack[openTokenDepth++].token = Template;
       templateString();
       break;
+    default:
+      if (!isTokenRunChar(ch))
+        break;
+    skipTokenRun:
+      while (isTokenRunChar(*(++pos)));
+      pos--;
   }
   if (!isComment)
     lastTokenPos = pos;
