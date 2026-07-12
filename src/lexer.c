@@ -9,7 +9,7 @@
 
 // NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION (via lexer.emcc.js base64 decoding)
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
-static const char16_t MPORT[] = { 'm', 'p', 'o', 'r', 't' };
+static const char16_t PORT[] = { 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
 static const char16_t ROM[] = { 'r', 'o', 'm' };
 static const char16_t ETA[] = { 'e', 't', 'a' };
@@ -84,7 +84,7 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         tryParseExportStatement();
       break;
     case 'i':
-      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
+      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
         tryParseImportStatement();
       break;
     case 'c':
@@ -212,7 +212,7 @@ bool parse () {
         }
         break;
       case 'i':
-        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 1, &MPORT[0], 5 * 2) == 0)
+        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
           tryParseImportStatement();
         break;
       case ';':
