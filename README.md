@@ -295,70 +295,70 @@ Multiple exports per declaration (`export var a = 'asdf', q = z`) and renamed de
 
 Benchmarks can be run with `npm run bench`.
 
-Current results for a high spec machine:
+Current results on a standard desktop machine:
 
 #### Wasm Build
 
 ```
 Module load time
-> 5ms
+> 1ms
 Cold Run, All Samples
-test/samples/*.js (3123 KiB)
-> 18ms
+test/samples/*.js (3057 KiB)
+> 13ms
 
 Warm Runs (average of 25 runs)
-test/samples/angular.js (739 KiB)
-> 3ms
+test/samples/angular.js (719 KiB)
+> 1ms
 test/samples/angular.min.js (188 KiB)
 > 1ms
-test/samples/d3.js (508 KiB)
-> 3ms
-test/samples/d3.min.js (274 KiB)
+test/samples/d3.js (491 KiB)
 > 2ms
-test/samples/magic-string.js (35 KiB)
+test/samples/d3.min.js (274 KiB)
+> 1.04ms
+test/samples/magic-string.js (34 KiB)
 > 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
-test/samples/rollup.js (929 KiB)
-> 4.32ms
+test/samples/rollup.js (902 KiB)
+> 3ms
 test/samples/rollup.min.js (429 KiB)
-> 2.16ms
+> 2ms
 
 Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3123 KiB)
-> 14.16ms
+test/samples/*.js (3057 KiB)
+> 10m
 ```
 
-#### JS Build (asm.js)
+### JS Build (asm.js)
 
 ```
 Module load time
-> 2ms
+> 1ms
 Cold Run, All Samples
-test/samples/*.js (3123 KiB)
-> 34ms
+test/samples/*.js (3057 KiB)
+> 92ms
 
 Warm Runs (average of 25 runs)
-test/samples/angular.js (739 KiB)
-> 3ms
+test/samples/angular.js (719 KiB)
+> 3.6ms
 test/samples/angular.min.js (188 KiB)
-> 1ms
-test/samples/d3.js (508 KiB)
-> 3ms
-test/samples/d3.min.js (274 KiB)
 > 2ms
-test/samples/magic-string.js (35 KiB)
+test/samples/d3.js (491 KiB)
+> 4ms
+test/samples/d3.min.js (274 KiB)
+> 2.52ms
+test/samples/magic-string.js (34 KiB)
 > 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
-test/samples/rollup.js (929 KiB)
-> 5ms
+test/samples/rollup.js (902 KiB)
+> 6ms
 test/samples/rollup.min.js (429 KiB)
-> 3.04ms
+> 3.2ms
 
 Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3123 KiB)
-> 17.12ms
+test/samples/*.js (3057 KiB)
+> 20.88ms
 ```
 
 ### Building
