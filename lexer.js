@@ -321,6 +321,19 @@ function tryParseImportStatement () {
         pos--;
         return;
       }
+      if (ch === 123/*{*/) {
+        readImportBinding(ch);
+        pos++;
+        ch = commentWhitespace(true);
+        if (ch !== 102/*f*/ || !source.startsWith('rom', pos + 1))
+          return syntaxError();
+        pos += 4;
+        ch = commentWhitespace(true);
+        if (ch !== 39/*'*/ && ch !== 34/*"*/)
+          return syntaxError();
+        readImportString(startPos, ch);
+        return;
+      }
       // Record the local binding names this import introduces (see
       // readImportBinding) so a later detached `export { x }` can be recognised
       // as a re-export of an imported binding. pos is restored so the opaque

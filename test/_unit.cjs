@@ -2086,6 +2086,16 @@ export { d as a, p as b, z as c, r as d, q }`;
 suite('Detached re-export of an imported binding', () => {
   setup(async () => await init);
 
+  if (min) {
+    test('Minimal build keeps the imported binding as the local name', () => {
+      const source = `import { x } from './m'; export { x }`;
+      const [, exports] = parse(source);
+      assert.strictEqual(exports.length, 1);
+      assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
+    });
+    return;
+  }
+
   test('Named import re-exported without a local name', () => {
     const source = `import { x } from './m'; export { x }`;
     const [, exports] = parse(source);
@@ -2098,6 +2108,14 @@ suite('Detached re-export of an imported binding', () => {
     const [, exports] = parse(source);
     assert.strictEqual(exports.length, 1);
     assertExportIs(source, exports[0], { n: 'y', ln: undefined });
+  });
+
+  test('String-named imports re-exported by their local bindings', () => {
+    const source = `import {'a-b' as c, "d-e" as f} from './m'; export { c, f }`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assertExportIs(source, exports[0], { n: 'c', ln: undefined });
+    assertExportIs(source, exports[1], { n: 'f', ln: undefined });
   });
 
   test('Aliased named import with comment after as records the target binding', () => {

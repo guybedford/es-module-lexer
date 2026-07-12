@@ -81,6 +81,7 @@ struct Export {
 };
 typedef struct Export Export;
 
+#ifndef LEXER_MIN
 // Local binding names introduced by import statements, recorded so a detached
 // `export { x }` can tell an imported binding (a re-export) from a genuine
 // local. Never read from JS; internal to the export finalization only.
@@ -90,16 +91,21 @@ struct ImportName {
   struct ImportName* next;
 };
 typedef struct ImportName ImportName;
+#endif
 
 Import* first_import = NULL;
 Export* first_export = NULL;
+#ifndef LEXER_MIN
 ImportName* first_import_name = NULL;
+#endif
 Import* import_read_head = NULL;
 Export* export_read_head = NULL;
 Import* import_write_head = NULL;
 Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
+#ifndef LEXER_MIN
 ImportName* import_name_write_head = NULL;
+#endif
 #ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
 #endif
@@ -143,8 +149,10 @@ const char16_t* sa (uint32_t utf16Len) {
   first_export = NULL;
   export_write_head = NULL;
   export_read_head = NULL;
+#ifndef LEXER_MIN
   first_import_name = NULL;
   import_name_write_head = NULL;
+#endif
   return source;
 }
 
@@ -206,6 +214,7 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
 #endif
 }
 
+#ifndef LEXER_MIN
 void addImportName (const char16_t* start, const char16_t* end) {
   ImportName* import_name = (ImportName*)(analysis_head);
   analysis_head = analysis_head + sizeof(ImportName);
@@ -218,6 +227,7 @@ void addImportName (const char16_t* start, const char16_t* end) {
   import_name->end = end;
   import_name->next = NULL;
 }
+#endif
 
 // getErr
 uint32_t e () {
@@ -353,8 +363,10 @@ void tryParseImportStatement ();
 void tryParseExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
+#ifndef LEXER_MIN
 void readImportBinding (char16_t ch);
 bool isImportBinding (const char16_t* start, const char16_t* end);
+#endif
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t readBindingTarget (char16_t ch);

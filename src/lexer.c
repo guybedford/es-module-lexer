@@ -380,6 +380,7 @@ void tryParseImportStatement () {
       return;
     }
 
+#ifndef LEXER_MIN
     // Record each specifier's local binding (the `as` target, or the imported
     // name when there is no `as`) so a later detached `export { x }` can be
     // recognised as a re-export of an imported binding. A string-literal name
@@ -429,6 +430,18 @@ void tryParseImportStatement () {
     }
     if (ch == '}')
       pos++;
+#else
+    while (pos < end) {
+      ch = commentWhitespace(true);
+      if (isQuote(ch)) {
+        stringLiteral(ch);
+      } else if (ch == '}') {
+        pos++;
+        break;
+      }
+      pos++;
+    }
+#endif
 
     ch = commentWhitespace(true);
     if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
@@ -459,6 +472,7 @@ void tryParseImportStatement () {
       pos--;
       return;
     }
+#ifndef LEXER_MIN
     // Record the default / namespace binding so a detached `export { d }` can be
     // recognised as a re-export. The named part of a combined `d, { a }` clause
     // is left to the opaque scan below; those bindings stay untracked (a rare
@@ -468,6 +482,7 @@ void tryParseImportStatement () {
       readImportBinding(ch);
       pos = clausePos;
     }
+#endif
     while (pos < end) {
       ch = *pos;
       if (isQuote(ch)) {
@@ -823,6 +838,7 @@ void tryParseExportStatement () {
     }
   }
   else {
+#ifndef LEXER_MIN
     // A detached `export { x }` (no `from`) whose local resolves to a binding
     // introduced by an import is itself a re-export, so report it with no local
     // name - exactly as `export { x } from` above. A genuine local keeps its
@@ -833,6 +849,7 @@ void tryParseExportStatement () {
           exprt->local_start = exprt->local_end = NULL;
       }
     }
+#endif
     pos--;
   }
 }
@@ -872,6 +889,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   return ch;
 }
 
+#ifndef LEXER_MIN
 // pos AT the first char of an import clause (the default binding identifier or
 // the `*` of a namespace import), `ch` that char. Records the default and/or
 // `* as ns` binding via addImportName. The named `{ ... }` part of a combined
@@ -919,6 +937,7 @@ bool isImportBinding (const char16_t* start, const char16_t* end) {
   }
   return false;
 }
+#endif
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   const char16_t* startPos = pos + 1;
