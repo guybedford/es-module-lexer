@@ -278,7 +278,8 @@ export function parse (source: string, name = '@'): readonly [
 
   const imports: ImportSpecifier[] = [], exports: ExportSpecifier[] = [];
   while (wasm.ri()) {
-    const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
+    const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 7;
+    const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
@@ -297,16 +298,17 @@ export function parse (source: string, name = '@'): readonly [
     if (MINIMAL)
       imports.push({ n, t, s, e, ss, se, d, a, at } as unknown as ImportSpecifier);
     else
-      imports.push({ n, t, s, e, ss, se, d, a, at, tp: !!wasm.itp() });
+      imports.push({ n, t, s, e, ss, se, d, a, at, tp: !!(importType & 8) });
   }
-  while (wasm.re()) {
+  let exportType;
+  while ((exportType = wasm.re())) {
     const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
     const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
     const n = decodeIfQuoted(source.slice(s, e));
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
     else
-      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln, tp: !!wasm.etp() });
+      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln, tp: exportType === 2 });
   }
 
   function decode (str: string) {
@@ -363,8 +365,6 @@ let wasm: {
   es(): number;
   /** getExportStatementStart */
   ess(): number;
-  /** getExportTypeOnly */
-  etp(): number;
   /** facade */
   f(): boolean;
   /** hasModuleSyntax */
@@ -375,12 +375,10 @@ let wasm: {
   ie(): number;
   /** getImportSafeString */
   ip(): number;
-  /** getImportTypeOnly */
-  itp(): number;
   /** getImportStart */
   is(): number;
   /** readExport */
-  re(): boolean;
+  re(): number;
   /** readImport */
   ri(): boolean;
   /** allocateSource */

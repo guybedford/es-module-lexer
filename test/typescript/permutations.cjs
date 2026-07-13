@@ -11,6 +11,7 @@ suite('TS type-only permutations', () => {
     // with attributes must still parse correctly.
     const [imports] = parse(`import type { A } from 'a';\nimport b from 'b' with { type: 'json' };`);
     assert.deepStrictEqual(imports.map(i => i.n), ['a', 'b']);
+    assert.deepStrictEqual(imports.map(i => i.t), [1, 1]);
     assert.deepStrictEqual(imports.map(i => i.tp), [true, false]);
     assert.deepStrictEqual(imports[1].at, [['type', 'json']]);
   });
@@ -23,11 +24,13 @@ suite('TS type-only permutations', () => {
 
   test('source phase import is not type-only', () => {
     const [imports] = parse(`import source x from './m.wasm';`);
+    assert.strictEqual(imports[0].t, 4);
     assert.strictEqual(imports[0].tp, false);
   });
 
   test('dynamic import is not type-only', () => {
     const [imports] = parse(`const m = import('m');`);
+    assert.strictEqual(imports[0].t, 2);
     assert.strictEqual(imports[0].tp, false);
   });
 

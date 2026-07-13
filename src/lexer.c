@@ -36,6 +36,7 @@ static const char16_t KEYWORDS[] = {
   'u', 'n', 'c', 't', 'i', 'o', 'n',
   'o', 'u', 'r', 'c', 'e',
   'e', 'f', 'e', 'r',
+  ';',
 #ifdef LEX_TS
   'y', 'p', 'e',
   'n', 't', 'e', 'r', 'f', 'a', 'c', 'e',
@@ -76,8 +77,10 @@ static const char16_t KEYWORDS[] = {
 #define UNCTION (SYNC + 4)
 #define OURCE (UNCTION + 7)
 #define EFER (OURCE + 5)
+// Program start and opaque declaration erasure are statement boundaries.
+#define STATEMENT_END (EFER + 4)
 #ifdef LEX_TS
-#define YPE (EFER + 4)
+#define YPE (STATEMENT_END + 1)
 #define NTERFACE (YPE + 3)
 #define NEW (NTERFACE + 8)
 #define KEYOF (NEW + 3)
@@ -141,7 +144,10 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   switch (ch) {
     case 'e':
       if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, XPORT, 5 * 2) == 0) {
-        tryParseExportStatement();
+        if (tryParseExportStatement()) {
+          lastTokenPos = (char16_t*)STATEMENT_END;
+          return true;
+        }
         break;
       }
       goto skipTokenRun;
@@ -154,8 +160,13 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       // Bare `interface Foo { ... }` (no `export`): skip it opaquely so a
       // member type like `m(): import('m')` is not lexed as a runtime edge. The
       // `n` pre-check keeps `if` / `in` / `instanceof` off the memcmp path.
-      else if (*(pos + 1) == 'n' && keywordStart(pos))
-        tryTsTypeDeclaration(true);
+      else if (*(pos + 1) == 'n' && *(pos + 2) == 't' &&
+          memcmp(pos + 3, NTERFACE + 2, 6 * 2) == 0 &&
+          (isBrOrWs(*(pos + 9)) || *(pos + 9) == '/') &&
+          keywordStart(pos) && tryTsTypeDeclaration(true)) {
+        lastTokenPos = (char16_t*)STATEMENT_END;
+        return true;
+      }
 #endif
       goto skipTokenRun;
     case 'c':
@@ -168,8 +179,11 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       // `import('m')` type records no runtime edge. tryTsTypeDeclaration only
       // commits when it is really `type <name> =`. The `y` pre-check keeps
       // `this` / `throw` / `try` / `typeof` off that path.
-      if (*(pos + 1) == 'y' && keywordStart(pos))
-        tryTsTypeDeclaration(true);
+      if (*(pos + 1) == 'y' && *(pos + 2) == 'p' && *(pos + 3) == 'e' &&
+          (isBrOrWs(*(pos + 4)) || *(pos + 4) == '/') && keywordStart(pos) && tryTsTypeDeclaration(true)) {
+        lastTokenPos = (char16_t*)STATEMENT_END;
+        return true;
+      }
       goto skipTokenRun;
 #endif
     case '(':
@@ -266,7 +280,7 @@ bool parse () {
 #endif
   dynamicImportStackDepth = 0;
   openTokenDepth = 0;
-  lastTokenPos = (char16_t*)EMPTY_CHAR;
+  lastTokenPos = (char16_t*)STATEMENT_END;
   lastSlashWasDivision = false;
   parse_error = 0;
   has_error = false;
@@ -289,7 +303,10 @@ bool parse () {
     switch (ch) {
       case 'e':
         if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, XPORT, 5 * 2) == 0) {
-          tryParseExportStatement();
+          if (tryParseExportStatement()) {
+            lastTokenPos = (char16_t*)STATEMENT_END;
+            continue;
+          }
           // export might have been a non-pure declaration
           if (!facade) {
             lastTokenPos = pos;
@@ -306,7 +323,8 @@ bool parse () {
         // A bare `interface` is a non-import statement: leave the facade fast
         // path like any other token so the main parser skips its body (where a
         // member type must not be lexed as a runtime edge).
-        if (keywordStart(pos) && memcmp(pos + 1, NTERFACE, 8 * 2) == 0 && isBrOrWs(*(pos + 9))) {
+        if (keywordStart(pos) && memcmp(pos + 1, NTERFACE, 8 * 2) == 0 &&
+            (isBrOrWs(*(pos + 9)) || *(pos + 9) == '/')) {
           facade = false;
           pos--;
           goto mainparse;
@@ -642,8 +660,9 @@ bool skipTsTrivia (char16_t ch) {
 // matching closer. Comments, strings, and templates are consumed so a bracket
 // inside one is ignored; nested openers recurse. For angles, `>>` / `>>>` close
 // multiple levels and `=>` never closes. Nothing here re-enters the tokenizer,
-// so an `import(...)` inside erased type text records no runtime edge.
-void skipTsBalanced () {
+// so an `import(...)` inside erased type text records no runtime edge. Returns
+// false at EOF when the region is unbalanced.
+bool skipTsBalanced () {
   char16_t open = *pos;
   if (open == '<') {
     int angle = 0;
@@ -655,32 +674,35 @@ void skipTsBalanced () {
         // `=>` is not a closer.
         if (*(pos - 1) != '=' && --angle == 0) {
           pos++;
-          return;
+          return true;
         }
       } else if (ch == '(' || ch == '[' || ch == '{') {
-        skipTsBalanced();
+        if (!skipTsBalanced())
+          return false;
         continue;
       } else if (skipTsTrivia(ch)) {
         // pos left AT the last consumed char; fall through to the pos++ below.
       }
       pos++;
     }
-    return;
+    return false;
   }
   char16_t close = open == '(' ? ')' : open == '[' ? ']' : '}';
   while (++pos <= end) {
     char16_t ch = *pos;
     if (ch == close) {
       pos++;
-      return;
+      return true;
     }
     if (ch == '(' || ch == '[' || ch == '{') {
-      skipTsBalanced();
+      if (!skipTsBalanced())
+        return false;
       pos--;
     } else {
       skipTsTrivia(ch);
     }
   }
+  return false;
 }
 
 // pos AT a `type` or `interface` keyword candidate that begins a declaration.
@@ -704,7 +726,8 @@ bool tryTsTypeDeclaration (bool bare) {
   bool isInterface = *pos == 'i';
   int keywordLen;
   if (isInterface) {
-    if (memcmp(pos + 1, NTERFACE, 8 * 2) != 0 || !isBrOrWs(*(pos + 9)))
+    if (memcmp(pos + 1, NTERFACE, 8 * 2) != 0 ||
+        !(isBrOrWs(*(pos + 9)) || *(pos + 9) == '/'))
       return false;
     keywordLen = 9;
   }
@@ -729,8 +752,13 @@ bool tryTsTypeDeclaration (bool bare) {
   char16_t* nameEnd = pos;
 
   char16_t ch = commentWhitespace(true);
-  if (ch == '<')
-    ch = (skipTsBalanced(), commentWhitespace(true));
+  if (ch == '<') {
+    if (!skipTsBalanced()) {
+      syntaxError();
+      return true;
+    }
+    ch = commentWhitespace(true);
+  }
 
   // A bare alias is only a declaration when a `=` follows the (optional) type
   // parameters. Without it (`type foo` used as a value, `type as X`) restore
@@ -753,10 +781,12 @@ bool tryTsTypeDeclaration (bool bare) {
     // declaration is erased, so no member (`load(): import('m')`) must reach the
     // tokenizer and record a bogus edge.
     while (pos < end && ch != '{') {
-      if (ch == '<' || ch == '(' || ch == '[')
-        skipTsBalanced();
-      else
+      if (ch == '<' || ch == '(' || ch == '[') {
+        if (!skipTsBalanced())
+          break;
+      } else {
         pos++;
+      }
       ch = commentWhitespace(true);
     }
     if (ch == '{')
@@ -804,8 +834,11 @@ bool tryTsTypeDeclaration (bool bare) {
           pos++;
           continue;
         }
+        if (ch == '}' && openTokenDepth > 0)
+          break;
         if (ch == '<' || ch == '(' || ch == '[' || ch == '{') {
-          skipTsBalanced();
+          if (!skipTsBalanced())
+            break;
           operandPending = false;
           continue;
         }
@@ -983,7 +1016,8 @@ void readBindingPattern () {
   }
 }
 
-void tryParseExportStatement () {
+// Returns true when an erased TypeScript declaration consumed the statement.
+bool tryParseExportStatement () {
   char16_t* sStartPos = pos;
   Export* prev_export_write_head = export_write_head;
 
@@ -994,7 +1028,7 @@ void tryParseExportStatement () {
   char16_t ch = commentWhitespace(true);
 
   if (pos == curPos && !isPunctuator(ch))
-    return;
+    return false;
 
 #ifndef LEXER_MIN
   // Only commit the statement start once this is a real export: skipExpression
@@ -1020,11 +1054,11 @@ void tryParseExportStatement () {
     } else {
       pos = savePos;
       if (tryTsTypeDeclaration(false))
-        return;
+        return true;
     }
   }
   else if (tryTsTypeDeclaration(false))
-    return;
+    return true;
 #endif
 
   if (ch == '{') {
@@ -1094,10 +1128,10 @@ void tryParseExportStatement () {
       }
       if (ch == '}')
         break;
-      if (pos == startPos)
-        return syntaxError();
-      if (pos > end)
-        return syntaxError();
+      if (pos == startPos || pos > end) {
+        syntaxError();
+        return false;
+      }
     }
 #ifndef LEXER_MIN
     hasModuleSyntax = true; // to handle "export {}"
@@ -1165,12 +1199,12 @@ void tryParseExportStatement () {
           if (pos > localStartPos) {
             addExport(startPos, startPos + 7, localStartPos, pos);
             pos--;
-            return;
+            return false;
           }
         }
         addExport(startPos, startPos + 7, NULL, NULL);
         pos = (char16_t*)(startPos + 6);
-        return;
+        return false;
       }
       // export async? function*? name () {
       case 'a':
@@ -1188,7 +1222,7 @@ void tryParseExportStatement () {
         ch = readToWsOrPunctuator(ch);
         addExport(startPos, pos, startPos, pos);
         pos--;
-        return;
+        return false;
 
       // export class name ...
       case 'c':
@@ -1199,7 +1233,7 @@ void tryParseExportStatement () {
           ch = readToWsOrPunctuator(ch);
           addExport(startPos, pos, startPos, pos);
           pos--;
-          return;
+          return false;
         }
         pos += 2;
       // fallthrough
@@ -1228,11 +1262,11 @@ void tryParseExportStatement () {
           ch = commentWhitespace(true);
         }
         pos--;
-        return;
+        return false;
       }
 
       default:
-        return;
+        return false;
     }
   }
 
@@ -1265,6 +1299,7 @@ void tryParseExportStatement () {
   else {
     pos--;
   }
+  return false;
 }
 
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {

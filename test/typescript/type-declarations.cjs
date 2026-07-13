@@ -21,10 +21,21 @@ suite('TS type declarations', () => {
     assert.strictEqual(exports[0].tp, true);
   });
 
+  test('interface name may follow a comment', () => {
+    const [imports, exports] = parse(`export interface/*c*/Foo { m(): import('m').T }`);
+    assert.deepStrictEqual(imports.map(i => i.n), []);
+    assert.deepStrictEqual(exports.map(e => e.n), ['Foo']);
+    assert.strictEqual(exports[0].tp, true);
+  });
+
   test('export type alias with default type parameter', () => {
     const [, exports] = parse(`export type Foo<T = string> = T;`);
     assert.deepStrictEqual(exports.map(e => e.n), ['Foo']);
     assert.strictEqual(exports[0].tp, true);
+  });
+
+  test('unbalanced speculative type parameters stop at EOF', () => {
+    assert.throws(() => parse('type a<\n'.repeat(20_000)), /Parse error/);
   });
 
   test('export interface with generic extends clause', () => {
@@ -198,6 +209,33 @@ suite('TS type declarations', () => {
     ]) {
       const [imports] = parse(src);
       assert.deepStrictEqual(imports.map(i => i.n), expected, src);
+    }
+  });
+
+  test('bare type alias stops before the enclosing block closer', () => {
+    for (const src of [
+      `function f() { type X = A }\nimport { v } from 'runtime';`,
+      `switch (x) { case 0: type X = A }\nimport { v } from 'runtime';`,
+      `const object = { method() { type X = A } };\nimport { v } from 'runtime';`
+    ]) {
+      const [imports] = parse(src);
+      assert.deepStrictEqual(imports.map(i => i.n), ['runtime'], src);
+    }
+  });
+
+  test('regex after an erased declaration stays regex', () => {
+    for (const src of [
+      `interface A {}\n/import('m')/.test(x);`,
+      `type X = { a: 1 }\n/import('m')/.test(x);`,
+      `type X = A\n/import('m')/;`,
+      `export interface A {}\n/import('m')/.test(x);`,
+      `export type X = { a: 1 }\n/import('m')/.test(x);`,
+      `interface A {}\n{}\n/import('m')/.test(x);`,
+      `type X = A\n{}\n/import('m')/.test(x);`,
+      `export type X = A\n{}\n/import('m')/.test(x);`
+    ]) {
+      const [imports] = parse(src);
+      assert.deepStrictEqual(imports.map(i => i.n), [], src);
     }
   });
 

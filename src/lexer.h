@@ -7,8 +7,6 @@ extern unsigned char __heap_base;
 
 const char16_t* STANDARD_IMPORT = (char16_t*)0x1;
 const char16_t* IMPORT_META = (char16_t*)0x2;
-const char16_t __empty_char = '\0';
-const char16_t* EMPTY_CHAR = &__empty_char;
 const char16_t* source = (void*)&__heap_base;
 
 void setSource (void* ptr) {
@@ -227,7 +225,11 @@ uint32_t se () {
 }
 // getImportType
 uint32_t it () {
+#ifdef LEX_TS
+  return import_read_head->import_ty | import_read_head->type_only << 3;
+#else
   return import_read_head->import_ty;
+#endif
 }
 // getAssertIndex
 uint32_t ai () {
@@ -246,12 +248,6 @@ uint32_t id () {
 uint32_t ip () {
   return import_read_head->safe;
 }
-#ifdef LEX_TS
-// getImportTypeOnly
-uint32_t itp () {
-  return import_read_head->type_only;
-}
-#endif
 // getExportStart
 uint32_t es () {
   return export_read_head->start - source;
@@ -274,12 +270,6 @@ uint32_t ess () {
   return export_read_head->statement_start - source;
 }
 #endif
-#ifdef LEX_TS
-// getExportTypeOnly
-uint32_t etp () {
-  return export_read_head->type_only;
-}
-#endif
 // readImport
 bool ri () {
   if (import_read_head == NULL)
@@ -291,14 +281,18 @@ bool ri () {
   return true;
 }
 // readExport
-bool re () {
+uint32_t re () {
   if (export_read_head == NULL)
     export_read_head = first_export;
   else
     export_read_head = export_read_head->next;
   if (export_read_head == NULL)
-    return false;
-  return true;
+    return 0;
+#ifdef LEX_TS
+  return 1 + export_read_head->type_only;
+#else
+  return 1;
+#endif
 }
 #ifndef LEXER_MIN
 bool f () {
@@ -347,7 +341,7 @@ void rsa () {
 bool parse ();
 
 void tryParseImportStatement ();
-void tryParseExportStatement ();
+bool tryParseExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
@@ -366,7 +360,7 @@ bool isTsIdentifierStart (char16_t c);
 bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd);
 bool tryTsTypeDeclaration (bool bare);
 bool skipTsTrivia (char16_t ch);
-void skipTsBalanced ();
+bool skipTsBalanced ();
 #endif
 
 char16_t commentWhitespace (bool br);

@@ -1,10 +1,7 @@
 const assert = require('assert');
 const { init, parse } = require('./_harness.cjs');
 
-// Increment 1 adds the type-only keyword machinery but no type-annotation
-// skipping yet. These cases pin that the shared regex/division disambiguation
-// is not perturbed by the new code paths.
-suite('TS regex / division (type-only increment)', () => {
+suite('TS regex / division', () => {
   setup(async () => await init);
 
   test('regex after type-only import still parses', () => {

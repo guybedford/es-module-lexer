@@ -52,7 +52,7 @@ const maybe = (p = 0.5) => rand() < p;
 
 const SPEC = ["'m'", "'m2'", '"m3"', "'./x'"];
 const NAME = ['A', 'B', 'Foo', 'type', 'from', 'as', 'x', 'y', '_z'];
-const WS = ['', ' ', '  ', '\n', '\n ', ' /*c*/ ', '\t', '\n\n', '\n// c\n'];
+const WS = ['', ' ', '  ', '\n', '\n ', '/*c*/', '/**/', ' /*c*/ ', '\t', '\n\n', '\n// c\n'];
 const BETWEEN_STATEMENTS = ['\n', '\n\n', ' ', ';', ';\n', '\t'];
 // Runtime statements dropped in after a TS form. A declaration skipper that
 // overshoots its terminator swallows one of these, which the export/import
@@ -65,6 +65,7 @@ const SENTINELS = [
   () => `import { ${pick(['A', 'B', 'Foo'])} } from 'runtime';`,
   () => `import 'runtime';`,
   () => `const dyn = import('runtime');`,
+  () => `/import('fuzz-regex')/.test(x);`,
   () => `const re = /ab+c/g;`,
   () => `const q = a / b / c;`,
   () => `\`template \${x} tail\`;`,
@@ -150,6 +151,17 @@ function aliasTerminator () {
   return pick([';', '\n', '\n\n', '\n| ' + typeExpr(1) + ';', '\n& ' + typeExpr(1) + ';', ';\n']);
 }
 
+/**
+ * @param {string} statement
+ */
+function nestStatement (statement) {
+  return pick([
+    `function f() { ${statement} }`,
+    `switch (x) { case 0: ${statement} }`,
+    `const object = { method() { ${statement} } };`,
+  ]);
+}
+
 // Out-of-scope statement forms: value-position type annotations. Node strips
 // these, but the lexer only erases exported/bare declarations and type-only
 // import/export clauses, so their embedded import() types stay visible.
@@ -173,8 +185,8 @@ const FORMS = {
   // a bare `type\nName`, making it a value expression (unlike `export type`).
   'bare-type': () => `type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${aliasTerminator()}`,
   'bare-interface': () => `interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`,
-  'nested-type': () => `function f() { type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${aliasTerminator()} }`,
-  'nested-interface': () => `if (true) { interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()} }`,
+  'nested-type': () => nestStatement(`type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${pick([';', '\n', ''])}`),
+  'nested-interface': () => nestStatement(`interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`),
   'const-annot': () => `export const ${pick(NAME)}${maybe() ? ': ' + typeExpr(1) : ''} = ${maybe() ? 'import(' + pick(SPEC) + ')' : '1'};`,
   'dynamic-import': () => `const x = import(${pick(SPEC)});`,
   'export-default': () => `export default ${maybe() ? 'import(' + pick(SPEC) + ')' : '1'};`,
