@@ -21,8 +21,8 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 
 // Keyword dictionary, extracted from the fastcomp static memory image at build
 // time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
-// keyword tables in lexer.c automatically.
-const words = '{{WORDS}}';
+// contiguous keyword table in lexer.c automatically.
+const words = {{WORDS}};
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -53,7 +53,8 @@ export function parse (_source, _name = '@') {
 
   const imports = [], exports = [];
   while (asm.ri()) {
-    const s = asm.is(), e = asm.ie(), a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se(), t = asm.it();
+    const s = asm.is(), e = asm.ie(), importType = asm.it(), t = importType & 7;
+    const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
@@ -69,16 +70,20 @@ export function parse (_source, _name = '@') {
       }
       at = at.length > 0 ? at : null;
     }
-    imports.push({ t, n, s, e, ss, se, d, a, at });
+    if (MINIMAL)
+      imports.push({ t, n, s, e, ss, se, d, a, at });
+    else
+      imports.push({ t, n, s, e, ss, se, d, a, at, tp: !!(importType & 8) });
   }
-  while (asm.re()) {
+  let exportType;
+  while ((exportType = asm.re())) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
     const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
     const n = decodeIfQuoted(s, e);
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln });
     else
-      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln });
+      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln, tp: exportType === 2 });
   }
 
   return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];

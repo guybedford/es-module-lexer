@@ -827,6 +827,11 @@ suite('Lexer', () => {
     assert.strictEqual(imports.length, 0);
   });
 
+  test('Program-leading block keeps the following regex opaque', () => {
+    const [imports] = parse(`{}\n/import('m')/.test(x);`);
+    assert.deepStrictEqual(imports.map(impt => impt.n), []);
+  });
+
   test('Regexp division', () => {
     parse(`\nconst x = num / /'/.exec(l)[0].slice(1, -1)//'"`);
   });

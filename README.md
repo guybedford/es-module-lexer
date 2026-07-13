@@ -190,6 +190,35 @@ Compared to the full build:
 
 All other fields are identical to the full build. For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
 
+### TypeScript
+
+The default `parse` lexes the type-only import and export syntax that [Node.js type stripping](https://nodejs.org/api/typescript.html#type-stripping) erases, so the same lexer that handles your JavaScript also handles those TypeScript edges without a separate transform step:
+
+```js
+const [imports, exports] = parse(`
+  import type { Foo } from './foo';
+  import { bar } from './bar';
+  export type { Baz } from './baz';
+`);
+```
+
+Type-only imports and exports are reported rather than elided, marked with the `tp` field:
+
+```js
+// import type { Foo } from './foo'  ->  { n: './foo', tp: true, ... }
+// import { bar } from './bar'       ->  { n: './bar', tp: false, ... }
+imports[0].tp; // true
+imports[1].tp; // false
+```
+
+`tp` is present on every import and export specifier. Inline modifiers are tracked per specifier, so `export { type A, b }` marks only `A`, and directly-exported `export type Foo = ...` / `export interface Foo {}` declarations are marked too. Plain JavaScript always reports `tp: false`: every type-only form is a syntax error in JavaScript except `import type from 'x'`, which is a value import of the default binding named `type` and keeps its runtime edge, so nothing changes for JavaScript consumers.
+
+Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The minimal build (`es-module-lexer/minimal`) lexes JavaScript only and omits `tp`.
+
+`type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import.
+
+This increment covers type-only imports and exports and `type` / `interface` declarations. Type annotations on values and generic type arguments in value positions are not yet handled: an `import(...)` type there (`const x: import('m').T`, `f<import('m').T>()`) is still reported as a runtime import, since telling a type argument from a `<` comparison needs full type context. `as` / `satisfies` and the rest of the erasable surface also follow later. Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
+
 ### Import Attributes
 
 The `a` field provides the index of the start of the `{` attributes bracket, or -1 for no attributes.

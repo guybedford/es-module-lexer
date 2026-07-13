@@ -127,6 +127,13 @@ export interface ImportSpecifier {
    * // Returns [['type', 'json'], ['integrity', 'sha384-...']]
    */
   readonly at: ReadonlyArray<readonly [string, string]> | null;
+
+  /**
+   * `true` for a TypeScript type-only import (`import type ... from`), elided
+   * from the emitted JavaScript. Both the Wasm and asm.js / CSP builds lex
+   * TypeScript; the minimal build (`es-module-lexer/minimal`) omits this field.
+   */
+  readonly tp: boolean;
 }
 
 export interface ExportSpecifier {
@@ -217,6 +224,13 @@ export interface ExportSpecifier {
    * // Returns "export"
    */
   readonly ss: number;
+  /**
+   * `true` for a TypeScript type-only export: `export type { ... }`, an inline
+   * `export { type X }`, or a directly-exported `export type`/`export interface`
+   * declaration. Elided from the emitted JavaScript. Both the Wasm and asm.js /
+   * CSP builds lex TypeScript; the minimal build omits this field.
+   */
+  readonly tp: boolean;
 }
 
 export interface ParseError extends Error {
@@ -264,7 +278,8 @@ export function parse (source: string, name = '@'): readonly [
 
   const imports: ImportSpecifier[] = [], exports: ExportSpecifier[] = [];
   while (wasm.ri()) {
-    const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
+    const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 7;
+    const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
@@ -280,16 +295,20 @@ export function parse (source: string, name = '@'): readonly [
       }
       if (at.length === 0) at = null;
     }
-    imports.push({ n, t, s, e, ss, se, d, a, at });
+    if (MINIMAL)
+      imports.push({ n, t, s, e, ss, se, d, a, at } as unknown as ImportSpecifier);
+    else
+      imports.push({ n, t, s, e, ss, se, d, a, at, tp: !!(importType & 8) });
   }
-  while (wasm.re()) {
+  let exportType;
+  while ((exportType = wasm.re())) {
     const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
     const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
     const n = decodeIfQuoted(source.slice(s, e));
     if (MINIMAL)
       exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
     else
-      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln });
+      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln, tp: exportType === 2 });
   }
 
   function decode (str: string) {
@@ -359,7 +378,7 @@ let wasm: {
   /** getImportStart */
   is(): number;
   /** readExport */
-  re(): boolean;
+  re(): number;
   /** readImport */
   ri(): boolean;
   /** allocateSource */

@@ -37,14 +37,14 @@ if (best.start === -1)
   throw new Error(`keyword dictionary not found in ${LAYOUT}.mem`);
 
 let words = best.str;
-// The image drops the trailing zero high byte of the final char16, leaving a
-// lone printable low byte at the very end of the dictionary.
+// The image can drop the trailing zero high byte of the final char16, leaving a
+// lone printable low byte at the very end.
 const tail = best.start + words.length * 2;
 if (tail === mem.length - 1 && mem[tail] >= 0x20 && mem[tail] <= 0x7e)
   words += String.fromCharCode(mem[tail]);
 
 let out = readFileSync(SRC, 'utf8')
-  .replace('{{WORDS}}', words)
+  .replace('{{WORDS}}', JSON.stringify(words))
   .replace('{{OFFSET}}', GLOBAL_BASE + best.start)
   .replace('{{STATIC_TOP}}', STACK_BASE);
 
