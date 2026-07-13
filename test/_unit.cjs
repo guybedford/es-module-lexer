@@ -841,6 +841,24 @@ suite('Lexer', () => {
     `);
   });
 
+  test('Identifier runs preserve template and punctuation boundaries', () => {
+    const source = `
+      const tag = String.raw;
+      const extraordinarilyLongIdentifier = 6;
+      const \\u0065scapedIdentifier = extraordinarilyLongIdentifier / 2;
+      const templateResult = tag\`value \${import('template-edge')}\`;
+      class LongClassName {
+        #privateField = import('class-edge');
+        method () { return /import\\('ignored'\\)/.test(''); }
+      }
+      \u00a0import('nbsp-edge');
+      export { templateResult, LongClassName };
+    `;
+    const [imports, exports] = parse(source);
+    assert.deepStrictEqual(imports.map(impt => impt.n), ['template-edge', 'class-edge', 'nbsp-edge']);
+    assert.deepStrictEqual(exports.map(expt => expt.n), ['templateResult', 'LongClassName']);
+  });
+
   test('Division operator case', () => {
     parse(`
       function log(r){
