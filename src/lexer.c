@@ -174,8 +174,7 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       if (!isTokenRunChar(ch))
         break;
     skipTokenRun:
-      while (isTokenRunChar(*(++pos)));
-      pos--;
+      while (isTokenRunChar(*(pos + 1))) pos++;
   }
   if (!isComment)
     lastTokenPos = pos;
