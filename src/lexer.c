@@ -31,6 +31,7 @@ static const char16_t ELS[] = { 'e', 'l', 's' };
 static const char16_t BREA[] = { 'b', 'r', 'e', 'a' };
 static const char16_t CONTIN[] = { 'c', 'o', 'n', 't', 'i', 'n' };
 static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
+static const char16_t BSTRACT[] = {'b', 's', 't', 'r', 'a', 'c', 't'};
 static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
 static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
@@ -715,8 +716,22 @@ void tryParseExportStatement () {
         pos = (char16_t*)(startPos + 6);
         return;
       }
-      // export async? function*? name () {
       case 'a':
+        // export abstract class name ...
+        if (memcmp(pos + 1, &BSTRACT[0], 7 * 2) == 0 && isWsNotBr(*(pos + 8))) {
+          pos += 8;
+          ch = commentWhitespace(true);
+          if (ch == 'c' && memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+            pos += 5;
+            ch = commentWhitespace(true);
+            const char16_t* startPos = pos;
+            ch = readToWsOrPunctuator(ch);
+            addExport(startPos, pos, startPos, pos);
+            pos--;
+          }
+          return;
+        }
+      // export async? function*? name () {
         pos += 5;
         commentWhitespace(false);
       // fallthrough
