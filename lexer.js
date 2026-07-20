@@ -355,8 +355,22 @@ function tryParseExportStatement () {
       addExport(pos, pos + 7, -1, -1);
       return;
 
-    // export async? function*? name () {
     case 97/*a*/:
+      // export abstract class name ...
+      if (source.startsWith('bstract', pos + 1) && isWsNotBr(source.charCodeAt(pos + 8))) {
+        pos += 8;
+        ch = commentWhitespace(true);
+        if (ch === 99/*c*/ && source.startsWith('lass', pos + 1) && isBrOrWsOrPunctuatorNotDot(source.charCodeAt(pos + 5))) {
+          pos += 5;
+          ch = commentWhitespace(true);
+          const startPos = pos;
+          ch = readToWsOrPunctuator(ch);
+          addExport(startPos, pos, startPos, pos);
+          pos--;
+        }
+        return;
+      }
+    // export async? function*? name () {
       pos += 5;
       commentWhitespace(true);
     // fallthrough

@@ -965,6 +965,21 @@ suite('Lexer', () => {
     assertExportIs(source, exports[1], {n: 'Q', ln: 'Q' });
   });
 
+  test('Exported abstract class (TypeScript)', () => {
+    const source = `
+      export abstract class Foo {
+        abstract bar (): void;
+      }
+      export abstract class Baz extends Qux {}
+      export class Plain {}
+    `;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 3);
+    assertExportIs(source, exports[0], { n: 'Foo', ln: 'Foo' });
+    assertExportIs(source, exports[1], { n: 'Baz', ln: 'Baz' });
+    assertExportIs(source, exports[2], { n: 'Plain', ln: 'Plain' });
+  });
+
   test('Export destructuring', () => {
     const source = `
       export const { a, b } = foo;
