@@ -12,6 +12,7 @@ let source, pos, end,
   templateStack,
   imports,
   exports,
+  importNames,
   exportStatementStart,
   name;
 
@@ -57,6 +58,7 @@ export function parse (_source, _name) {
 
   imports = [];
   exports = [];
+  importNames = [];
 
   source = _source;
   pos = -1;
@@ -319,6 +321,28 @@ function tryParseImportStatement () {
         pos--;
         return;
       }
+      if (ch === 123/*{*/) {
+        readImportBinding(ch);
+        pos++;
+        ch = commentWhitespace(true);
+        if (ch !== 102/*f*/ || !source.startsWith('rom', pos + 1))
+          return syntaxError();
+        pos += 4;
+        ch = commentWhitespace(true);
+        if (ch !== 39/*'*/ && ch !== 34/*"*/)
+          return syntaxError();
+        readImportString(startPos, ch);
+        return;
+      }
+      // Record the local binding names this import introduces (see
+      // readImportBinding) so a later detached `export { x }` can be recognised
+      // as a re-export of an imported binding. pos is restored so the opaque
+      // specifier scan below is unaffected.
+      if (ch !== 39/*'*/ && ch !== 34/*"*/) {
+        const clausePos = pos;
+        readImportBinding(ch);
+        pos = clausePos;
+      }
       while (pos < end) {
         ch = source.charCodeAt(pos);
         if (ch === 39/*'*/ || ch === 34/*"*/) {
@@ -328,6 +352,89 @@ function tryParseImportStatement () {
         pos++;
       }
       syntaxError();
+  }
+}
+
+// pos AT the first char of an import clause. Records the local binding names it
+// introduces via importNames: each named specifier's `as` target (or its
+// imported name when there is no `as`; a string name binds only via `as`), the
+// `* as ns` namespace, and a leading default identifier. The named part of a
+// combined `d, { a }` clause is not descended into; those bindings stay
+// untracked (a rare form - a detached export of one keeps its local name).
+function readImportBinding (ch) {
+  // named imports: { a, b as c, "str" as d }
+  if (ch === 123/*{*/) {
+    pos++;
+    ch = commentWhitespace(true);
+    while (ch !== 125/*}*/ && pos < end) {
+      const specStartPos = pos;
+      let nameStart = pos, nameEnd = pos, quoted = false;
+      if (ch === 39/*'*/ || ch === 34/*"*/) {
+        stringLiteral(ch);
+        pos++;
+        quoted = true;
+      }
+      else {
+        readToWsOrPunctuator(ch);
+        nameEnd = pos;
+      }
+      ch = commentWhitespace(true);
+      if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWsOrPunctuatorNotDot(source.charCodeAt(pos + 2))) {
+        pos += 2;
+        ch = commentWhitespace(true);
+        // `as` target: a binding identifier, or (only in malformed input, since
+        // JS requires an identifier here) a string literal - skip the string so
+        // its contents are not mistaken for further specifier tokens.
+        if (ch === 39/*'*/ || ch === 34/*"*/) {
+          stringLiteral(ch);
+          pos++;
+          quoted = true;
+        }
+        else {
+          nameStart = pos;
+          readToWsOrPunctuator(ch);
+          nameEnd = pos;
+          quoted = false;
+        }
+        ch = commentWhitespace(true);
+      }
+      if (!quoted && nameEnd > nameStart)
+        importNames.push([nameStart, nameEnd]);
+      if (ch === 44/*,*/) {
+        pos++;
+        ch = commentWhitespace(true);
+      }
+      else if (pos === specStartPos)
+        break;
+    }
+    return;
+  }
+  // namespace import: * as ns
+  if (ch === 42/***/) {
+    pos++;
+    ch = commentWhitespace(true);
+    if (ch === 97/*a*/ && source.charCodeAt(pos + 1) === 115/*s*/ && isBrOrWsOrPunctuatorNotDot(source.charCodeAt(pos + 2))) {
+      pos += 2;
+      ch = commentWhitespace(true);
+      const nameStart = pos;
+      readToWsOrPunctuator(ch);
+      if (pos > nameStart)
+        importNames.push([nameStart, pos]);
+    }
+    return;
+  }
+  // default binding, optionally `default, * as ns`
+  const nameStart = pos;
+  readToWsOrPunctuator(ch);
+  if (pos === nameStart)
+    return;
+  importNames.push([nameStart, pos]);
+  ch = commentWhitespace(true);
+  if (ch === 44/*,*/) {
+    pos++;
+    ch = commentWhitespace(true);
+    if (ch === 42/***/)
+      readImportBinding(ch);
   }
 }
 
@@ -465,8 +572,34 @@ function tryParseExportStatement () {
     }
   }
   else {
+    // A detached `export { x }` (no `from`) whose local resolves to a binding
+    // introduced by an import is itself a re-export, so report it with no local
+    // name - exactly as `export { x } from` above. A genuine local keeps its
+    // name. Pure name match: a lexer cannot do scope analysis (an import after
+    // the export, or a same-named local shadowing an import, is not resolved) -
+    // the same assumption the `export { x } from` case already makes.
+    if (importNames.length) {
+      for (let i = prevExport; i < exports.length; ++i) {
+        const expt = exports[i];
+        if (expt.ls !== -1 && isImportBinding(expt.ls, expt.le)) {
+          expt.ls = expt.le = -1;
+          expt.ln = undefined;
+        }
+      }
+    }
     pos--;
   }
+}
+
+// True when [start, end) equals a local binding name introduced by an import.
+function isImportBinding (start, end) {
+  const len = end - start;
+  for (let i = 0; i < importNames.length; ++i) {
+    const [nameStart, nameEnd] = importNames[i];
+    if (nameEnd - nameStart === len && source.startsWith(source.slice(start, end), nameStart))
+      return true;
+  }
+  return false;
 }
 
 /*

@@ -380,6 +380,57 @@ void tryParseImportStatement () {
       return;
     }
 
+#ifndef LEXER_MIN
+    // Record each specifier's local binding (the `as` target, or the imported
+    // name when there is no `as`) so a later detached `export { x }` can be
+    // recognised as a re-export of an imported binding. A string-literal name
+    // ("foo") only binds via `as`, so it is skipped when no `as` follows.
+    pos++;
+    ch = commentWhitespace(true);
+    while (ch != '}' && pos < end) {
+      char16_t* specStartPos = pos;
+      char16_t* nameStart = pos;
+      char16_t* nameEnd = pos;
+      if (isQuote(ch)) {
+        stringLiteral(ch);
+        pos++;
+        nameStart = NULL;
+      } else {
+        readToWsOrPunctuator(ch);
+        nameEnd = pos;
+      }
+      ch = commentWhitespace(true);
+      if (ch == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
+        pos += 2;
+        ch = commentWhitespace(true);
+        // `as` target: a binding identifier, or (only in malformed input, since
+        // JS requires an identifier here) a string literal - skip the string so
+        // its contents are not mistaken for further specifier tokens.
+        if (isQuote(ch)) {
+          stringLiteral(ch);
+          pos++;
+          nameStart = NULL;
+        } else {
+          nameStart = pos;
+          readToWsOrPunctuator(ch);
+          nameEnd = pos;
+        }
+        ch = commentWhitespace(true);
+      }
+      if (nameStart != NULL && nameEnd > nameStart)
+        addImportName(nameStart, nameEnd);
+      if (ch == ',') {
+        pos++;
+        ch = commentWhitespace(true);
+      }
+      // Guard against malformed input that consumed no characters, so the
+      // scan always terminates (the main loop assumes valid source).
+      else if (pos == specStartPos)
+        break;
+    }
+    if (ch == '}')
+      pos++;
+#else
     while (pos < end) {
       ch = commentWhitespace(true);
       if (isQuote(ch)) {
@@ -390,6 +441,7 @@ void tryParseImportStatement () {
       }
       pos++;
     }
+#endif
 
     ch = commentWhitespace(true);
     if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
@@ -420,6 +472,17 @@ void tryParseImportStatement () {
       pos--;
       return;
     }
+#ifndef LEXER_MIN
+    // Record the default / namespace binding so a detached `export { d }` can be
+    // recognised as a re-export. The named part of a combined `d, { a }` clause
+    // is left to the opaque scan below; those bindings stay untracked (a rare
+    // form - a detached export of one keeps its local name).
+    if (!isQuote(ch)) {
+      char16_t* clausePos = pos;
+      readImportBinding(ch);
+      pos = clausePos;
+    }
+#endif
     while (pos < end) {
       ch = *pos;
       if (isQuote(ch)) {
@@ -775,6 +838,18 @@ void tryParseExportStatement () {
     }
   }
   else {
+#ifndef LEXER_MIN
+    // A detached `export { x }` (no `from`) whose local resolves to a binding
+    // introduced by an import is itself a re-export, so report it with no local
+    // name - exactly as `export { x } from` above. A genuine local keeps its
+    // name.
+    if (first_import_name != NULL) {
+      for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
+        if (exprt->local_start != NULL && isImportBinding(exprt->local_start, exprt->local_end))
+          exprt->local_start = exprt->local_end = NULL;
+      }
+    }
+#endif
     pos--;
   }
 }
@@ -813,6 +888,56 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     addExport(startPos, endPos, localStartPos, localEndPos);
   return ch;
 }
+
+#ifndef LEXER_MIN
+// pos AT the first char of an import clause (the default binding identifier or
+// the `*` of a namespace import), `ch` that char. Records the default and/or
+// `* as ns` binding via addImportName. The named `{ ... }` part of a combined
+// `d, { a }` clause is not descended into; those bindings stay untracked.
+void readImportBinding (char16_t ch) {
+  // `* as ns`
+  if (ch == '*') {
+    pos++;
+    ch = commentWhitespace(true);
+    if (ch == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
+      pos += 2;
+      ch = commentWhitespace(true);
+      char16_t* nameStart = pos;
+      readToWsOrPunctuator(ch);
+      if (pos > nameStart)
+        addImportName(nameStart, pos);
+    }
+    return;
+  }
+  // default binding
+  char16_t* nameStart = pos;
+  readToWsOrPunctuator(ch);
+  if (pos == nameStart)
+    return;
+  addImportName(nameStart, pos);
+  ch = commentWhitespace(true);
+  // `default, * as ns` also binds the namespace
+  if (ch == ',') {
+    pos++;
+    ch = commentWhitespace(true);
+    if (ch == '*')
+      readImportBinding(ch);
+  }
+}
+
+// True when [start, end) equals a local binding name introduced by an import.
+// Pure name match: a lexer cannot do scope analysis, so a same-named local that
+// shadows an import is treated as the import - the same assumption the reported
+// `export { x } from` case already makes.
+bool isImportBinding (const char16_t* start, const char16_t* end) {
+  size_t len = end - start;
+  for (ImportName* name = first_import_name; name != NULL; name = name->next) {
+    if (name->end - name->start == len && memcmp(name->start, start, len * 2) == 0)
+      return true;
+  }
+  return false;
+}
+#endif
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   const char16_t* startPos = pos + 1;
