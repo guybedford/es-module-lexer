@@ -57,6 +57,8 @@ export function parse (_source, _name = '@') {
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
+    else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
+      n = decodeTemplate(s, e);
     let at = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -139,6 +141,40 @@ function readString (start, quote) {
   }
   out += source.slice(chunkStart, acornPos++);
   return out;
+}
+
+// Glob for a lone interpolated-template specifier starting at `s`. The parser
+// commits a ${...} span list only for that shape (see lexer.c), so a first rt()
+// of false means "not a glob" (a concatenation such as `a${x}` + b, or a nested
+// template) and yields undefined. Walking from the opening backtick, each
+// top-level ${...} becomes a single "*" and is skipped via its recorded end;
+// static runs are copied raw so the three ports agree byte-for-byte. The walk
+// ends at the specifier's unescaped closing backtick. Kept identical to the
+// wasm build's decodeTemplate (src/lexer.ts).
+function decodeTemplate (s, e) {
+  asm.rts();
+  if (!asm.rt())
+    return;
+  let out = '', chunkStart = s + 1, index = s + 1, spanEnd = asm.te();
+  // `e` bounds the walk defensively; the parser guarantees an unescaped closing
+  // backtick within it for a committed glob.
+  while (index < e) {
+    const ch = source.charCodeAt(index);
+    if (ch === 96/*`*/)
+      break;
+    if (ch === 92/*\*/) {
+      index += 2;
+      continue;
+    }
+    if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
+      out += source.slice(chunkStart, index) + '*';
+      index = chunkStart = spanEnd;
+      spanEnd = asm.rt() ? asm.te() : -1;
+      continue;
+    }
+    index++;
+  }
+  return out + source.slice(chunkStart, index);
 }
 
 // Used to read escaped characters

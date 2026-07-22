@@ -4,6 +4,7 @@ let source, pos, end,
   openTokenPosStack,
   openClassPosStack,
   curDynamicImport,
+  dynamicImportStack,
   templateStackDepth,
   facade,
   lastSlashWasDivision,
@@ -13,6 +14,15 @@ let source, pos, end,
   imports,
   exports,
   exportStatementStart,
+  // Maps a dynamic import to its glob-recording scratch, kept off the public
+  // import objects so the JS result shape stays identical to the wasm build's.
+  // The scratch is { ends, close, depth }: `ends` collects each top-level ${...}
+  // end, `close` the specifier's closing backtick, `depth` the openTokenDepth
+  // its top-level substitutions close at. Per-import, so a nested import(`...`)
+  // records against its own entry and never corrupts an enclosing one. Reuses
+  // the real tokenizer's regex/division disambiguation, which a standalone
+  // ${...} skimmer cannot do.
+  templateGlobs,
   name;
 
 function addImport (ss, s, e, d) {
@@ -40,10 +50,54 @@ function readName (impt) {
   impt.n = readString(s, source.charCodeAt(s - 1));
 }
 
+// A dynamic import whose whole argument is a lone template literal globs its
+// static skeleton, collapsing each top-level ${...} to a "*" (import(`./p/${x}.js`)
+// -> "./p/*.js"). The parser records each substitution's end as it goes, reusing
+// the real tokenizer's regex/division disambiguation, so this only splices "*"
+// per span. Mirrors dropUncommittedGlob + decodeTemplate in src/lexer.c / .ts.
+function finalizeDynamicTemplate (impt) {
+  // Only a backtick-led argument can be a glob, so gate on it before the WeakMap
+  // lookup: import(x)/import(fn())/import(a + b) close here too and never recorded
+  // one. The glob is committed only when the specifier template's closing backtick
+  // was the last token of the argument (glob.close === lastTokenPos), so a
+  // concatenation (`a${x}` + b) or a trailing operator yields undefined. Anchoring
+  // on lastTokenPos, not impt.e, keeps trailing whitespace/comments from dropping
+  // the glob and matches the wasm/asm builds.
+  if (source.charCodeAt(impt.s) !== 96/*`*/)
+    return;
+  const glob = templateGlobs.get(impt);
+  if (glob === undefined || glob.close !== lastTokenPos)
+    return;
+  const spans = glob.ends;
+  const e = impt.e;
+  let out = '', chunkStart = impt.s + 1, index = impt.s + 1, spanIndex = 0, spanEnd = spans[0];
+  // `e` bounds the walk defensively; the parser guarantees an unescaped closing
+  // backtick within it for a committed glob.
+  while (index < e) {
+    const ch = source.charCodeAt(index);
+    if (ch === 96/*`*/)
+      break;
+    if (ch === 92/*\*/) {
+      index += 2;
+      continue;
+    }
+    if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
+      out += source.slice(chunkStart, index) + '*';
+      index = chunkStart = spanEnd;
+      spanEnd = ++spanIndex < spans.length ? spans[spanIndex] : -1;
+      continue;
+    }
+    index++;
+  }
+  impt.n = out + source.slice(chunkStart, index);
+}
+
 // Note: parsing is based on the _assumption_ that the source is already valid
 export function parse (_source, _name) {
   openTokenDepth = 0;
   curDynamicImport = null;
+  dynamicImportStack = [];
+  templateGlobs = new WeakMap();
   templateDepth = -1;
   lastTokenPos = -1;
   lastSlashWasDivision = false;
@@ -137,10 +191,12 @@ export function parse (_source, _name) {
           syntaxError();
         openTokenDepth--;
         if (curDynamicImport && curDynamicImport.d === openTokenPosStack[openTokenDepth]) {
-          if (curDynamicImport.e === 0)
+          if (curDynamicImport.e === 0) {
             curDynamicImport.e = pos;
+            finalizeDynamicTemplate(curDynamicImport);
+          }
           curDynamicImport.se = pos;
-          curDynamicImport = null;
+          curDynamicImport = dynamicImportStack.pop();
         }
         break;
       case 91/*[*/:
@@ -154,6 +210,7 @@ export function parse (_source, _name) {
       case 44/*,*/:
         if (curDynamicImport && curDynamicImport.e === 0 && curDynamicImport.d === openTokenPosStack[openTokenDepth - 1]) {
           curDynamicImport.e = lastTokenPos + 1;
+          finalizeDynamicTemplate(curDynamicImport);
           pos++;
           commentWhitespace(true);
           curDynamicImport.a = pos;
@@ -177,6 +234,15 @@ export function parse (_source, _name) {
           syntaxError();
         if (openTokenDepth-- === templateDepth) {
           templateDepth = templateStack[--templateStackDepth];
+          // A top-level ${...} of the recording import's specifier template just
+          // closed: note the position after "}" for a "*" splice. The backtick
+          // gate skips the WeakMap lookup unless the current import's argument
+          // starts with a backtick (the only shape that ever records a glob).
+          if (curDynamicImport && source.charCodeAt(curDynamicImport.s) === 96/*`*/) {
+            const glob = templateGlobs.get(curDynamicImport);
+            if (glob && openTokenDepth + 1 === glob.depth)
+              glob.ends.push(pos + 1);
+          }
           templateString();
         }
         else {
@@ -231,6 +297,11 @@ export function parse (_source, _name) {
         break;
       }
       case 96/*`*/:
+        // A backtick that is the first token of an open dynamic import's
+        // argument opens the specifier template: start recording its top-level
+        // ${...} spans so the glob can be built without re-tokenizing.
+        if (curDynamicImport && curDynamicImport.e === 0 && pos === curDynamicImport.s)
+          templateGlobs.set(curDynamicImport, { ends: [], close: -1, depth: openTokenDepth + 1 });
         templateString();
         break;
     }
@@ -263,6 +334,11 @@ function tryParseImportStatement () {
       // The specifier start is recorded after leading whitespace/comments so it
       // points at the literal, matching the C lexer (src/lexer.c).
       const impt = addImport(startPos, pos, 0, startPos);
+      // Stack the enclosing dynamic import so a nested import(...) inside an
+      // argument restores it on close; without this the outer import's end/se
+      // (and template-glob recording) are lost. Popped at both finalization
+      // sites: the constant path just below and the main-loop ")".
+      dynamicImportStack.push(curDynamicImport);
       curDynamicImport = impt;
       if (ch === 39/*'*/ || ch === 34/*"*/) {
         stringLiteral(ch);
@@ -292,6 +368,7 @@ function tryParseImportStatement () {
         impt.e = pos;
         impt.se = pos;
         readName(impt);
+        curDynamicImport = dynamicImportStack.pop();
       }
       else {
         pos--;
@@ -738,8 +815,20 @@ function templateString () {
       templateDepth = ++openTokenDepth;
       return;
     }
-    if (ch === 96/*`*/)
+    if (ch === 96/*`*/) {
+      // The specifier template just closed. Note its closing backtick and stop
+      // recording; finalizeDynamicTemplate keeps the spans only if this backtick
+      // is the last token of the argument. The backtick gate skips the WeakMap
+      // lookup for the common non-template dynamic-import argument.
+      if (curDynamicImport && source.charCodeAt(curDynamicImport.s) === 96/*`*/) {
+        const glob = templateGlobs.get(curDynamicImport);
+        if (glob && openTokenDepth + 1 === glob.depth) {
+          glob.close = pos;
+          glob.depth = 0;
+        }
+      }
       return;
+    }
     if (ch === 92/*\*/)
       pos++;
   }

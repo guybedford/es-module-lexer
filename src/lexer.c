@@ -70,6 +70,19 @@ static inline __attribute__((always_inline)) bool handleSlash () {
   return false;
 }
 
+// At dynamic-import finalization: keep the recorded ${...} spans only when the
+// specifier template's closing backtick was the last token of the argument, so
+// its non-empty list means "lone template glob". A concatenation (`a${x}` + b)
+// or a trailing operator recorded spans for its first template but does not end
+// on that backtick, so its list is dropped and the decoders report undefined.
+// No-op in the minimal build, which never records or reads a glob.
+static inline __attribute__((always_inline)) void dropUncommittedGlob (Import* import) {
+#ifndef LEXER_MIN
+  if (import->template_close != import->end - 1)
+    import->template_spans = NULL;
+#endif
+}
+
 // Consume one token at the current ch/pos, updating the global tokenizer state.
 // The single source of tokenization: the main loop and skipExpression both call
 // it, so the regex/keyword/import rules never diverge. Comments do not advance
@@ -108,6 +121,7 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
         if (cur_dynamic_import->end == 0) {
           cur_dynamic_import->end = lastTokenPos + 1;
+          dropUncommittedGlob(cur_dynamic_import);
           pos++;
           ch = commentWhitespace(true);
           cur_dynamic_import->attr_index = pos;
@@ -120,8 +134,10 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       openTokenDepth--;
       if (dynamicImportStackDepth > 0 && openTokenStack[openTokenDepth].token == ImportParen) {
         Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
-        if (cur_dynamic_import->end == 0)
+        if (cur_dynamic_import->end == 0) {
           cur_dynamic_import->end = lastTokenPos + 1;
+          dropUncommittedGlob(cur_dynamic_import);
+        }
         cur_dynamic_import->statement_end = pos + 1;
         dynamicImportStackDepth--;
       }
@@ -145,8 +161,29 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       break;
     case '}':
       if (openTokenDepth == 0) return syntaxError(), false;
-      if (openTokenStack[--openTokenDepth].token == TemplateBrace)
+      if (openTokenStack[--openTokenDepth].token == TemplateBrace) {
+#ifndef LEXER_MIN
+        // A top-level ${...} of an open dynamic import's specifier template just
+        // closed: record the position after "}" so the decoders splice a "*".
+        // The top import is the innermost, so a nested import's substitutions
+        // record against the nested entry, never this one.
+        if (dynamicImportStackDepth > 0) {
+          Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+          if (cur_dynamic_import->specifier_template_depth == openTokenDepth) {
+            TemplateSpan* span = (TemplateSpan*)(analysis_head);
+            analysis_head = analysis_head + sizeof(TemplateSpan);
+            span->end = pos + 1;
+            span->next = NULL;
+            if (cur_dynamic_import->template_span_tail == NULL)
+              cur_dynamic_import->template_spans = span;
+            else
+              cur_dynamic_import->template_span_tail->next = span;
+            cur_dynamic_import->template_span_tail = span;
+          }
+        }
+#endif
         templateString();
+      }
       break;
     case '\'':
     case '"':
@@ -156,6 +193,18 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       isComment = handleSlash();
       break;
     case '`':
+#ifndef LEXER_MIN
+      // A backtick that opens an active dynamic import's argument (its recorded
+      // specifier start, so leading whitespace/comments don't matter) opens the
+      // specifier template: mark this import so its top-level ${...} spans are
+      // recorded for globbing (see struct TemplateSpan). Per-import, so a nested
+      // import(`...`) in a substitution records against its own entry and never
+      // corrupts an enclosing import.
+      if (dynamicImportStackDepth > 0 &&
+          dynamicImportStack[dynamicImportStackDepth - 1]->end == 0 &&
+          dynamicImportStack[dynamicImportStackDepth - 1]->start == pos)
+        dynamicImportStack[dynamicImportStackDepth - 1]->specifier_template_depth = openTokenDepth + 1;
+#endif
       openTokenStack[openTokenDepth].pos = lastTokenPos;
       openTokenStack[openTokenDepth++].token = Template;
       templateString();
@@ -956,6 +1005,18 @@ void templateString () {
     if (ch == '`') {
       if (openTokenStack[--openTokenDepth].token != Template)
         syntaxError();
+#ifndef LEXER_MIN
+      // The specifier template just closed. Note its closing backtick and stop
+      // recording (depth back to 0); finalization keeps the spans only if this
+      // backtick is the last token of the argument.
+      if (dynamicImportStackDepth > 0) {
+        Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+        if (cur_dynamic_import->specifier_template_depth == openTokenDepth + 1) {
+          cur_dynamic_import->template_close = pos;
+          cur_dynamic_import->specifier_template_depth = 0;
+        }
+      }
+#endif
       return;
     }
     if (ch == '\\')

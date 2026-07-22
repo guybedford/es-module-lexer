@@ -416,12 +416,95 @@ suite('Lexer', () => {
 
   test(`Dynamic import no-substitution template specifier`, () => {
     // A no-substitution template literal is a constant string, so n is set the
-    // same as for the quoted forms; an interpolated template has no constant
-    // value, so n stays undefined.
+    // same as for the quoted forms.
     assert.strictEqual(parse('import("./x.js")')[0][0].n, './x.js');
     assert.strictEqual(parse("import('./x.js')")[0][0].n, './x.js');
     assert.strictEqual(parse('import(`./x.js`)')[0][0].n, './x.js');
-    assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, undefined);
+  });
+
+  test(`Dynamic import interpolated template specifier glob`, () => {
+    // Glob n is a full-build-only feature; the minimal build reports undefined.
+    if (min) {
+      assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, undefined);
+      return;
+    }
+    // An interpolated template literal has no constant value, but its static
+    // skeleton is a useful glob: each ${...} collapses to a single "*".
+    assert.strictEqual(parse('import(`./a${x}.js`)')[0][0].n, './a*.js');
+    assert.strictEqual(parse('import(`./p/${x}/${y}.js`)')[0][0].n, './p/*/*.js');
+    assert.strictEqual(parse('import(`${x}`)')[0][0].n, '*');
+    assert.strictEqual(parse('import(`${x}/tail`)')[0][0].n, '*/tail');
+    // The substitution body may itself contain braces, strings, templates and
+    // comments without closing the glob early.
+    assert.strictEqual(parse('import(`a${ {y:1} }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ `n${z}` }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse("import(`a${ obj['}'] }b`)")[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ x /* } */ }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ x // }\n }b`)')[0][0].n, 'a*b');
+    // A "/" inside the substitution is disambiguated by the parser's own
+    // tokenizer, so a regex literal carrying a "}" no longer closes the
+    // substitution early: the whole ${...} still collapses to a single "*".
+    assert.strictEqual(parse('import(`a${ /x}y/g }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ /x/g }b`)')[0][0].n, 'a*b');
+    assert.strictEqual(parse('import(`a${ b/c }d`)')[0][0].n, 'a*d');
+    assert.strictEqual(parse('import(`a${ `n${ /x}/g }` }b`)')[0][0].n, 'a*b');
+    // A "/" inside a string or comment is an ordinary character and keeps the
+    // glob.
+    assert.strictEqual(parse("import(`a${ x['/}'] }b`)")[0][0].n, 'a*b');
+    // A glob is still reported when an import-attributes argument follows.
+    assert.strictEqual(parse('import(`./p/${x}.js`, { with: { type: "json" } })')[0][0].n, './p/*.js');
+    // Only a lone template literal globs; a concatenation has no static
+    // skeleton, so n stays undefined.
+    assert.strictEqual(parse('import(`a` + b)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(`a${x}` + `b${y}`)')[0][0].n, undefined);
+    assert.strictEqual(parse('import("a" + x)')[0][0].n, undefined);
+    assert.strictEqual(parse('import(x)')[0][0].n, undefined);
+  });
+
+  test(`Dynamic import interpolated template glob edge cases`, () => {
+    // The glob is a full-build-only feature; the minimal build never reports it.
+    if (min) {
+      assert.strictEqual(parse('import(`./a/${x}.js`)')[0][0].n, undefined);
+      return;
+    }
+    // A substitution is never evaluated: expressions with side effects collapse
+    // to "*" like any other, so parse() cannot execute source (a regression for
+    // the Wasm build cooking its skeleton with eval).
+    globalThis.__templateGlobEvalRan = false;
+    assert.strictEqual(parse('import( `${(globalThis.__templateGlobEvalRan = true, "x")}.js`)')[0][0].n, '*.js');
+    assert.strictEqual(globalThis.__templateGlobEvalRan, false);
+    delete globalThis.__templateGlobEvalRan;
+    // Whitespace around the argument does not change the glob, and matches the
+    // no-whitespace form (a cross-build divergence regression).
+    assert.strictEqual(parse('import(`./a/${x}.js` )')[0][0].n, './a/*.js');
+    assert.strictEqual(parse('import( `./a/${x}.js`)')[0][0].n, './a/*.js');
+    assert.strictEqual(parse('import(\t`./a/${x}.js`\n)')[0][0].n, './a/*.js');
+    // Static parts are raw source: CR/CRLF is not normalized and a literal "*"
+    // is emitted verbatim next to substitution wildcards.
+    assert.strictEqual(parse('import(`a\r\nb${x}`)')[0][0].n, 'a\r\nb*');
+    assert.strictEqual(parse('import(`a\\*${x}.js`)')[0][0].n, 'a\\**.js');
+    // More top-level ${...} than the parser could ever record must not loop or
+    // reuse a stale span (a regression for the rt() reload / decoder hang).
+    assert.strictEqual(parse('import(`${a}${b}${c}${d}` + x)')[0][0].n, undefined);
+    // A nested dynamic import inside a substitution keeps the outer glob and is
+    // itself detected, whether the inner import closes through the constant fast
+    // path (a quoted/no-substitution specifier) or the main loop's ")".
+    assert.strictEqual(parse('import(`a${ import("b.js") }c`)')[0][0].n, 'a*c');
+    assert.strictEqual(parse('import(`a${x}${ import(`y`) }${w}`)')[0][0].n, 'a***');
+    // A nested import that closes through the main loop must restore the outer
+    // import so its end/glob survive (a regression for the pure-JS-port losing
+    // e/se/n on any non-constant nested import).
+    const [[outerId, innerId]] = parse('import(`a${ import(x) }c`)');
+    assert.strictEqual(outerId.n, 'a*c');
+    assert.notStrictEqual(outerId.e, 0);
+    assert.notStrictEqual(outerId.se, 0);
+    assert.strictEqual(innerId.n, undefined);
+    // The same holds when the inner import's own specifier is an interpolated
+    // template: all three builds report the outer glob and the inner glob.
+    const [[outerTmpl, innerTmpl]] = parse('import(`a${ import(`b${y}`) }c`)');
+    assert.strictEqual(innerTmpl.n, 'b*');
+    assert.strictEqual(outerTmpl.n, 'a*c');
+    assert.notStrictEqual(outerTmpl.e, 0);
   });
 
   test(`Dynamic import template specifier with escapes and attributes`, () => {
