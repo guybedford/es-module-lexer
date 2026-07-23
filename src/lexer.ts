@@ -1,8 +1,10 @@
 // Build-time variant flag. The minimal build (dist/lexer.minimal.js) rewrites
 // this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
-// ms/attributes), matching the stripped LEXER_MIN wasm exports. `as boolean`
-// keeps both branches type-checked rather than narrowed to the false literal.
+// ms/attributes/export analysis), matching the stripped LEXER_MIN wasm
+// exports. `as boolean` keeps both branches type-checked rather than narrowed
+// to the false literal.
 const MINIMAL = false as boolean;
+const EXPORT_CAPTURE_THRESHOLD = 4096;
 
 export enum ImportType {
   /**
@@ -39,6 +41,10 @@ export enum ImportType {
    *   import.defer('module')
    */
   DynamicDeferPhase = 7,
+  /**
+   * The module specifier of an `export * from 'module'` statement.
+   */
+  StaticReexportStar = 8,
 }
 
 export interface ImportSpecifier {
@@ -129,7 +135,13 @@ export interface ImportSpecifier {
   readonly at: ReadonlyArray<readonly [string, string]> | null;
 }
 
-export interface ExportSpecifier {
+export enum ExportType {
+  Direct = 1,
+  Reexport = 2,
+  ReexportAll = 3,
+}
+
+interface ExportBase {
   /**
    * Exported name
    *
@@ -146,24 +158,6 @@ export interface ExportSpecifier {
    * // Returns "asdf"
    */
   readonly n: string;
-
-  /**
-   * Local name, or undefined.
-   *
-   * @example
-   * const source = `export default []`;
-   * const [imports, exports] = parse(source);
-   * exports[0].ln;
-   * // Returns undefined
-   *
-   * @example
-   * const asdf = 42;
-   * const source = `export { asdf as a }`;
-   * const [imports, exports] = parse(source);
-   * exports[0].ln;
-   * // Returns "asdf"
-   */
-  readonly ln: string | undefined;
 
   /**
    * Start of exported name
@@ -187,22 +181,6 @@ export interface ExportSpecifier {
   readonly e: number;
 
   /**
-   * Start of local name, or -1.
-   *
-   * @example
-   * const asdf = 42;
-   * const source = `export { asdf as a }`;
-   * const [imports, exports] = parse(source);
-   * source.substring(exports[0].ls, exports[0].le);
-   * // Returns "asdf"
-   */
-  readonly ls: number;
-  /**
-   * End of local name, or -1.
-   */
-  readonly le: number;
-
-  /**
    * Start of the export statement.
    *
    * Only the statement start is provided; the statement end is not tracked
@@ -218,6 +196,73 @@ export interface ExportSpecifier {
    */
   readonly ss: number;
 }
+
+export interface DirectExport extends ExportBase {
+  readonly t: ExportType.Direct;
+  /**
+   * Local name, or undefined for anonymous default exports.
+   */
+  readonly ln: string | undefined;
+  /**
+   * Start of local name, or -1.
+   */
+  readonly ls: number;
+  /**
+   * End of local name, or -1.
+   */
+  readonly le: number;
+}
+
+export interface Reexport extends ExportBase {
+  readonly t: ExportType.Reexport;
+  /**
+   * Imported name, or null for namespace and source phase imports.
+   */
+  readonly im: string | null;
+  /**
+   * Start of imported name, or -1 when `im` is null or `"default"` from a
+   * default import.
+   */
+  readonly ims: number;
+  /**
+   * End of imported name, or -1 when `ims` is -1.
+   */
+  readonly ime: number;
+  /**
+   * Module specifier.
+   */
+  readonly f: string;
+  /**
+   * Index of the originating import in the imports array.
+   */
+  readonly fi: number;
+}
+
+export interface ReexportAll {
+  readonly t: ExportType.ReexportAll;
+  /**
+   * Module specifier.
+   */
+  readonly f: string;
+  /**
+   * Index of the originating import in the imports array.
+   */
+  readonly fi: number;
+  /**
+   * Start of the `*`.
+   */
+  readonly s: number;
+  /**
+   * End of the `*`.
+   */
+  readonly e: number;
+  /**
+   * Start of the export statement.
+   */
+  readonly ss: number;
+}
+
+export type ExportSpecifier = DirectExport | Reexport | ReexportAll;
 
 export interface ParseError extends Error {
   idx: number
@@ -252,6 +297,8 @@ export function parse (source: string, name = '@'): readonly [
     wasm.memory.grow(Math.ceil(extraMem / 65536));
 
   const addr = wasm.sa(len - 1);
+  if (!MINIMAL)
+    wasm.eac(mayHaveExportClause(source));
   // Node's Buffer blits UTF-16 straight into Wasm memory ~10x faster than the
   // charCodeAt fallback, in explicit LE matching Wasm regardless of host.
   if (typeof Buffer !== 'undefined')
@@ -282,14 +329,57 @@ export function parse (source: string, name = '@'): readonly [
     }
     imports.push({ n, t, s, e, ss, se, d, a, at });
   }
-  while (wasm.re()) {
-    const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
-    const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
-    const n = decodeIfQuoted(source.slice(s, e));
-    if (MINIMAL)
+  let exportPtr = wasm.re();
+  const memoryView = MINIMAL || exportPtr === 0 ? undefined : new DataView(wasm.memory.buffer);
+  while (exportPtr !== 0) {
+    if (MINIMAL) {
+      const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
+      const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
+      const n = decodeIfQuoted(source.slice(s, e));
       exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
-    else
-      exports.push({ s, e, ls, le, ss: wasm.ess(), n, ln });
+      exportPtr = wasm.re();
+      continue;
+    }
+
+    // Full-build Export ABI: six 32-bit fields followed by two byte tags.
+    const s = (memoryView!.getUint32(exportPtr, true) - addr) >>> 1;
+    const e = (memoryView!.getUint32(exportPtr + 4, true) - addr) >>> 1;
+    const localStart = memoryView!.getUint32(exportPtr + 8, true);
+    const ls = localStart === 0 ? -1 : (localStart - addr) >>> 1;
+    const localEnd = memoryView!.getUint32(exportPtr + 12, true);
+    const le = localEnd === 0 ? -1 : (localEnd - addr) >>> 1;
+    const ss = (memoryView!.getUint32(exportPtr + 16, true) - addr) >>> 1;
+    const fi = memoryView!.getUint32(exportPtr + 20, true);
+    const t = memoryView!.getUint8(exportPtr + 24) as ExportType;
+    if (t === ExportType.ReexportAll) {
+      exports.push({ t, f: imports[fi].n as string, fi, s, e, ss });
+    }
+    else {
+      const n = decodeIfQuoted(source.slice(s, e));
+      if (t === ExportType.Direct) {
+        const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
+        exports.push({ t, n, ln, s, e, ls, le, ss });
+      }
+      else {
+        const importNameType = memoryView!.getUint8(exportPtr + 25);
+        const im = importNameType === 0
+          ? decodeIfQuoted(source.slice(ls, le))
+          : importNameType === 1 ? 'default' : null;
+        exports.push({
+          t,
+          n,
+          im,
+          ims: importNameType === 0 ? ls : -1,
+          ime: importNameType === 0 ? le : -1,
+          f: imports[fi].n as string,
+          fi,
+          s,
+          e,
+          ss
+        });
+      }
+    }
+    exportPtr = wasm.re();
   }
 
   function decode (str: string) {
@@ -326,6 +416,15 @@ function copyLE (src: string, outBuf16: Uint16Array) {
     outBuf16[i] = src.charCodeAt(i++);
 }
 
+/**
+ * @param source Module source
+ * @returns Whether the source may contain a detached export clause
+ */
+function mayHaveExportClause (source: string): boolean {
+  return source.length >= EXPORT_CAPTURE_THRESHOLD &&
+    (source.indexOf('export {') !== -1 || source.indexOf('export{') !== -1);
+}
+
 let wasm: {
   __heap_base: {value: number} | number & {value: undefined};
   memory: WebAssembly.Memory;
@@ -336,8 +435,14 @@ let wasm: {
   ai(): number;
   /** getErr */
   e(): number;
+  /** enable import binding collection */
+  eac(enabled: boolean): void;
   /** getExportEnd */
   ee(): number;
+  /** getExportImportIndex */
+  eii(): number;
+  /** getExportImportNameType */
+  eit(): number;
   /** getExportLocalEnd */
   ele(): number;
   /** getExportLocalStart */
@@ -346,6 +451,8 @@ let wasm: {
   es(): number;
   /** getExportStatementStart */
   ess(): number;
+  /** getExportType */
+  et(): number;
   /** facade */
   f(): boolean;
   /** hasModuleSyntax */
@@ -359,7 +466,7 @@ let wasm: {
   /** getImportStart */
   is(): number;
   /** readExport */
-  re(): boolean;
+  re(): number;
   /** readImport */
   ri(): boolean;
   /** allocateSource */

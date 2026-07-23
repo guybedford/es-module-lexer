@@ -1,8 +1,9 @@
 // LEXER_MIN (defined via -DLEXER_MIN): stripped build for es-module-shims, which
 // only consumes imports (n,s,e,ss,se,d,t,a) and exports (n,s,e,ls,le,ln). Drops
-// the fields/getters/paths it never reads: the parsed attribute list (Attribute
-// + ra/aks/ake/avs/ave), export statement_start/ess(), the facade f()/
-// hasModuleSyntax ms() flags, and the module-only facade fast path.
+// the fields/getters/paths it never reads: export classification and origin
+// analysis, the parsed attribute list (Attribute + ra/aks/ake/avs/ave), export
+// statement_start/ess(), the facade f()/hasModuleSyntax ms() flags, and the
+// module-only facade fast path.
 #include "lexer.h"
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,75 @@ static const char16_t SYNC[] = {'s', 'y', 'n', 'c'};
 static const char16_t UNCTION[] = {'u', 'n', 'c', 't', 'i', 'o', 'n'};
 static const char16_t OURCE[] = {'o', 'u', 'r', 'c', 'e'};
 static const char16_t EFER[] = {'e', 'f', 'e', 'r'};
+
+#ifdef LEXER_MIN
+#define charsEqual(a, b, length) (memcmp(a, b, (length) * 2) == 0)
+#else
+static inline __attribute__((always_inline)) bool charsEqual (
+  const char16_t* a,
+  const char16_t* b,
+  size_t length
+) {
+  for (size_t i = 0; i < length; i++) {
+    if (a[i] != b[i])
+      return false;
+  }
+  return true;
+}
+#endif
+
+#ifndef LEXER_MIN
+#define SMALL_EXPORT_BUCKET_COUNT 512
+#define MEDIUM_EXPORT_BUCKET_COUNT 4096
+#define MAX_EXPORT_BUCKET_COUNT 32768
+
+static Export** export_buckets;
+static uint32_t export_bucket_count;
+static uint32_t export_bucket_limit;
+static uint32_t export_bucket_mask;
+
+static inline __attribute__((always_inline)) bool isIdentifierCodeUnit (char16_t ch) {
+  return ch >= '0' && ch <= '9' ||
+         ch >= 'A' && ch <= 'Z' ||
+         ch >= 'a' && ch <= 'z' ||
+         ch == '_' || ch == '$' || ch == '\\' || ch >= 128;
+}
+
+static char16_t readImportName (char16_t ch) {
+  while (isIdentifierCodeUnit(ch)) {
+    if (ch == '\\' && pos + 2 <= end && *(pos + 1) == 'u' && *(pos + 2) == '{') {
+      pos += 3;
+      while (pos <= end && *pos != '}')
+        pos++;
+      if (pos > end)
+        return '\0';
+    }
+    ch = *(++pos);
+  }
+  return ch;
+}
+
+static inline __attribute__((always_inline)) char16_t importWhitespace () {
+  char16_t ch = *pos;
+  if (ch == ' ') {
+    do
+      ch = *(++pos);
+    while (ch == ' ');
+    return ch;
+  }
+  return commentWhitespace(true);
+}
+
+static char16_t readImportBindingName (
+  const char16_t** binding_start,
+  const char16_t** binding_end,
+  uint32_t* binding_hash,
+  char16_t ch
+);
+static char16_t readImportName (char16_t ch);
+static char16_t collectNamedImportBindings (uint32_t import_index);
+static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_t import_index);
+#endif
 
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
 // resolves '/' with the exact main-loop logic. Returns true for a comment
@@ -80,15 +150,15 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   bool isComment = false;
   switch (ch) {
     case 'e':
-      if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0)
+      if (openTokenDepth == 0 && keywordStart(pos) && charsEqual(pos + 1, &XPORT[0], 5))
         tryParseExportStatement();
       break;
     case 'i':
-      if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
+      if (*(pos + 1) == 'm' && keywordStart(pos) && charsEqual(pos + 2, &PORT[0], 4))
         tryParseImportStatement();
       break;
     case 'c':
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, &LASS[1], 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
+      if (*(pos + 1) == 'l' && keywordStart(pos) && charsEqual(pos + 2, &LASS[1], 3) && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       break;
     case '(':
@@ -138,6 +208,9 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
           import_write_head->next = NULL;
         else
           first_import = NULL;
+#ifndef LEXER_MIN
+        import_count--;
+#endif
       }
       openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
       openTokenStack[openTokenDepth++].pos = lastTokenPos;
@@ -152,6 +225,21 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
     case '"':
       stringLiteral(ch);
       break;
+#ifndef LEXER_MIN
+    case '\\': {
+      char16_t* escapePos = pos;
+      if (pos + 2 <= end && *(pos + 1) == 'u' && *(pos + 2) == '{') {
+        pos += 3;
+        while (pos <= end && *pos != '}')
+          pos++;
+        if (pos > end)
+          return syntaxError(), false;
+        lastTokenPos = escapePos;
+        return true;
+      }
+      break;
+    }
+#endif
     case '/':
       isComment = handleSlash();
       break;
@@ -202,7 +290,7 @@ bool parse () {
 
     switch (ch) {
       case 'e':
-        if (openTokenDepth == 0 && keywordStart(pos) && memcmp(pos + 1, &XPORT[0], 5 * 2) == 0) {
+        if (openTokenDepth == 0 && keywordStart(pos) && charsEqual(pos + 1, &XPORT[0], 5)) {
           tryParseExportStatement();
           // export might have been a non-pure declaration
           if (!facade) {
@@ -212,7 +300,7 @@ bool parse () {
         }
         break;
       case 'i':
-        if (*(pos + 1) == 'm' && keywordStart(pos) && memcmp(pos + 2, &PORT[0], 4 * 2) == 0)
+        if (*(pos + 1) == 'm' && keywordStart(pos) && charsEqual(pos + 2, &PORT[0], 4))
           tryParseImportStatement();
         break;
       case ';':
@@ -243,6 +331,8 @@ bool parse () {
   if (has_error)
     return false;
 
+  finalizeExports();
+
   // the minimal build has no facade fast-path; everything goes through mainparse
   mainparse:
 #endif
@@ -258,6 +348,10 @@ bool parse () {
 
   if (openTokenDepth || has_error || dynamicImportStackDepth)
     return false;
+
+#ifndef LEXER_MIN
+  finalizeExports();
+#endif
 
   // succeess
   return true;
@@ -279,16 +373,16 @@ void tryParseImportStatement () {
     pos++;
     ch = commentWhitespace(true);
     // import.meta indicated by d == -2
-    if (ch == 'm' && memcmp(pos + 1, &ETA[0], 3 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    if (ch == 'm' && charsEqual(pos + 1, &ETA[0], 3) && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       addImport(startPos, startPos, pos + 4, IMPORT_META);
       return;
     }
-    else if (ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    else if (ch == 's' && charsEqual(pos + 1, &OURCE[0], 5) && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       phase_keyword = 1;
       pos += 6;
       ch = commentWhitespace(true);
     }
-    else if (ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
+    else if (ch == 'd' && charsEqual(pos + 1, &EFER[0], 4) && (isSpread(lastTokenPos) || *lastTokenPos != '.')) {
       phase_keyword = 2;
       pos += 5;
       ch = commentWhitespace(true);
@@ -297,23 +391,29 @@ void tryParseImportStatement () {
       return;
     }
   }
-  else if (pos > startPos + 6 && ch == 's' && memcmp(pos + 1, &OURCE[0], 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
+  else if (pos > startPos + 6 && ch == 's' && charsEqual(pos + 1, &OURCE[0], 5) && isBrOrWs(*(pos + 6))) {
     phase_keyword = 1;
     pos += 6;
     ch = commentWhitespace(true);
     // need a space after the source keyword, and must not be followed by from keyword
-    if (pos == maybePhasePos + 6 || ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 4))) {
+    if (
+      pos == maybePhasePos + 6 ||
+      ch == ',' ||
+      ch == 'f' && charsEqual(pos + 1, &ROM[0], 3) && isBrOrWsOrPunctuatorNotDot(*(pos + 4))
+    ) {
       pos = maybePhasePos;
+      ch = *pos;
       phase_keyword = 0;
     }
   }
-  else if (pos > startPos + 5 && ch == 'd' && memcmp(pos + 1, &EFER[0], 4 * 2) == 0 && isBrOrWs(*(pos + 5))) {
+  else if (pos > startPos + 5 && ch == 'd' && charsEqual(pos + 1, &EFER[0], 4) && isBrOrWs(*(pos + 5))) {
     phase_keyword = 2;
     pos += 5;
     ch = commentWhitespace(true);
     // need a * after the defer keyword
     if (ch != '*') {
       pos = maybePhasePos;
+      ch = *pos;
       phase_keyword = 0;
     }
   }
@@ -380,19 +480,40 @@ void tryParseImportStatement () {
       return;
     }
 
-    while (pos < end) {
-      ch = commentWhitespace(true);
-      if (isQuote(ch)) {
-        stringLiteral(ch);
-      } else if (ch == '}') {
-        pos++;
-        break;
-      }
+#ifndef LEXER_MIN
+    if (collect_import_bindings) {
+      ch = collectNamedImportBindings(import_count);
+      if (ch != '}')
+        return syntaxError();
       pos++;
+    }
+    else
+#endif
+    {
+      while (pos < end) {
+        ch = commentWhitespace(true);
+        if (isQuote(ch)) {
+          stringLiteral(ch);
+        }
+#ifndef LEXER_MIN
+        else if (ch == '\\' && pos + 2 <= end && *(pos + 1) == 'u' && *(pos + 2) == '{') {
+          pos += 3;
+          while (pos <= end && *pos != '}')
+            pos++;
+          if (pos > end)
+            return syntaxError();
+        }
+#endif
+        else if (ch == '}') {
+          pos++;
+          break;
+        }
+        pos++;
+      }
     }
 
     ch = commentWhitespace(true);
-    if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) != 0) {
+    if (ch == 'f' && !charsEqual(pos + 1, &ROM[0], 3)) {
       syntaxError();
       return;
     }
@@ -420,6 +541,10 @@ void tryParseImportStatement () {
       pos--;
       return;
     }
+#ifndef LEXER_MIN
+    if (collect_import_bindings && !isQuote(ch))
+      collectStaticImportBindings(ch, phase_keyword, import_count);
+#endif
     while (pos < end) {
       ch = *pos;
       if (isQuote(ch)) {
@@ -572,6 +697,8 @@ void readBindingPattern () {
 void tryParseExportStatement () {
   char16_t* sStartPos = pos;
   Export* prev_export_write_head = export_write_head;
+  bool export_clause = false;
+  bool export_all = false;
 
   pos += 6;
 
@@ -590,13 +717,24 @@ void tryParseExportStatement () {
 #endif
 
   if (ch == '{') {
+    export_clause = true;
     pos++;
     ch = commentWhitespace(true);
     while (true) {
       char16_t* startPos = pos;
+#ifndef LEXER_MIN
+      Export* previous_export = export_write_head;
+      uint32_t binding_hash = 0;
+#endif
 
       if (!isQuote(ch)) {
+#ifndef LEXER_MIN
+        const char16_t* binding_start;
+        const char16_t* binding_end;
+        ch = readImportBindingName(&binding_start, &binding_end, &binding_hash, ch);
+#else
         ch = readToWsOrPunctuator(ch);
+#endif
       }
       // export { "identifer" as } from
       // export { "@notid" as } from
@@ -615,6 +753,10 @@ void tryParseExportStatement () {
       char16_t* endPos = pos;
       commentWhitespace(true);
       ch = readExportAs(startPos, endPos);
+#ifndef LEXER_MIN
+      if (export_write_head != previous_export)
+        export_write_head->import_index = binding_hash;
+#endif
       // ,
       if (ch == ',') {
         pos++;
@@ -636,10 +778,18 @@ void tryParseExportStatement () {
   // export *
   // export * as X
   else if (ch == '*') {
+    char16_t* starPos = pos;
     pos++;
     commentWhitespace(true);
     ch = readExportAs(pos, pos);
     ch = commentWhitespace(true);
+    export_all = export_write_head == prev_export_write_head;
+#ifndef LEXER_MIN
+    if (export_all) {
+      addExport(starPos, starPos + 1, NULL, NULL);
+      export_write_head->export_ty = ReexportAll;
+    }
+#endif
   }
   else {
     facade = false;
@@ -653,7 +803,7 @@ void tryParseExportStatement () {
         switch (ch) {
           // export default async? function*? name? (){}
           case 'a':
-            if (memcmp(pos + 1, &SYNC[0], 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
+            if (charsEqual(pos + 1, &SYNC[0], 4) && isWsNotBr(*(pos + 5))) {
               pos += 5;
               ch = commentWhitespace(false);
             }
@@ -662,7 +812,7 @@ void tryParseExportStatement () {
             }
           // fallthrough
           case 'f':
-            if (memcmp(pos + 1, &UNCTION[0], 7 * 2) == 0 && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
+            if (charsEqual(pos + 1, &UNCTION[0], 7) && (isBrOrWs(*(pos + 8)) || *(pos + 8) == '*' || *(pos + 8) == '(')) {
               pos += 8;
               ch = commentWhitespace(true);
               if (ch == '*') {
@@ -677,7 +827,7 @@ void tryParseExportStatement () {
             break;
           case 'c':
             // export default class name? {}
-            if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
+            if (charsEqual(pos + 1, &LASS[0], 4) && (isBrOrWs(*(pos + 5)) || *(pos + 5) == '{')) {
               pos += 5;
               ch = commentWhitespace(true);
               if (ch == '{') {
@@ -720,7 +870,7 @@ void tryParseExportStatement () {
 
       // export class name ...
       case 'c':
-        if (memcmp(pos + 1, &LASS[0], 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
+        if (charsEqual(pos + 1, &LASS[0], 4) && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
           pos += 5;
           ch = commentWhitespace(true);
           const char16_t* startPos = pos;
@@ -765,19 +915,472 @@ void tryParseExportStatement () {
   }
 
   // from ...
-  if (ch == 'f' && memcmp(pos + 1, &ROM[0], 3 * 2) == 0) {
+  if (ch == 'f' && charsEqual(pos + 1, &ROM[0], 3)) {
     pos += 4;
     readImportString(sStartPos, commentWhitespace(true), false);
+    if (export_all)
+      import_write_head->import_ty = StaticReexportStar;
 
+#ifndef LEXER_MIN
+    uint32_t import_index = import_count - 1;
+#endif
     // There were no local names.
     for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
+#ifndef LEXER_MIN
+      exprt->import_index = import_index;
+      if (exprt->export_ty != ReexportAll) {
+        exprt->export_ty = Reexport;
+        exprt->import_name_ty = exprt->local_start == NULL ? NamespaceImport : NamedImport;
+      }
+#else
       exprt->local_start = exprt->local_end = NULL;
+#endif
     }
   }
   else {
+#ifndef LEXER_MIN
+    if (export_clause) {
+      for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next)
+        exprt->export_ty = Pending;
+    }
+#endif
     pos--;
   }
 }
+
+#ifndef LEXER_MIN
+static uint32_t hexValue (char16_t ch) {
+  if (ch >= '0' && ch <= '9')
+    return ch - '0';
+  if (ch >= 'a' && ch <= 'f')
+    return ch - 'a' + 10;
+  return ch - 'A' + 10;
+}
+
+static inline __attribute__((always_inline)) uint32_t readIdentifierCodePoint (
+  const char16_t** cursor,
+  const char16_t* identifier_end
+) {
+  const char16_t* cur = *cursor;
+  uint32_t code_point = *cur++;
+
+  if (code_point == '\\') {
+    const char16_t* escaped_start = cur;
+    if (cur >= identifier_end || *cur++ != 'u') {
+      *cursor = escaped_start;
+      return code_point;
+    }
+
+    if (cur < identifier_end && *cur == '{') {
+      code_point = 0;
+      cur++;
+      while (cur < identifier_end && *cur != '}')
+        code_point = code_point * 16 + hexValue(*cur++);
+      if (cur == identifier_end) {
+        *cursor = escaped_start;
+        return '\\';
+      }
+      cur++;
+    }
+    else {
+      if (identifier_end - cur < 4) {
+        *cursor = escaped_start;
+        return '\\';
+      }
+      code_point = hexValue(*cur++);
+      for (uint32_t i = 1; i < 4; i++)
+        code_point = code_point * 16 + hexValue(*cur++);
+      if (
+        code_point >= 0xD800 && code_point <= 0xDBFF &&
+        cur + 6 <= identifier_end &&
+        cur[0] == '\\' && cur[1] == 'u' && cur[2] != '{'
+      ) {
+        uint32_t low = hexValue(cur[2]);
+        for (uint32_t i = 3; i < 6; i++)
+          low = low * 16 + hexValue(cur[i]);
+        if (low >= 0xDC00 && low <= 0xDFFF) {
+          code_point = 0x10000 + ((code_point - 0xD800) << 10) + low - 0xDC00;
+          cur += 6;
+        }
+      }
+    }
+  }
+  else if (code_point >= 0xD800 && code_point <= 0xDBFF && cur < identifier_end) {
+    uint32_t low = *cur;
+    if (low >= 0xDC00 && low <= 0xDFFF) {
+      code_point = 0x10000 + ((code_point - 0xD800) << 10) + low - 0xDC00;
+      cur++;
+    }
+  }
+
+  *cursor = cur;
+  return code_point;
+}
+
+bool identifierNameEqual (
+  const char16_t* a_start,
+  const char16_t* a_end,
+  const char16_t* b_start,
+  const char16_t* b_end
+) {
+  if (a_end - a_start == b_end - b_start && memcmp(a_start, b_start, (a_end - a_start) * 2) == 0)
+    return true;
+
+  while (a_start < a_end && b_start < b_end) {
+    if (readIdentifierCodePoint(&a_start, a_end) != readIdentifierCodePoint(&b_start, b_end))
+      return false;
+  }
+  return a_start == a_end && b_start == b_end;
+}
+
+static inline __attribute__((always_inline)) uint32_t updateIdentifierHash (uint32_t hash, uint32_t code_point) {
+  hash += code_point;
+  hash += hash << 10;
+  return hash ^ hash >> 6;
+}
+
+static inline __attribute__((always_inline)) uint32_t finalizeIdentifierHash (uint32_t hash) {
+  hash += hash << 3;
+  hash ^= hash >> 11;
+  return hash + (hash << 15);
+}
+
+static uint32_t identifierNameHash (const char16_t* start, const char16_t* identifier_end) {
+  uint32_t hash = 0;
+  while (start < identifier_end)
+    hash = updateIdentifierHash(hash, readIdentifierCodePoint(&start, identifier_end));
+  return finalizeIdentifierHash(hash);
+}
+
+static void resolveExport (
+  Export* exprt,
+  const char16_t* import_start,
+  const char16_t* import_end,
+  enum ExportImportNameType import_name_ty,
+  uint32_t import_index
+) {
+  exprt->local_start = import_start;
+  exprt->local_end = import_end;
+  exprt->import_index = import_index;
+  exprt->import_name_ty = import_name_ty;
+  exprt->export_ty = Reexport;
+}
+
+void resolveImportBinding (
+  const char16_t* local_start,
+  const char16_t* local_end,
+  const char16_t* import_start,
+  const char16_t* import_end,
+  enum ExportImportNameType import_name_ty,
+  uint32_t import_index,
+  uint32_t binding_hash
+) {
+  if (export_bucket_count == 0) {
+    for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
+      if (
+        exprt->export_ty == PendingChunk &&
+        exprt->import_index == binding_hash &&
+        identifierNameEqual(exprt->local_start, exprt->local_end, local_start, local_end)
+      )
+        resolveExport(exprt, import_start, import_end, import_name_ty, import_index);
+    }
+    return;
+  }
+
+  uint32_t bucket_index = binding_hash & export_bucket_mask;
+  Export* exprt;
+  while ((exprt = export_buckets[bucket_index]) != NULL) {
+    if (
+      exprt->export_ty == PendingChunk &&
+      exprt->import_index == binding_hash &&
+      identifierNameEqual(exprt->local_start, exprt->local_end, local_start, local_end)
+    )
+      resolveExport(exprt, import_start, import_end, import_name_ty, import_index);
+    bucket_index = (bucket_index + 1) & export_bucket_mask;
+  }
+}
+
+static char16_t readImportBindingName (
+  const char16_t** binding_start,
+  const char16_t** binding_end,
+  uint32_t* binding_hash,
+  char16_t ch
+) {
+  *binding_start = pos;
+  uint32_t hash = 0;
+  bool escaped = false;
+  while (isIdentifierCodeUnit(ch)) {
+    if (ch == '\\') {
+      escaped = true;
+      if (pos + 2 <= end && *(pos + 1) == 'u' && *(pos + 2) == '{') {
+        pos += 3;
+        while (pos <= end && *pos != '}')
+          pos++;
+        if (pos > end) {
+          ch = '\0';
+          break;
+        }
+      }
+    }
+    else if (ch >= 0xD800 && ch <= 0xDBFF) {
+      escaped = true;
+    }
+    else if (!escaped) {
+      hash = updateIdentifierHash(hash, ch);
+    }
+    ch = *(++pos);
+  }
+  *binding_end = pos;
+  *binding_hash = escaped
+    ? identifierNameHash(*binding_start, *binding_end)
+    : finalizeIdentifierHash(hash);
+  return ch;
+}
+
+static void addTrackedImportBinding (
+  const char16_t* local_start,
+  const char16_t* local_end,
+  const char16_t* import_start,
+  const char16_t* import_end,
+  enum ExportImportNameType import_name_ty,
+  uint32_t import_index,
+  uint32_t binding_hash
+) {
+#ifdef __wasm__
+  ensureAnalysisCapacity(sizeof(ImportBinding));
+#endif
+  ImportBinding* binding = (ImportBinding*)analysis_head;
+  analysis_head += sizeof(ImportBinding);
+  if (import_binding_write_head == NULL)
+    first_import_binding = binding;
+  else
+    import_binding_write_head->next = binding;
+  import_binding_write_head = binding;
+  binding->local_start = local_start;
+  binding->local_end = local_end;
+  binding->import_start = import_start;
+  binding->import_end = import_end;
+  binding->import_name_ty = import_name_ty;
+  binding->import_index = import_index;
+  binding->binding_hash = binding_hash;
+  binding->next = NULL;
+}
+
+static char16_t collectNamedImportBindings (uint32_t import_index) {
+  pos++;
+  char16_t ch = importWhitespace();
+
+  while (ch != '}' && pos <= end) {
+    const char16_t* import_start;
+    const char16_t* import_end;
+    if (isQuote(ch)) {
+      import_start = pos;
+      stringLiteral(ch);
+      pos++;
+      import_end = pos;
+      ch = *pos;
+    }
+    else {
+      import_start = pos;
+      ch = readImportName(ch);
+      import_end = pos;
+    }
+    ch = importWhitespace();
+
+    const char16_t* local_start = import_start;
+    const char16_t* local_end = import_end;
+    uint32_t binding_hash;
+    if (ch == 'a' && *(pos + 1) == 's' && isBrOrWs(*(pos + 2))) {
+      pos += 2;
+      ch = importWhitespace();
+      ch = readImportBindingName(&local_start, &local_end, &binding_hash, ch);
+    }
+    else {
+      binding_hash = identifierNameHash(local_start, local_end);
+    }
+
+    addTrackedImportBinding(
+      local_start,
+      local_end,
+      import_start,
+      import_end,
+      NamedImport,
+      import_index,
+      binding_hash
+    );
+    ch = importWhitespace();
+    if (ch == ',') {
+      pos++;
+      ch = importWhitespace();
+    }
+  }
+  return ch;
+}
+
+static void collectNamespaceImportBinding (uint32_t import_index, enum ExportImportNameType import_name_ty) {
+  pos++;
+  commentWhitespace(true);
+  pos += 2;
+  char16_t ch = commentWhitespace(true);
+  const char16_t* local_start;
+  const char16_t* local_end;
+  uint32_t binding_hash;
+  readImportBindingName(&local_start, &local_end, &binding_hash, ch);
+  addTrackedImportBinding(local_start, local_end, NULL, NULL, import_name_ty, import_index, binding_hash);
+}
+
+static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_t import_index) {
+  if (phase_keyword == 1) {
+    const char16_t* local_start;
+    const char16_t* local_end;
+    uint32_t binding_hash;
+    readImportBindingName(&local_start, &local_end, &binding_hash, ch);
+    addTrackedImportBinding(local_start, local_end, NULL, NULL, SourceImport, import_index, binding_hash);
+    return;
+  }
+
+  if (phase_keyword == 2) {
+    collectNamespaceImportBinding(import_index, NamespaceImport);
+    return;
+  }
+
+  if (ch != '{' && ch != '*') {
+    const char16_t* local_start;
+    const char16_t* local_end;
+    uint32_t binding_hash;
+    ch = readImportBindingName(&local_start, &local_end, &binding_hash, ch);
+    addTrackedImportBinding(local_start, local_end, NULL, NULL, DefaultImport, import_index, binding_hash);
+    ch = commentWhitespace(true);
+    if (ch != ',')
+      return;
+    pos++;
+    ch = commentWhitespace(true);
+  }
+
+  if (ch == '{')
+    collectNamedImportBindings(import_index);
+  else if (ch == '*')
+    collectNamespaceImportBinding(import_index, NamespaceImport);
+}
+
+static void collectStaticImportBindingsFromRecord (Import* impt, uint32_t import_index) {
+  pos = (char16_t*)impt->statement_start + 6;
+  char16_t ch = commentWhitespace(true);
+
+  if (impt->import_ty == StaticSourcePhase) {
+    pos += 6;
+    ch = commentWhitespace(true);
+    collectStaticImportBindings(ch, 1, import_index);
+  }
+  else if (impt->import_ty == StaticDeferPhase) {
+    pos += 5;
+    ch = commentWhitespace(true);
+    collectStaticImportBindings(ch, 2, import_index);
+  }
+  else if (!isQuote(ch)) {
+    collectStaticImportBindings(ch, 0, import_index);
+  }
+}
+
+static void resolvePendingImportBindings () {
+  if (!collect_import_bindings) {
+    uint32_t import_index = 0;
+    for (Import* impt = first_import; impt != NULL; impt = impt->next, import_index++) {
+      if (impt->dynamic == STANDARD_IMPORT && *impt->statement_start == 'i')
+        collectStaticImportBindingsFromRecord(impt, import_index);
+    }
+    collect_import_bindings = true;
+  }
+
+  for (ImportBinding* binding = first_import_binding; binding != NULL; binding = binding->next) {
+    resolveImportBinding(
+      binding->local_start,
+      binding->local_end,
+      binding->import_start,
+      binding->import_end,
+      binding->import_name_ty,
+      binding->import_index,
+      binding->binding_hash
+    );
+  }
+}
+
+static void finalizePendingChunk () {
+  for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
+    if (exprt->export_ty == PendingChunk)
+      exprt->export_ty = Direct;
+  }
+}
+
+static void finalizeSmallPendingExports () {
+  export_bucket_count = 0;
+  for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
+    if (exprt->export_ty == Pending)
+      exprt->export_ty = PendingChunk;
+  }
+  resolvePendingImportBindings();
+  finalizePendingChunk();
+}
+
+// Keep the temporary table in the growable analysis arena so modules without
+// detached exports do not pay for the large-module capacity.
+static __attribute__((noinline)) void finalizePendingExports (uint32_t pending_export_count) {
+  if (pending_export_count <= SMALL_EXPORT_BUCKET_COUNT * 3 / 4)
+    export_bucket_count = SMALL_EXPORT_BUCKET_COUNT;
+  else if (pending_export_count <= MEDIUM_EXPORT_BUCKET_COUNT * 3 / 4)
+    export_bucket_count = MEDIUM_EXPORT_BUCKET_COUNT;
+  else
+    export_bucket_count = MAX_EXPORT_BUCKET_COUNT;
+  export_bucket_limit = export_bucket_count * 3 / 4;
+  export_bucket_mask = export_bucket_count - 1;
+  size_t export_bucket_size = export_bucket_count * sizeof(Export*);
+#ifdef __wasm__
+  ensureAnalysisCapacity(export_bucket_size);
+#endif
+  export_buckets = (Export**)analysis_head;
+  analysis_head += export_bucket_size;
+
+  Export* chunk_cursor = first_export;
+  while (chunk_cursor != NULL) {
+    for (uint32_t i = 0; i < export_bucket_count; i++)
+      ((Export* volatile*)export_buckets)[i] = NULL;
+
+    uint32_t chunk_size = 0;
+    while (chunk_cursor != NULL && chunk_size < export_bucket_limit) {
+      if (chunk_cursor->export_ty == Pending) {
+        uint32_t binding_hash = chunk_cursor->import_index;
+        uint32_t bucket_index = binding_hash & export_bucket_mask;
+        while (export_buckets[bucket_index] != NULL)
+          bucket_index = (bucket_index + 1) & export_bucket_mask;
+        chunk_cursor->import_index = binding_hash;
+        export_buckets[bucket_index] = chunk_cursor;
+        chunk_cursor->export_ty = PendingChunk;
+        chunk_size++;
+      }
+      chunk_cursor = chunk_cursor->next;
+    }
+
+    resolvePendingImportBindings();
+    finalizePendingChunk();
+  }
+}
+
+void finalizeExports () {
+  char16_t* parse_end = pos;
+  uint32_t pending_export_count = 0;
+  for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
+    if (exprt->export_ty == Pending)
+      pending_export_count++;
+  }
+  if (pending_export_count > 0) {
+    if (pending_export_count <= 4)
+      finalizeSmallPendingExports();
+    else
+      finalizePendingExports(pending_export_count);
+  }
+  pos = parse_end;
+}
+#endif
 
 char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
   char16_t ch = *pos;
@@ -790,7 +1393,11 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos) {
     startPos = pos;
 
     if (!isQuote(ch)) {
+#ifndef LEXER_MIN
+      ch = readImportName(ch);
+#else
       ch = readToWsOrPunctuator(ch);
+#endif
     }
     // export { mod as "identifer" } from
     // export { mod as "@notid" } from
@@ -895,6 +1502,9 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       return;
     }
 #ifndef LEXER_MIN
+#ifdef __wasm__
+    ensureAnalysisCapacity(sizeof(Attribute));
+#endif
     Attribute* attr = (Attribute*)(analysis_head);
     analysis_head = analysis_head + sizeof(Attribute);
     attr->key_start = key_start;
@@ -1054,6 +1664,16 @@ void regularExpression () {
 
 char16_t readToWsOrPunctuator (char16_t ch) {
   do {
+#ifndef LEXER_MIN
+    if (ch == '\\' && pos + 2 <= end && *(pos + 1) == 'u' && *(pos + 2) == '{') {
+      pos += 3;
+      while (pos <= end && *pos != '}')
+        pos++;
+      if (pos > end)
+        return '\0';
+      ch = *(++pos);
+    }
+#endif
     if (isBrOrWs(ch) || isPunctuator(ch))
       return ch;
   } while (ch = *(++pos));
@@ -1118,7 +1738,7 @@ bool readPrecedingKeyword1 (char16_t* pos, char16_t c1) {
 
 bool readPrecedingKeywordn (char16_t* pos, const char16_t* compare, size_t n) {
   if (pos - n + 1 < source) return false;
-  return memcmp(pos - n + 1, compare, n * 2) == 0 && (pos - n + 1 == source || isBrOrWsOrPunctuatorOrSpreadNotDot(pos - n));
+  return charsEqual(pos - n + 1, compare, n) && (pos - n + 1 == source || isBrOrWsOrPunctuatorOrSpreadNotDot(pos - n));
 }
 
 // Detects one of case, debugger, delete, do, else, in, instanceof, new,

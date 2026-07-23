@@ -1,7 +1,10 @@
 // Build-time variant flag. The minimal build (lib/lexer.min.asm.in.js) rewrites
 // this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
-// ms/attributes), matching the stripped LEXER_MIN wasm/asm exports.
+// ms/attributes/export analysis), matching the stripped LEXER_MIN wasm/asm
+// exports.
 const MINIMAL = false;
+const EXPORT_CAPTURE_THRESHOLD = 4096;
+const MAX_EXPORT_BUCKET_SIZE = 131072;
 
 let asm, asmBuffer, allocSize = 2<<19, addr;
 
@@ -19,6 +22,44 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
   }
 };
 
+/**
+ * @param {string} source
+ * @param {number} recordSize
+ * @returns {number}
+ */
+function getAnalysisSize (source, recordSize) {
+  const defaultSize = (source.length + 1) * 2;
+  if (source.length < 16384)
+    return defaultSize;
+  const recordCount = 1 +
+    countOccurrences(source, ',') +
+    countOccurrences(source, 'import') +
+    countOccurrences(source, 'export');
+  return Math.max(defaultSize, recordCount * recordSize);
+}
+
+/**
+ * @param {string} source
+ * @param {string} token
+ * @returns {number}
+ */
+function countOccurrences (source, token) {
+  let count = 0;
+  let index = -1;
+  while ((index = source.indexOf(token, index + 1)) !== -1)
+    count++;
+  return count;
+}
+
+/**
+ * @param {string} source
+ * @returns {boolean}
+ */
+function mayHaveExportClause (source) {
+  return source.length >= EXPORT_CAPTURE_THRESHOLD &&
+    (source.indexOf('export {') !== -1 || source.indexOf('export{') !== -1);
+}
+
 // Keyword dictionary, extracted from the fastcomp static memory image at build
 // time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
 // keyword tables in lexer.c automatically.
@@ -28,10 +69,14 @@ let source, name;
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
+  const collectImportBindings = !MINIMAL && mayHaveExportClause(source);
   // 2 bytes per string code point
-  // + analysis space (2^17)
-  // remaining space is EMCC stack space (2^17)
-  const memBound = source.length * 2 + (2 << 18);
+  // + analysis space
+  // + EMCC stack space (2^18)
+  const analysisSize = MINIMAL
+    ? 2 << 17
+    : Math.max(2 << 17, getAnalysisSize(source, 72) + MAX_EXPORT_BUCKET_SIZE);
+  const memBound = source.length * 2 + analysisSize + (2 << 17);
   if (memBound > allocSize || !asm) {
     while (memBound > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize);
@@ -43,6 +88,8 @@ export function parse (_source, _name = '@') {
   const len = source.length + 1;
   asm.ses(addr);
   asm.sa(len - 1);
+  if (!MINIMAL)
+    asm.eac(collectImportBindings);
 
   copy(source, new Uint16Array(asmBuffer, addr, len));
 
@@ -73,12 +120,43 @@ export function parse (_source, _name = '@') {
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
-    const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
-    const n = decodeIfQuoted(s, e);
-    if (MINIMAL)
+    if (MINIMAL) {
+      const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
+      const n = decodeIfQuoted(s, e);
       exports.push({ s, e, ls, le, n, ln });
-    else
-      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln });
+      continue;
+    }
+
+    const t = asm.et(), ss = asm.ess();
+    if (t === 3) {
+      const fi = asm.eii();
+      exports.push({ t, f: imports[fi].n, fi, s, e, ss });
+    }
+    else {
+      const n = decodeIfQuoted(s, e);
+      if (t === 1) {
+        const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
+        exports.push({ t, n, ln, s, e, ls, le, ss });
+      }
+      else {
+        const fi = asm.eii(), importNameType = asm.eit();
+        const im = importNameType === 0
+          ? decodeIfQuoted(ls, le)
+          : importNameType === 1 ? 'default' : null;
+        exports.push({
+          t,
+          n,
+          im,
+          ims: importNameType === 0 ? ls : -1,
+          ime: importNameType === 0 ? le : -1,
+          f: imports[fi].n,
+          fi,
+          s,
+          e,
+          ss
+        });
+      }
+    }
   }
 
   return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];
