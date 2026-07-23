@@ -23,9 +23,25 @@ enum ImportType {
   DynamicSourcePhase = 5,
   StaticDeferPhase = 6,
   DynamicDeferPhase = 7,
+  StaticReexportStar = 8,
 };
 
 #ifndef LEXER_MIN
+enum ExportType {
+  Direct = 1,
+  Reexport = 2,
+  ReexportAll = 3,
+  Pending = 4,
+  PendingChunk = 5,
+};
+
+enum ExportImportNameType {
+  NamedImport = 0,
+  DefaultImport = 1,
+  NamespaceImport = 2,
+  SourceImport = 3,
+};
+
 struct Attribute {
   const char16_t* key_start;
   const char16_t* key_end;
@@ -34,6 +50,18 @@ struct Attribute {
   struct Attribute* next;
 };
 typedef struct Attribute Attribute;
+
+struct ImportBinding {
+  const char16_t* local_start;
+  const char16_t* local_end;
+  const char16_t* import_start;
+  const char16_t* import_end;
+  uint32_t import_index;
+  uint32_t binding_hash;
+  uint8_t import_name_ty;
+  struct ImportBinding* next;
+};
+typedef struct ImportBinding ImportBinding;
 #endif
 
 struct Import {
@@ -76,6 +104,9 @@ struct Export {
   const char16_t* local_end;
 #ifndef LEXER_MIN
   const char16_t* statement_start;
+  uint32_t import_index;
+  uint8_t export_ty;
+  uint8_t import_name_ty;
 #endif
   struct Export* next;
 };
@@ -90,9 +121,16 @@ Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
 #ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
+uint32_t import_count = 0;
+bool collect_import_bindings = false;
+ImportBinding* first_import_binding = NULL;
+ImportBinding* import_binding_write_head = NULL;
 #endif
 void* analysis_base;
 void* analysis_head;
+#if defined(__wasm__) && !defined(LEXER_MIN)
+uintptr_t analysis_limit;
+#endif
 
 bool facade;
 #ifndef LEXER_MIN
@@ -125,16 +163,46 @@ const char16_t* sa (uint32_t utf16Len) {
   *(char16_t*)(source + utf16Len) = '\0';
   analysis_base = (void*)sourceEnd;
   analysis_head = analysis_base;
+#if defined(__wasm__) && !defined(LEXER_MIN)
+  analysis_limit = (uintptr_t)__builtin_wasm_memory_size(0) << 16;
+#endif
   first_import = NULL;
   import_write_head = NULL;
   import_read_head = NULL;
   first_export = NULL;
   export_write_head = NULL;
   export_read_head = NULL;
+#ifndef LEXER_MIN
+  import_count = 0;
+  collect_import_bindings = false;
+  first_import_binding = NULL;
+  import_binding_write_head = NULL;
+#endif
   return source;
 }
 
+#if defined(__wasm__) && !defined(LEXER_MIN)
+static inline void ensureAnalysisCapacity (size_t size) {
+  uintptr_t required = (uintptr_t)analysis_head + size;
+  if (required > analysis_limit) {
+    uint32_t pages = (required - analysis_limit + 65535) >> 16;
+    if (__builtin_wasm_memory_grow(0, pages) == (size_t)-1)
+      __builtin_trap();
+    analysis_limit += (uintptr_t)pages << 16;
+  }
+}
+#endif
+
+#ifndef LEXER_MIN
+void eac (bool enabled) {
+  collect_import_bindings = enabled;
+}
+#endif
+
 void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
+#if defined(__wasm__) && !defined(LEXER_MIN)
+  ensureAnalysisCapacity(sizeof(Import));
+#endif
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
   if (import_write_head == NULL)
@@ -166,12 +234,16 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
 #endif
   import->next = NULL;
 #ifndef LEXER_MIN
+  import_count++;
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
     hasModuleSyntax = true;
 #endif
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
+#if defined(__wasm__) && !defined(LEXER_MIN)
+  ensureAnalysisCapacity(sizeof(Export));
+#endif
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)
@@ -185,6 +257,9 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->local_end = local_end;
 #ifndef LEXER_MIN
   export->statement_start = export_statement_start;
+  export->import_index = -1;
+  export->export_ty = Direct;
+  export->import_name_ty = NamedImport;
 #endif
   export->next = NULL;
 #ifndef LEXER_MIN
@@ -251,6 +326,18 @@ int32_t ele () {
   return export_read_head->local_end ? export_read_head->local_end - source : -1;
 }
 #ifndef LEXER_MIN
+// getExportType
+uint32_t et () {
+  return export_read_head->export_ty;
+}
+// getExportImportIndex
+uint32_t eii () {
+  return export_read_head->import_index;
+}
+// getExportImportNameType
+uint32_t eit () {
+  return export_read_head->import_name_ty;
+}
 // getExportStatementStart
 uint32_t ess () {
   return export_read_head->statement_start - source;
@@ -267,14 +354,12 @@ bool ri () {
   return true;
 }
 // readExport
-bool re () {
+uintptr_t re () {
   if (export_read_head == NULL)
     export_read_head = first_export;
   else
     export_read_head = export_read_head->next;
-  if (export_read_head == NULL)
-    return false;
-  return true;
+  return (uintptr_t)export_read_head;
 }
 #ifndef LEXER_MIN
 bool f () {
@@ -324,6 +409,25 @@ bool parse ();
 
 void tryParseImportStatement ();
 void tryParseExportStatement ();
+
+#ifndef LEXER_MIN
+void finalizeExports ();
+void resolveImportBinding (
+  const char16_t* local_start,
+  const char16_t* local_end,
+  const char16_t* import_start,
+  const char16_t* import_end,
+  enum ExportImportNameType import_name_ty,
+  uint32_t import_index,
+  uint32_t binding_hash
+);
+bool identifierNameEqual (
+  const char16_t* a_start,
+  const char16_t* a_end,
+  const char16_t* b_start,
+  const char16_t* b_end
+);
+#endif
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);

@@ -113,20 +113,27 @@ import { init, parse } from 'es-module-lexer';
   // Returns "export"
   source.slice(exports[0].ss, exports[0].ss + 6);
 
+  // Reexports identify their imported name and source module.
+  // Returns "external name"
+  exports[2].n;
+  // Returns "x"
+  exports[2].im;
+  // Returns "external"
+  exports[2].f;
+  // Returns 2, the index of the corresponding entry in imports.
+  exports[2].fi;
   // Returns "'external name'"
   source.slice(exports[2].s, exports[2].e);
-  // Returns -1
-  exports[2].ls;
-  // Returns -1
-  exports[2].le;
+  // Returns "x"
+  source.slice(exports[2].ims, exports[2].ime);
 
   // Import type is provided by `t` value
-  // (1 for static, 2, for dynamic)
+  // (1 for static, 2 for dynamic)
   // Returns true
-  imports[2].t == 2;
+  imports[2].t == 1;
 
   // Returns "asdf" (only for string literal dynamic imports)
-  imports[2].n
+  imports[3].n
   // Returns "import /*comment!*/ (  'asdf', { with: { type: 'json' } })"
   source.slice(imports[3].ss, imports[3].se);
   // Returns "'asdf'"
@@ -144,7 +151,7 @@ import { init, parse } from 'es-module-lexer';
   // For nested dynamic imports, the se value of the outer import is -1 as end tracking does not
   // currently support nested dynamic immports
 
-  // import.meta is indicated by imports[3].d === -2
+  // import.meta is indicated by imports[4].d === -2
   // Returns true
   imports[4].d === -2;
   // Returns "import /*comment!*/.meta"
@@ -159,6 +166,41 @@ import { init, parse } from 'es-module-lexer';
   imports[6].t === 5;
 })();
 ```
+
+### Export Analysis
+
+Full builds return each export as a tagged union:
+
+* Direct exports have `t === 1` and provide `n`, `ln`, `s`, `e`, `ls`, `le`, and `ss`.
+* Named and namespace reexports have `t === 2`. They provide the exported name `n`, imported name `im`, imported-name range `ims` / `ime`, module specifier `f`, corresponding import index `fi`, exported-name range `s` / `e`, and statement start `ss`. `im` is `null` for namespace and source phase imports; `ims` and `ime` are `-1` when there is no source range.
+* `export * from 'module'` has `t === 3` and provides `f`, `fi`, the `*` range `s` / `e`, and `ss`.
+
+Detached exports are resolved after the complete module is lexed. An imported
+binding is therefore classified as a reexport regardless of whether its import
+appears before or after the export:
+
+```js
+const source = `
+  export { value as publicValue };
+  import { original as value } from 'dep';
+`;
+const [imports, exports] = parse(source);
+
+exports[0].t === 2;
+exports[0].n === 'publicValue';
+exports[0].im === 'original';
+exports[0].f === 'dep';
+exports[0].fi === 0;
+imports[0].n === 'dep';
+```
+
+The import entry corresponding to `export * from 'module'` has import type 8.
+
+When migrating a full-build consumer from v2, switch on `t` before reading
+kind-specific fields. Reexports no longer expose placeholder local-name
+properties, and bare star reexports now appear in the exports array. Their
+origins are available through `im` and `imports[fi]` without rescanning source
+statements.
 
 ### CSP asm.js Build
 
@@ -186,9 +228,9 @@ Compared to the full build:
 
 * `parse` returns a two-element `[imports, exports]` tuple only - the third and fourth facade and `hasModuleSyntax` booleans are dropped.
 * Imports drop the parsed attribute list `at` (the attribute source remains recoverable via the `a` attributes index).
-* Exports drop the statement start `ss`.
+* Exports keep the v2 flat `{ n, ln, s, e, ls, le }` shape and do not include export classification, origins, statement starts, or `export *` records.
 
-All other fields are identical to the full build. For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
+For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
 
 ### Import Attributes
 
