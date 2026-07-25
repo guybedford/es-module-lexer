@@ -31,8 +31,8 @@ enum ExportType {
   Direct = 1,
   Reexport = 2,
   ReexportAll = 3,
+  // Internal: an export clause with no `from`, until the module is fully lexed.
   Pending = 4,
-  PendingChunk = 5,
 };
 
 enum ExportImportNameType {
@@ -57,7 +57,6 @@ struct ImportBinding {
   const char16_t* import_start;
   const char16_t* import_end;
   uint32_t import_index;
-  uint32_t binding_hash;
   uint8_t import_name_ty;
   struct ImportBinding* next;
 };
@@ -112,6 +111,15 @@ struct Export {
 };
 typedef struct Export Export;
 
+#ifndef LEXER_MIN
+_Static_assert(
+  offsetof(Export, end) == 4 && offsetof(Export, local_start) == 8 && offsetof(Export, local_end) == 12 &&
+  offsetof(Export, statement_start) == 16 && offsetof(Export, import_index) == 20 &&
+  offsetof(Export, export_ty) == 24 && offsetof(Export, import_name_ty) == 25,
+  "src/lexer.ts reads the full-build Export record straight out of memory"
+);
+#endif
+
 Import* first_import = NULL;
 Export* first_export = NULL;
 Import* import_read_head = NULL;
@@ -122,13 +130,13 @@ Export* export_write_head = NULL;
 #ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
 uint32_t import_count = 0;
-bool collect_import_bindings = false;
+uint32_t pending_export_count = 0;
 ImportBinding* first_import_binding = NULL;
 ImportBinding* import_binding_write_head = NULL;
 #endif
 void* analysis_base;
 void* analysis_head;
-#if defined(__wasm__) && !defined(LEXER_MIN)
+#ifndef LEXER_MIN
 uintptr_t analysis_limit;
 #endif
 
@@ -174,14 +182,15 @@ const char16_t* sa (uint32_t utf16Len) {
   export_read_head = NULL;
 #ifndef LEXER_MIN
   import_count = 0;
-  collect_import_bindings = false;
+  pending_export_count = 0;
   first_import_binding = NULL;
   import_binding_write_head = NULL;
 #endif
   return source;
 }
 
-#if defined(__wasm__) && !defined(LEXER_MIN)
+#ifndef LEXER_MIN
+#ifdef __wasm__
 static inline void ensureAnalysisCapacity (size_t size) {
   uintptr_t required = (uintptr_t)analysis_head + size;
   if (required > analysis_limit) {
@@ -191,16 +200,30 @@ static inline void ensureAnalysisCapacity (size_t size) {
     analysis_limit += (uintptr_t)pages << 16;
   }
 }
-#endif
-
-#ifndef LEXER_MIN
-void eac (bool enabled) {
-  collect_import_bindings = enabled;
+#else
+// setAnalysisLimit: the asm.js build cannot grow its heap, so the JS wrapper owns
+// the arena bound and re-parses into a larger buffer when a parse reports -1.
+void sal (uint32_t limit) {
+  analysis_limit = limit;
 }
+
+static void bailAnalysisCapacity () {
+  // Rewinding keeps every record write inside the arena. The result is discarded:
+  // the wrapper sees the -1 error position and retries.
+  analysis_head = analysis_base;
+  parse_error = -1;
+  has_error = true;
+}
+
+static inline void ensureAnalysisCapacity (size_t size) {
+  if ((uintptr_t)analysis_head + size > analysis_limit)
+    bailAnalysisCapacity();
+}
+#endif
 #endif
 
 void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
-#if defined(__wasm__) && !defined(LEXER_MIN)
+#ifndef LEXER_MIN
   ensureAnalysisCapacity(sizeof(Import));
 #endif
   Import* import = (Import*)(analysis_head);
@@ -241,7 +264,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
-#if defined(__wasm__) && !defined(LEXER_MIN)
+#ifndef LEXER_MIN
   ensureAnalysisCapacity(sizeof(Export));
 #endif
   Export* export = (Export*)(analysis_head);
@@ -409,25 +432,6 @@ bool parse ();
 
 void tryParseImportStatement ();
 void tryParseExportStatement ();
-
-#ifndef LEXER_MIN
-void finalizeExports ();
-void resolveImportBinding (
-  const char16_t* local_start,
-  const char16_t* local_end,
-  const char16_t* import_start,
-  const char16_t* import_end,
-  enum ExportImportNameType import_name_ty,
-  uint32_t import_index,
-  uint32_t binding_hash
-);
-bool identifierNameEqual (
-  const char16_t* a_start,
-  const char16_t* a_end,
-  const char16_t* b_start,
-  const char16_t* b_end
-);
-#endif
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);

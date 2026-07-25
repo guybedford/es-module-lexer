@@ -195,7 +195,8 @@ exports[0].fi === 0;
 imports[0].n === 'dep';
 ```
 
-The import entry corresponding to `export * from 'module'` has import type 8.
+The import entry corresponding to `export * from 'module'` has import type 8 in
+every build, including the minimal one.
 
 When migrating a full-build consumer from v2, switch on `t` before reading
 kind-specific fields. Reexports no longer expose placeholder local-name
@@ -230,6 +231,7 @@ Compared to the full build:
 * `parse` returns a two-element `[imports, exports]` tuple only - the third and fourth facade and `hasModuleSyntax` booleans are dropped.
 * Imports drop the parsed attribute list `at` (the attribute source remains recoverable via the `a` attributes index).
 * Exports keep the v2 flat `{ n, ln, s, e, ls, le }` shape and do not include export classification, origins, statement starts, or `export *` records.
+* The import type for `export * from 'module'` is 8 here as well, so a consumer switching on `t` sees the same values as the full build.
 
 For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
 

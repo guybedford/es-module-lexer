@@ -47,11 +47,11 @@ function assertExportIs(source, actual, expected) {
 
 /**
  * @param {number} count
- * @param {boolean} captureCandidate
+ * @param {boolean} commentedClause
  * @param {boolean} [compact]
  * @returns {string}
  */
-function createDetachedExportSource(count, captureCandidate, compact = false) {
+function createDetachedExportSource(count, commentedClause, compact = false) {
   const imports = [];
   const exports = [];
   for (let i = 0; i < count; i++) {
@@ -59,7 +59,7 @@ function createDetachedExportSource(count, captureCandidate, compact = false) {
     imports.push(`${compact ? 'i' : 'imported'}${suffix} as ${compact ? 'l' : 'local'}${suffix}`);
     exports.push(`${compact ? 'l' : 'local'}${suffix} as ${compact ? 'e' : 'exported'}${suffix}`);
   }
-  const exportStart = captureCandidate ? 'export {' : 'export /* capture miss */ {';
+  const exportStart = commentedClause ? 'export /* comment */ {' : 'export {';
   return `${exportStart}${exports.join(',')}};import {${imports.join(',')}} from './bulk';`;
 }
 
@@ -75,7 +75,6 @@ async function parseWasmMemory(source) {
   if (required > 0)
     wasm.memory.grow(Math.ceil(required / 65536));
   const address = wasm.sa(source.length);
-  wasm.eac(0);
   Buffer.from(wasm.memory.buffer, address, source.length * 2).write(source, 'utf16le');
   assert.strictEqual(wasm.parse(), 1);
   return wasm.memory.buffer.byteLength;
@@ -1590,7 +1589,7 @@ function x() {
     assert.strictEqual(exports[0].im, 'original');
   });
 
-  test('Export analysis does not depend on the capture prefilter', () => {
+  test('Export analysis resolves a clause interrupted by a comment', () => {
     if (min) return;
     const source = `
       /* ${'x'.repeat(5000)} */
@@ -1606,10 +1605,10 @@ function x() {
     assert.strictEqual(exports[0].f, './fallback');
   });
 
-  test('Export analysis resets false-positive capture state', () => {
+  test('Export analysis ignores an export clause inside a comment', () => {
     if (min) return;
-    const falsePositive = `/* export { ${'x'.repeat(5000)} */ import { value } from './capture';`;
-    const [imports, exports] = parse(falsePositive);
+    const commentedOut = `/* export { ${'x'.repeat(5000)} */ import { value } from './commented';`;
+    const [imports, exports] = parse(commentedOut);
     assert.strictEqual(imports.length, 1);
     assert.strictEqual(exports.length, 0);
 
@@ -1620,13 +1619,13 @@ function x() {
     assert.strictEqual(nextExports[0].im, 'next');
   });
 
-  test('Export analysis resolves contextual default imports across capture branches', () => {
+  test('Export analysis resolves contextual default imports for every clause spelling', () => {
     if (min) return;
     const modes = [
-      { name: 'below threshold', prefix: '', exportStart: 'export {' },
-      { name: 'spaced capture', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export {' },
-      { name: 'minified capture', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export{' },
-      { name: 'capture miss', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export /* comment */ {' }
+      { name: 'short source', prefix: '', exportStart: 'export {' },
+      { name: 'padded source', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export {' },
+      { name: 'no space before clause', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export{' },
+      { name: 'comment before clause', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export /* comment */ {' }
     ];
 
     for (const keyword of ['source', 'defer']) {
@@ -1705,10 +1704,11 @@ function x() {
     assert.strictEqual(exports[1].im, null);
   });
 
-  test('Export analysis covers resolver capacity branches', () => {
+  test('Export analysis covers resolver table growth boundaries', () => {
     if (min) return;
-    for (const count of [4, 5, 384, 385, 3072, 3073]) {
-      const source = createDetachedExportSource(count, true);
+    // The table holds two buckets per pending export, doubling from four.
+    for (const count of [1, 2, 3, 4, 5, 8, 9, 2048, 2049]) {
+      const source = createDetachedExportSource(count, false);
       const [, exports] = parse(source);
 
       assert.strictEqual(exports.length, count, `${count} exports`);
@@ -1742,13 +1742,13 @@ function x() {
     }
   });
 
-  test('Export analysis covers the multi-chunk boundary', () => {
+  test('Export analysis resolves clauses far past the largest table step', () => {
     if (min) return;
-    for (const captureCandidate of [true, false]) {
-      for (const count of [24576, 24577]) {
-        const source = createDetachedExportSource(count, captureCandidate);
+    for (const commentedClause of [true, false]) {
+      for (const count of [32768, 32769]) {
+        const source = createDetachedExportSource(count, commentedClause);
         const [, exports] = parse(source);
-        const label = `${count} exports, ${captureCandidate ? 'capture' : 'fallback'}`;
+        const label = `${count} exports, ${commentedClause ? 'commented' : 'plain'} clause`;
 
         assert.strictEqual(exports.length, count, label);
         assert.strictEqual(exports[0].im, 'imported0', label);
@@ -1970,17 +1970,77 @@ function x() {
     assert.strictEqual(exports[count - 1].t, 1);
   });
 
+  test('A failed parse leaves no state behind', () => {
+    assert.throws(() => parse(`export * from bar`), { idx: 14 });
+
+    const source = `import { a } from 'y'; export { a };`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'y');
+    assert.strictEqual(exports.length, 1);
+    if (!min)
+      assert.strictEqual(exports[0].t, 2);
+  });
+
+  test('Export star without a module specifier reports nothing', () => {
+    for (const source of ['export *;', 'export *', 'export*;', 'export * ']) {
+      const [imports, exports] = parse(source);
+      assert.deepStrictEqual(imports, [], source);
+      assert.deepStrictEqual(exports, [], source);
+    }
+  });
+
+  test('Import clause holding a stray operator still terminates', () => {
+    for (const prefix of ['', `/* export { ${'x'.repeat(5000)} */`]) {
+      const [imports] = parse(`${prefix}import { a - b } from 'x';`);
+      assert.strictEqual(imports.length, 1);
+      assert.strictEqual(imports[0].n, 'x');
+    }
+  });
+
+  test('Import binding renamed with no space after as', () => {
+    if (min) return;
+    const source = `import { a as/*c*/b } from './x'; export { b }; export { a };`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].im, 'a');
+    // `a` was renamed away, so nothing local or imported carries that name.
+    assert.strictEqual(exports[1].t, 1);
+  });
+
+  test('Export declaration with consecutive braced escapes', () => {
+    if (min) return;
+    const [, exports] = parse(String.raw`export let \u{61}\u{62}, c;`);
+    assert.deepStrictEqual(exports.map(({ n }) => n), [String.raw`\u{61}\u{62}`, 'c']);
+  });
+
+  test('Record-dense sources report every record', () => {
+    if (min) return;
+    // Each statement needs more analysis space than its own source bytes, so the
+    // arena has to grow (Wasm) or the parse has to be retried (asm.js).
+    const count = 4000;
+    const [imports, exports] = parse(`export*from'a'with{t:'j'};`.repeat(count));
+    assert.strictEqual(imports.length, count);
+    assert.strictEqual(exports.length, count);
+    assert.strictEqual(imports[count - 1].n, 'a');
+    assert.deepStrictEqual(imports[count - 1].at, [['t', 'j']]);
+    assert.strictEqual(exports[count - 1].t, 3);
+    assert.strictEqual(exports[count - 1].fi, count - 1);
+  });
+
   test('Full Wasm keeps temporary export tables out of initial memory', async () => {
     if (!process.env.WASM || min) return;
     const { instance } = await WebAssembly.instantiate(await readFile('lib/lexer.wasm'));
     assert.ok(Number(instance.exports.__heap_base.value) < 131072);
   });
 
-  test('Full Wasm does not recollect fallback bindings across chunks', async () => {
+  test('Full Wasm grows the resolver table one step at a time', async () => {
     if (!process.env.WASM || min) return;
-    const oneChunk = await parseWasmMemory(createDetachedExportSource(24576, false, true));
-    const twoChunks = await parseWasmMemory(createDetachedExportSource(24577, false, true));
-    assert.ok(twoChunks - oneChunk < 131072, `${oneChunk} -> ${twoChunks}`);
+    // 16384 pending exports fill a 32768-bucket table; one more doubles it.
+    const beforeStep = await parseWasmMemory(createDetachedExportSource(16384, false, true));
+    const afterStep = await parseWasmMemory(createDetachedExportSource(16385, false, true));
+    assert.ok(afterStep - beforeStep <= 262144, `${beforeStep} -> ${afterStep}`);
   });
 
   test('Export statement start', () => {

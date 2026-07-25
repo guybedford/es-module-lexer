@@ -4,7 +4,6 @@
 // exports. `as boolean` keeps both branches type-checked rather than narrowed
 // to the false literal.
 const MINIMAL = false as boolean;
-const EXPORT_CAPTURE_THRESHOLD = 4096;
 
 export enum ImportType {
   /**
@@ -297,8 +296,6 @@ export function parse (source: string, name = '@'): readonly [
     wasm.memory.grow(Math.ceil(extraMem / 65536));
 
   const addr = wasm.sa(len - 1);
-  if (!MINIMAL)
-    wasm.eac(mayHaveExportClause(source));
   // Node's Buffer blits UTF-16 straight into Wasm memory ~10x faster than the
   // charCodeAt fallback, in explicit LE matching Wasm regardless of host.
   if (typeof Buffer !== 'undefined')
@@ -456,15 +453,6 @@ function copyLE (src: string, outBuf16: Uint16Array) {
     outBuf16[i] = src.charCodeAt(i++);
 }
 
-/**
- * @param source Module source
- * @returns Whether the source may contain a detached export clause
- */
-function mayHaveExportClause (source: string): boolean {
-  return source.length >= EXPORT_CAPTURE_THRESHOLD &&
-    (source.indexOf('export {') !== -1 || source.indexOf('export{') !== -1);
-}
-
 let wasm: {
   __heap_base: {value: number} | number & {value: undefined};
   memory: WebAssembly.Memory;
@@ -475,8 +463,6 @@ let wasm: {
   ai(): number;
   /** getErr */
   e(): number;
-  /** enable import binding collection */
-  eac(enabled: boolean): void;
   /** getExportEnd */
   ee(): number;
   /** getExportImportIndex */
