@@ -1998,6 +1998,17 @@ function x() {
     }
   });
 
+  test('Block comment carrying a line break ends a no-line-break scan', () => {
+    // `export default async` may only continue into `function` on the same line,
+    // so a line break inside the comment has to end the scan.
+    const sameLine = parse(`export default async /* c */ function foo () {}`)[1][0];
+    assert.strictEqual(sameLine.ln, 'foo');
+
+    const broken = parse(`export default async /*\n*/ function foo () {}`)[1][0];
+    assert.strictEqual(broken.ln, undefined);
+    assert.strictEqual(broken.ls, -1);
+  });
+
   test('Import binding renamed with no space after as', () => {
     if (min) return;
     const source = `import { a as/*c*/b } from './x'; export { b }; export { a };`;

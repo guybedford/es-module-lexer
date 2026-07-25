@@ -1464,9 +1464,20 @@ bool noSubstitutionTemplate () {
 
 void blockComment (bool br) {
   pos++;
+  // br is loop invariant and a comment body is scanned one character at a time,
+  // so the line-break exit is hoisted out rather than tested on every one.
+  if (br) {
+    while (pos++ < end) {
+      if (*pos == '*' && *(pos + 1) == '/') {
+        pos++;
+        return;
+      }
+    }
+    return;
+  }
   while (pos++ < end) {
     char16_t ch = *pos;
-    if (!br && isBr(ch))
+    if (isBr(ch))
       return;
     if (ch == '*' && *(pos + 1) == '/') {
       pos++;
