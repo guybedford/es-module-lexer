@@ -463,22 +463,16 @@ let wasm: {
   ai(): number;
   /** getErr */
   e(): number;
+  // The export getters are only exported by the minimal wasm build; the full
+  // build reads Export records straight out of memory via the re() pointer.
   /** getExportEnd */
   ee(): number;
-  /** getExportImportIndex */
-  eii(): number;
-  /** getExportImportNameType */
-  eit(): number;
   /** getExportLocalEnd */
   ele(): number;
   /** getExportLocalStart */
   els(): number;
   /** getExportStart */
   es(): number;
-  /** getExportStatementStart */
-  ess(): number;
-  /** getExportType */
-  et(): number;
   /** facade */
   f(): boolean;
   /** hasModuleSyntax */

@@ -27,16 +27,16 @@ const replacements = [
   [/,\s?_(\w+):/g, ',$1:', null, endFuncs],
   ['setSource:', 'ses:', null, endFuncs],
   ['parse:', 'p:', null, endFuncs],
-  [/___errno_location:\s?([\w$]+),/, '', removeFunc, endFuncs, true],
-  [/_apply_relocations:\s?([\w$]+),/, '', removeFunc, endFuncs, true],
-  [/,\s?free:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?malloc:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?memcpy:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?memset:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?stackAlloc:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?emscripten_get_sbrk_ptr:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?stackRestore:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
-  [/,\s?stackSave:\s?([\w$]+)/, '', removeFunc, endFuncs, true],
+  [/___errno_location:\s?([\w$]+),/, '', removeFunc, endFuncs, 'errno_location:'],
+  [/_apply_relocations:\s?([\w$]+),/, '', removeFunc, endFuncs, 'apply_relocations:'],
+  [/,\s?free:\s?([\w$]+)/, '', removeFunc, endFuncs, 'free:'],
+  [/,\s?malloc:\s?([\w$]+)/, '', removeFunc, endFuncs, 'malloc:'],
+  [/,\s?memcpy:\s?([\w$]+)/, '', removeFunc, endFuncs, 'memcpy:'],
+  [/,\s?memset:\s?([\w$]+)/, '', removeFunc, endFuncs, 'memset:'],
+  [/,\s?stackAlloc:\s?([\w$]+)/, '', removeFunc, endFuncs, 'stackAlloc:'],
+  [/,\s?emscripten_get_sbrk_ptr:\s?([\w$]+)/, '', removeFunc, endFuncs, 'sbrk_ptr:'],
+  [/,\s?stackRestore:\s?([\w$]+)/, '', removeFunc, endFuncs, 'stackRestore:'],
+  [/,\s?stackSave:\s?([\w$]+)/, '', removeFunc, endFuncs, 'stackSave:'],
   [/,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?env\.\w+\|0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0,\s*\w+\s?=\s?0\.0,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+,\s*\w+\s?=\s?env\.\w+/, ''],
   [/,\s*\w+\s?=\s?\d+,\s*\w+\s?=\s?0.0;/, ';'],
   [/function \w+\(\w+\)\s?{[^{}]+{[^{}s]+s\(\)[^{}]+}[^{}]+}/, '', null, null, true],
@@ -54,7 +54,10 @@ const replacements = [
 for (const [from, to, add, after, optional] of replacements) {
   const [matched, match] = source.match(from) || [];
   if (!matched) {
-    if (optional) continue;
+    // An optional entry may only miss when its function is genuinely absent
+    // from the build: a still-present anchor means the pattern went stale.
+    if (optional === true) continue;
+    if (typeof optional === 'string' && !source.includes(optional, after ? source.indexOf(after) : 0)) continue;
     console.log(source.slice(0, 1000));
     throw new Error(`Match not found for ${from} -> ${to}${after ? `, after ${after}` : ''}`);
   }
