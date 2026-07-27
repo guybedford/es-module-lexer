@@ -66,6 +66,7 @@ static int skipBracedEscape () {
 }
 
 static char16_t readImportName (char16_t ch) {
+  import_name_chars |= ch == '\\' ? ~0u : 1u << (ch & 31);
   while (isIdentifierCodeUnit(ch)) {
     if (ch == '\\' && skipBracedEscape() < 0)
       return '\0';
@@ -349,6 +350,9 @@ bool parse () {
 }
 
 void tryParseImportStatement () {
+#ifndef LEXER_MIN
+  import_name_chars = 0;
+#endif
   char16_t* startPos = pos;
 
   pos += 6;
@@ -921,6 +925,7 @@ void tryParseExportStatement () {
       // and rather than at resolve time keeps the name text cache-hot.
       for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
         exprt->export_ty = Pending;
+        pending_first_chars |= *exprt->local_start == '\\' ? ~0u : 1u << (*exprt->local_start & 31);
         pending_export_count++;
       }
     }
@@ -1115,6 +1120,7 @@ static char16_t skipImportClause () {
     char16_t ch = *pos;
     if (ch == '}')
       return ch;
+    import_name_chars |= 1u << (ch & 31);
     if (isQuote(ch)) {
       stringLiteral(ch);
     }
@@ -1125,9 +1131,12 @@ static char16_t skipImportClause () {
       else if (next_ch == '*')
         blockComment(true);
     }
-    else if (ch == '\\' && skipBracedEscape() < 0) {
-      syntaxError();
-      return '\0';
+    else if (ch == '\\') {
+      import_name_chars = ~0u;
+      if (skipBracedEscape() < 0) {
+        syntaxError();
+        return '\0';
+      }
     }
     pos++;
   }
@@ -1306,6 +1315,10 @@ static void resolvePendingExports () {
   char16_t* parse_end = pos;
   uint32_t import_index = 0;
   for (Import* impt = first_import; impt != NULL; impt = impt->next, import_index++) {
+    // No binding in this statement starts with a character any pending export
+    // name starts with, so re-reading its clause cannot resolve anything.
+    if ((impt->name_chars & pending_first_chars) == 0)
+      continue;
     // `export … from` records share the Import shape but carry no local bindings.
     if (impt->dynamic == STANDARD_IMPORT && *impt->statement_start == 'i')
       collectStaticImportBindingsFromRecord(impt, import_index);

@@ -63,6 +63,7 @@ struct Import {
   enum ImportType import_ty;
 #ifndef LEXER_MIN
   struct Attribute* attributes;
+  uint32_t name_chars;
 #endif
   struct Import* next;
 };
@@ -123,6 +124,8 @@ const char16_t* export_statement_start = NULL;
 uint32_t import_count = 0;
 uint32_t pending_export_count = 0;
 bool has_import_bindings = false;
+uint32_t import_name_chars = 0;
+uint32_t pending_first_chars = 0;
 #endif
 void* analysis_base;
 void* analysis_head;
@@ -174,6 +177,8 @@ const char16_t* sa (uint32_t utf16Len) {
   import_count = 0;
   pending_export_count = 0;
   has_import_bindings = false;
+  import_name_chars = 0;
+  pending_first_chars = 0;
 #endif
   return source;
 }
@@ -222,6 +227,9 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
 #endif
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
+#ifndef LEXER_MIN
+  import->name_chars = import_name_chars;
+#endif
   if (import_write_head == NULL)
     first_import = import;
   else
