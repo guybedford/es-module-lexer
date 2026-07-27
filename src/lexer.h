@@ -178,14 +178,19 @@ const char16_t* sa (uint32_t utf16Len) {
 
 #ifndef LEXER_MIN
 #ifdef __wasm__
+// Out of line so each allocation site inlines the bounds test alone: growing is
+// rare enough that its code only costs the record path i-cache.
+static __attribute__((noinline)) void growAnalysis (uintptr_t required) {
+  uint32_t pages = (required - analysis_limit + 65535) >> 16;
+  if (__builtin_wasm_memory_grow(0, pages) == (size_t)-1)
+    __builtin_trap();
+  analysis_limit += (uintptr_t)pages << 16;
+}
+
 static inline void ensureAnalysisCapacity (size_t size) {
   uintptr_t required = (uintptr_t)analysis_head + size;
-  if (required > analysis_limit) {
-    uint32_t pages = (required - analysis_limit + 65535) >> 16;
-    if (__builtin_wasm_memory_grow(0, pages) == (size_t)-1)
-      __builtin_trap();
-    analysis_limit += (uintptr_t)pages << 16;
-  }
+  if (required > analysis_limit)
+    growAnalysis(required);
 }
 #else
 // setAnalysisLimit: the asm.js build cannot grow its heap, so the JS wrapper owns
