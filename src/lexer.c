@@ -75,7 +75,7 @@ static char16_t readImportName (char16_t ch) {
 }
 
 static uint32_t identifierNameHash (const char16_t* start, const char16_t* identifier_end);
-static char16_t collectNamedImportBindings (uint32_t import_index);
+static char16_t readImportClause (uint32_t import_index);
 static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_t import_index);
 #endif
 
@@ -472,7 +472,8 @@ void tryParseImportStatement () {
     }
 
 #ifndef LEXER_MIN
-    ch = collectNamedImportBindings(import_count);
+    pos++;
+    ch = readImportClause(import_count);
     if (ch != '}')
       return syntaxError();
     pos++;
@@ -1105,8 +1106,42 @@ static void resolveBinding (
   );
 }
 
+// Finds the clause end without tokenizing it, by stepping over the only
+// constructs that can hide a '}' from a straight scan.
+static char16_t skipImportClause () {
+  while (pos <= end) {
+    char16_t ch = *pos;
+    if (ch == '}')
+      return ch;
+    if (isQuote(ch)) {
+      stringLiteral(ch);
+    }
+    else if (ch == '/') {
+      char16_t next_ch = *(pos + 1);
+      if (next_ch == '/')
+        lineComment();
+      else if (next_ch == '*')
+        blockComment(true);
+    }
+    else if (ch == '\\' && skipBracedEscape() < 0) {
+      syntaxError();
+      return '\0';
+    }
+    pos++;
+  }
+  return '\0';
+}
+
+static char16_t collectNamedImportBindings (uint32_t import_index);
+
+// The main loop only needs to know where the clause ends. Binding structure is
+// worth reading in the deferred pass, which is also the only caller holding a
+// table to resolve it against, so a table is what selects the reader.
+static char16_t readImportClause (uint32_t import_index) {
+  return export_buckets == NULL ? skipImportClause() : collectNamedImportBindings(import_index);
+}
+
 static char16_t collectNamedImportBindings (uint32_t import_index) {
-  pos++;
   char16_t ch = commentWhitespace(true);
 
   while (ch != '}' && pos <= end) {
@@ -1189,8 +1224,10 @@ static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_
     ch = commentWhitespace(true);
   }
 
-  if (ch == '{')
-    collectNamedImportBindings(import_index);
+  if (ch == '{') {
+    pos++;
+    readImportClause(import_index);
+  }
   else if (ch == '*')
     collectNamespaceImportBinding(import_index, NamespaceImport);
 }
