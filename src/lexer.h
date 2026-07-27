@@ -50,17 +50,6 @@ struct Attribute {
   struct Attribute* next;
 };
 typedef struct Attribute Attribute;
-
-struct ImportBinding {
-  const char16_t* local_start;
-  const char16_t* local_end;
-  const char16_t* import_start;
-  const char16_t* import_end;
-  uint32_t import_index;
-  uint8_t import_name_ty;
-  struct ImportBinding* next;
-};
-typedef struct ImportBinding ImportBinding;
 #endif
 
 struct Import {
@@ -131,8 +120,6 @@ Export* export_write_head = NULL;
 const char16_t* export_statement_start = NULL;
 uint32_t import_count = 0;
 uint32_t pending_export_count = 0;
-ImportBinding* first_import_binding = NULL;
-ImportBinding* import_binding_write_head = NULL;
 #endif
 void* analysis_base;
 void* analysis_head;
@@ -183,8 +170,6 @@ const char16_t* sa (uint32_t utf16Len) {
 #ifndef LEXER_MIN
   import_count = 0;
   pending_export_count = 0;
-  first_import_binding = NULL;
-  import_binding_write_head = NULL;
 #endif
   return source;
 }

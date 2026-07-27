@@ -1081,7 +1081,10 @@ static void resolveImportBinding (
   }
 }
 
-static void addTrackedImportBinding (
+// Bindings are not stored. The main-loop pass only skips the clause; the deferred
+// pass re-reads it against the pending-export table, so a module without detached
+// exports pays nothing for the analysis.
+static void resolveBinding (
   const char16_t* local_start,
   const char16_t* local_end,
   const char16_t* import_start,
@@ -1089,21 +1092,17 @@ static void addTrackedImportBinding (
   enum ExportImportNameType import_name_ty,
   uint32_t import_index
 ) {
-  ensureAnalysisCapacity(sizeof(ImportBinding));
-  ImportBinding* binding = (ImportBinding*)analysis_head;
-  analysis_head += sizeof(ImportBinding);
-  if (import_binding_write_head == NULL)
-    first_import_binding = binding;
-  else
-    import_binding_write_head->next = binding;
-  import_binding_write_head = binding;
-  binding->local_start = local_start;
-  binding->local_end = local_end;
-  binding->import_start = import_start;
-  binding->import_end = import_end;
-  binding->import_name_ty = import_name_ty;
-  binding->import_index = import_index;
-  binding->next = NULL;
+  if (export_buckets == NULL)
+    return;
+  resolveImportBinding(
+    local_start,
+    local_end,
+    import_start,
+    import_end,
+    import_name_ty,
+    import_index,
+    identifierNameHash(local_start, local_end)
+  );
 }
 
 static char16_t collectNamedImportBindings (uint32_t import_index) {
@@ -1146,7 +1145,7 @@ static char16_t collectNamedImportBindings (uint32_t import_index) {
       local_end = pos;
     }
 
-    addTrackedImportBinding(local_start, local_end, import_start, import_end, NamedImport, import_index);
+    resolveBinding(local_start, local_end, import_start, import_end, NamedImport, import_index);
     ch = commentWhitespace(true);
     if (ch == ',') {
       pos++;
@@ -1163,14 +1162,14 @@ static void collectNamespaceImportBinding (uint32_t import_index, enum ExportImp
   char16_t ch = commentWhitespace(true);
   const char16_t* local_start = pos;
   readImportName(ch);
-  addTrackedImportBinding(local_start, pos, NULL, NULL, import_name_ty, import_index);
+  resolveBinding(local_start, pos, NULL, NULL, import_name_ty, import_index);
 }
 
 static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_t import_index) {
   if (phase_keyword == 1) {
     const char16_t* local_start = pos;
     readImportName(ch);
-    addTrackedImportBinding(local_start, pos, NULL, NULL, SourceImport, import_index);
+    resolveBinding(local_start, pos, NULL, NULL, SourceImport, import_index);
     return;
   }
 
@@ -1182,7 +1181,7 @@ static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_
   if (ch != '{' && ch != '*') {
     const char16_t* local_start = pos;
     ch = readImportName(ch);
-    addTrackedImportBinding(local_start, pos, NULL, NULL, DefaultImport, import_index);
+    resolveBinding(local_start, pos, NULL, NULL, DefaultImport, import_index);
     ch = commentWhitespace(true);
     if (ch != ',')
       return;
@@ -1199,6 +1198,25 @@ static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_
 // The table lives in the analysis arena, so a module without detached exports
 // never reserves it. Load stays at 50%: a lookup walks its probe cluster to the
 // terminating NULL because one import binding can resolve several exports.
+static void collectStaticImportBindingsFromRecord (Import* impt, uint32_t import_index) {
+  pos = (char16_t*)impt->statement_start + 6;
+  char16_t ch = commentWhitespace(true);
+
+  if (impt->import_ty == StaticSourcePhase) {
+    pos += 6;
+    ch = commentWhitespace(true);
+    collectStaticImportBindings(ch, 1, import_index);
+  }
+  else if (impt->import_ty == StaticDeferPhase) {
+    pos += 5;
+    ch = commentWhitespace(true);
+    collectStaticImportBindings(ch, 2, import_index);
+  }
+  else if (!isQuote(ch)) {
+    collectStaticImportBindings(ch, 0, import_index);
+  }
+}
+
 static void resolvePendingExports () {
   export_bucket_count = 4;
   while (export_bucket_count < pending_export_count * 2)
@@ -1224,29 +1242,31 @@ static void resolvePendingExports () {
     export_buckets[bucket_index] = exprt;
   }
 
-  for (ImportBinding* binding = first_import_binding; binding != NULL; binding = binding->next) {
-    resolveImportBinding(
-      binding->local_start,
-      binding->local_end,
-      binding->import_start,
-      binding->import_end,
-      binding->import_name_ty,
-      binding->import_index,
-      identifierNameHash(binding->local_start, binding->local_end)
-    );
+  char16_t* parse_end = pos;
+  uint32_t import_index = 0;
+  for (Import* impt = first_import; impt != NULL; impt = impt->next, import_index++) {
+    // `export … from` records share the Import shape but carry no local bindings.
+    if (impt->dynamic == STANDARD_IMPORT && *impt->statement_start == 'i')
+      collectStaticImportBindingsFromRecord(impt, import_index);
+    if (pending_export_count == 0)
+      break;
   }
+  pos = parse_end;
 
   // Every clause export that no import binding claimed is a local export after
   // all. resolveExport() keeps the count, so a fully resolved table skips this.
-  if (pending_export_count == 0)
-    return;
-  for (uint32_t i = 0; i < export_bucket_count; i++) {
-    Export* exprt = export_buckets[i];
-    if (exprt != NULL && exprt->export_ty == Pending) {
-      exprt->export_ty = Direct;
-      exprt->import_index = -1;
+  if (pending_export_count != 0) {
+    for (uint32_t i = 0; i < export_bucket_count; i++) {
+      Export* exprt = export_buckets[i];
+      if (exprt != NULL && exprt->export_ty == Pending) {
+        exprt->export_ty = Direct;
+        exprt->import_index = -1;
+      }
     }
   }
+  // The table is what tells the clause reader to resolve, so it must not outlive
+  // this pass into the next parse's main loop.
+  export_buckets = NULL;
 }
 #endif
 
