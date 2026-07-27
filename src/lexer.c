@@ -921,7 +921,6 @@ void tryParseExportStatement () {
       // and rather than at resolve time keeps the name text cache-hot.
       for (Export* exprt = prev_export_write_head == NULL ? first_export : prev_export_write_head->next; exprt != NULL; exprt = exprt->next) {
         exprt->export_ty = Pending;
-        exprt->import_index = identifierNameHash(exprt->local_start, exprt->local_end);
         pending_export_count++;
       }
     }
@@ -1141,6 +1140,7 @@ static char16_t collectNamedImportBindings (uint32_t import_index);
 // worth reading in the deferred pass, which is also the only caller holding a
 // table to resolve it against, so a table is what selects the reader.
 static char16_t readImportClause (uint32_t import_index) {
+  has_import_bindings = true;
   return export_buckets == NULL ? skipImportClause() : collectNamedImportBindings(import_index);
 }
 
@@ -1204,6 +1204,7 @@ static void collectNamespaceImportBinding (uint32_t import_index, enum ExportImp
 }
 
 static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_t import_index) {
+  has_import_bindings = true;
   if (phase_keyword == 1) {
     const char16_t* local_start = pos;
     readImportName(ch);
@@ -1256,7 +1257,23 @@ static void collectStaticImportBindingsFromRecord (Import* impt, uint32_t import
   }
 }
 
+// A clause export that no import binding claimed is a local export after all.
+static inline __attribute__((always_inline)) void markExportLocal (Export* exprt) {
+  exprt->export_ty = Direct;
+  exprt->import_index = -1;
+}
+
 static void resolvePendingExports () {
+  // With no import clause in the module there is nothing a pending export could
+  // resolve against, so the table would be allocated, zeroed and swept for
+  // nothing.
+  if (!has_import_bindings) {
+    for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next)
+      if (exprt->export_ty == Pending)
+        markExportLocal(exprt);
+    return;
+  }
+
   export_bucket_count = 4;
   while (export_bucket_count < pending_export_count * 2)
     export_bucket_count <<= 1;
@@ -1278,6 +1295,9 @@ static void resolvePendingExports () {
   for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
     if (exprt->export_ty != Pending)
       continue;
+    // Hashed here rather than at the clause: a module with no import clause
+    // never builds the table and never needs the name hashed at all.
+    exprt->import_index = identifierNameHash(exprt->local_start, exprt->local_end);
     uint32_t bucket_index = exprt->import_index & export_bucket_mask;
     exprt->bucket_next = export_buckets[bucket_index];
     export_buckets[bucket_index] = exprt;
@@ -1294,17 +1314,12 @@ static void resolvePendingExports () {
   }
   pos = parse_end;
 
-  // Every clause export that no import binding claimed is a local export after
-  // all. resolveExport() keeps the count, so a fully resolved table skips this.
+  // resolveExport() keeps the count, so a fully resolved table skips this.
   if (pending_export_count != 0) {
-    for (uint32_t i = 0; i < export_bucket_count; i++) {
-      for (Export* exprt = export_buckets[i]; exprt != NULL; exprt = exprt->bucket_next) {
-        if (exprt->export_ty == Pending) {
-          exprt->export_ty = Direct;
-          exprt->import_index = -1;
-        }
-      }
-    }
+    for (uint32_t i = 0; i < export_bucket_count; i++)
+      for (Export* exprt = export_buckets[i]; exprt != NULL; exprt = exprt->bucket_next)
+        if (exprt->export_ty == Pending)
+          markExportLocal(exprt);
   }
   // The table is what tells the clause reader to resolve, so it must not outlive
   // this pass into the next parse's main loop.

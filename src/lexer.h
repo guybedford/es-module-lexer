@@ -122,6 +122,7 @@ Export* export_write_head = NULL;
 const char16_t* export_statement_start = NULL;
 uint32_t import_count = 0;
 uint32_t pending_export_count = 0;
+bool has_import_bindings = false;
 #endif
 void* analysis_base;
 void* analysis_head;
@@ -172,6 +173,7 @@ const char16_t* sa (uint32_t utf16Len) {
 #ifndef LEXER_MIN
   import_count = 0;
   pending_export_count = 0;
+  has_import_bindings = false;
 #endif
   return source;
 }
