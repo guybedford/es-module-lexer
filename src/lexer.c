@@ -1069,16 +1069,19 @@ static void resolveImportBinding (
   uint32_t import_index,
   uint32_t binding_hash
 ) {
-  uint32_t bucket_index = binding_hash & export_bucket_mask;
-  Export* exprt;
-  while ((exprt = export_buckets[bucket_index]) != NULL) {
+  // resolveExport() overwrites the hash and the name it matched on, but never
+  // the chain, so resolved entries stay walkable for the rest of the bucket.
+  for (
+    Export* exprt = export_buckets[binding_hash & export_bucket_mask];
+    exprt != NULL;
+    exprt = exprt->bucket_next
+  ) {
     if (
       exprt->export_ty == Pending &&
       exprt->import_index == binding_hash &&
       identifierNameEqual(exprt->local_start, exprt->local_end, local_start, local_end)
     )
       resolveExport(exprt, import_start, import_end, import_name_ty, import_index);
-    bucket_index = (bucket_index + 1) & export_bucket_mask;
   }
 }
 
@@ -1233,8 +1236,7 @@ static void collectStaticImportBindings (char16_t ch, int phase_keyword, uint32_
 }
 
 // The table lives in the analysis arena, so a module without detached exports
-// never reserves it. Load stays at 50%: a lookup walks its probe cluster to the
-// terminating NULL because one import binding can resolve several exports.
+// never reserves it.
 static void collectStaticImportBindingsFromRecord (Import* impt, uint32_t import_index) {
   pos = (char16_t*)impt->statement_start + 6;
   char16_t ch = commentWhitespace(true);
@@ -1270,12 +1272,14 @@ static void resolvePendingExports () {
   for (uint32_t i = 0; i < export_bucket_count; i++)
     ((Export* volatile*)export_buckets)[i] = NULL;
 
+  // Chained rather than open addressed: names repeat in a clause without being
+  // legal, and probing for a free slot makes that quadratic. Prepending costs no
+  // comparison at all, and a bucket a name shares stays one walk to resolve.
   for (Export* exprt = first_export; exprt != NULL; exprt = exprt->next) {
     if (exprt->export_ty != Pending)
       continue;
     uint32_t bucket_index = exprt->import_index & export_bucket_mask;
-    while (export_buckets[bucket_index] != NULL)
-      bucket_index = (bucket_index + 1) & export_bucket_mask;
+    exprt->bucket_next = export_buckets[bucket_index];
     export_buckets[bucket_index] = exprt;
   }
 
@@ -1294,10 +1298,11 @@ static void resolvePendingExports () {
   // all. resolveExport() keeps the count, so a fully resolved table skips this.
   if (pending_export_count != 0) {
     for (uint32_t i = 0; i < export_bucket_count; i++) {
-      Export* exprt = export_buckets[i];
-      if (exprt != NULL && exprt->export_ty == Pending) {
-        exprt->export_ty = Direct;
-        exprt->import_index = -1;
+      for (Export* exprt = export_buckets[i]; exprt != NULL; exprt = exprt->bucket_next) {
+        if (exprt->export_ty == Pending) {
+          exprt->export_ty = Direct;
+          exprt->import_index = -1;
+        }
       }
     }
   }

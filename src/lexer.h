@@ -95,6 +95,8 @@ struct Export {
   uint32_t import_index;
   uint8_t export_ty;
   uint8_t import_name_ty;
+  // Chains the pending-export table bucket; see resolvePendingExports().
+  struct Export* bucket_next;
 #endif
   struct Export* next;
 };
