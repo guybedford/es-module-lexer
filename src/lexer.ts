@@ -55,6 +55,12 @@ export interface ImportSpecifier {
    * For dynamic import expressions, this field will be empty if not a valid JS string.
    * For static import expressions, this field will always be populated.
    *
+   * A dynamic import whose entire argument is a single template literal is
+   * reported as a glob: each `${...}` substitution is collapsed to a single
+   * `*` (full build only; the minimal build reports undefined). Other
+   * expressions (including a template concatenated with anything else) remain
+   * undefined.
+   *
    * @example
    * const [imports1, exports1] = parse(String.raw`import './\u0061\u0062.js'`);
    * imports1[0].n;
@@ -67,6 +73,10 @@ export interface ImportSpecifier {
    * const [imports3, exports3] = parse(`import("./" + "ab.js")`);
    * imports3[0].n;
    * // Returns undefined
+   *
+   * const [imports4, exports4] = parse('import(`./locales/${locale}.js`)');
+   * imports4[0].n;
+   * // Returns "./locales/*.js"
    */
   readonly n: string | undefined;
   /**
@@ -312,6 +322,8 @@ export function parse (source: string, name = '@'): readonly [
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
+    else if (!MINIMAL && d !== -1 && source[s] === '`')
+      n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -507,6 +519,12 @@ let wasm: {
   avs(): number;
   /** getAttributeValueEnd */
   ave(): number;
+  /** readTemplateSpan */
+  rt(): boolean;
+  /** getTemplateSpanEnd */
+  te(): number;
+  /** resetTemplateSpans */
+  rts(): void;
 };
 
 const getWasmBytes = () => (

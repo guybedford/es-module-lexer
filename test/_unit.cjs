@@ -464,8 +464,7 @@ suite('Lexer', () => {
 
   test(`Dynamic import no-substitution template specifier`, () => {
     // A no-substitution template literal is a constant string, so n is set the
-    // same as for the quoted forms; an interpolated template has no constant
-    // value, so n stays undefined.
+    // same as for the quoted forms.
     assert.strictEqual(parse('import("./x.js")')[0][0].n, './x.js');
     assert.strictEqual(parse("import('./x.js')")[0][0].n, './x.js');
     assert.strictEqual(parse('import(`./x.js`)')[0][0].n, './x.js');
