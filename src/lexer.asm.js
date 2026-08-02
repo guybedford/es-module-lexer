@@ -22,8 +22,8 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 
 // Keyword dictionary, extracted from the fastcomp static memory image at build
 // time (see chompfile.toml lib/lexer.asm.in.js) so it stays in sync with the
-// keyword tables in lexer.c automatically.
-const words = '{{WORDS}}';
+// contiguous keyword table in lexer.c automatically.
+const words = {{WORDS}};
 
 let source, name;
 export function parse (_source, _name = '@') {
@@ -64,7 +64,8 @@ export function parse (_source, _name = '@') {
 
   const imports = [], exports = [];
   while (asm.ri()) {
-    const s = asm.is(), e = asm.ie(), a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se(), t = asm.it();
+    const s = asm.is(), e = asm.ie(), importType = asm.it(), t = importType & 15;
+    const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
     let n;
     if (asm.ip())
       n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
@@ -94,10 +95,11 @@ export function parse (_source, _name = '@') {
     }
     else {
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
+      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
     }
   }
-  while (asm.re()) {
+  let exportType;
+  while ((exportType = asm.re())) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
     if (MINIMAL) {
       const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
@@ -106,16 +108,16 @@ export function parse (_source, _name = '@') {
       continue;
     }
 
-    const t = asm.et(), ss = asm.ess();
+    const exportType = asm.et(), t = exportType & 3, tp = !!(exportType & 4), ss = asm.ess();
     if (t === 3) {
       const fi = asm.eii();
-      exports.push({ type: 'reexport-all', from: imports[fi].specifier, importIndex: fi, start: s, end: e, exportStart: ss });
+      exports.push({ type: 'reexport-all', from: imports[fi].specifier, importIndex: fi, start: s, end: e, exportStart: ss, typeOnly: tp });
     }
     else {
       const n = decodeIfQuoted(s, e);
       if (t === 1) {
         const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
-        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss });
+        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss, typeOnly: tp });
       }
       else {
         const fi = asm.eii(), importNameType = asm.eit();
@@ -132,7 +134,8 @@ export function parse (_source, _name = '@') {
           importIndex: fi,
           start: s,
           end: e,
-          exportStart: ss
+          exportStart: ss,
+          typeOnly: tp
         });
       }
     }

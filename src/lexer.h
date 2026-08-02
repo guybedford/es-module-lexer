@@ -7,8 +7,6 @@ extern unsigned char __heap_base;
 
 const char16_t* STANDARD_IMPORT = (char16_t*)0x1;
 const char16_t* IMPORT_META = (char16_t*)0x2;
-const char16_t __empty_char = '\0';
-const char16_t* EMPTY_CHAR = &__empty_char;
 const char16_t* source = (void*)&__heap_base;
 
 void setSource (void* ptr) {
@@ -42,6 +40,11 @@ enum ExportImportNameType {
   SourceImport = 3,
 };
 
+#ifdef LEX_TS
+// ExportImportNameType uses bits 0-1, leaving bit 2 for type-only metadata.
+#define TYPE_ONLY_EXPORT 4
+#endif
+
 struct Attribute {
   const char16_t* key_start;
   const char16_t* key_end;
@@ -74,6 +77,9 @@ struct Import {
   const char16_t* attr_index;
   const char16_t* dynamic;
   bool safe;
+#ifdef LEX_TS
+  bool type_only;
+#endif
   enum ImportType import_ty;
 #ifndef LEXER_MIN
   struct Attribute* attributes;
@@ -273,6 +279,9 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->attr_index = 0;
   import->dynamic = dynamic;
   import->safe = dynamic == STANDARD_IMPORT;
+#ifdef LEX_TS
+  import->type_only = false;
+#endif
 #ifndef LEXER_MIN
   import->attributes = NULL;
   import->template_spans = NULL;
@@ -338,7 +347,11 @@ uint32_t se () {
 }
 // getImportType
 uint32_t it () {
+#ifdef LEX_TS
+  return import_read_head->import_ty | import_read_head->type_only << 4;
+#else
   return import_read_head->import_ty;
+#endif
 }
 // getAssertIndex
 uint32_t ai () {
@@ -408,7 +421,11 @@ int32_t ele () {
 #ifndef LEXER_MIN
 // getExportType
 uint32_t et () {
+#ifdef LEX_TS
+  return export_read_head->export_ty | (export_read_head->import_name_ty & TYPE_ONLY_EXPORT);
+#else
   return export_read_head->export_ty;
+#endif
 }
 // getExportImportIndex
 uint32_t eii () {
@@ -416,7 +433,11 @@ uint32_t eii () {
 }
 // getExportImportNameType
 uint32_t eit () {
+#ifdef LEX_TS
+  return export_read_head->import_name_ty & 3;
+#else
   return export_read_head->import_name_ty;
+#endif
 }
 // getExportStatementStart
 uint32_t ess () {
@@ -488,7 +509,7 @@ void rsa () {
 bool parse ();
 
 void tryParseImportStatement ();
-void tryParseExportStatement ();
+bool tryParseExportStatement ();
 
 void readImportString (const char16_t* ss, char16_t ch, int phase_keyword);
 char16_t readExportAs (char16_t* startPos, char16_t* endPos);
@@ -497,6 +518,19 @@ char16_t readBindingTarget (char16_t ch);
 void readBindingPattern ();
 char16_t skipExpression (bool asi);
 bool isValueChar (char16_t c);
+
+#ifdef LEX_TS
+// pos AT the start of a `type` token candidate. Returns true when it is the
+// contextual `type` keyword whose follower begins an import/export clause,
+// not an identifier whose prefix is "type" (typeof, typed, ...).
+static inline __attribute__((always_inline)) bool isTsTypeKeyword (char16_t* pos);
+static inline __attribute__((always_inline)) bool isTsInterfaceKeyword (char16_t* pos);
+static inline __attribute__((always_inline)) bool isTsIdentifierStart (char16_t c);
+bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd);
+bool tryTsTypeDeclaration (bool bare);
+bool skipTsTrivia (char16_t ch, bool stopAtLineBreak);
+bool skipTsBalanced ();
+#endif
 
 char16_t commentWhitespace (bool br);
 void regularExpression ();

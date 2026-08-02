@@ -75,3 +75,35 @@ jobs:
           EMSDK_PATH: './emsdk'
           EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
         run: chomp bench
+
+  fuzz:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v2
+
+      - name: Use Node.js latest
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+
+      - name: Install Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd ./emsdk
+          ./emsdk install ${{ env.EMCC_VERSION }}
+          ./emsdk activate ${{ env.EMCC_VERSION }}
+
+      - name: npm Install
+        run: npm install
+
+      - name: Setup Chomp
+        uses: guybedford/chomp-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fuzz TypeScript Lexing
+        env:
+          EMSDK_PATH: './emsdk'
+        run: chomp test:fuzz

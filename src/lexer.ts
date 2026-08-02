@@ -117,6 +117,12 @@ export interface StaticImport extends ImportBase {
    * Start of the import attributes (`with { ... }`), or -1 if none.
    */
   readonly attributesStart: number;
+  /**
+   * `true` for a TypeScript type-only import (`import type ... from`), elided
+   * from the emitted JavaScript. Both the Wasm and asm.js / CSP builds lex
+   * TypeScript; the minimal build (`es-module-lexer/minimal`) omits this field.
+   */
+  readonly typeOnly: boolean;
 }
 
 export interface DynamicImport extends ImportBase {
@@ -223,6 +229,13 @@ export interface DirectExport {
    * returns the same `exportStart` for both `a` and `b`.
    */
   readonly exportStart: number;
+  /**
+   * `true` for a TypeScript type-only export: `export type { ... }`, an inline
+   * `export { type X }`, or a directly-exported `export type`/`export interface`
+   * declaration. Elided from the emitted JavaScript. Both the Wasm and asm.js /
+   * CSP builds lex TypeScript; the minimal build omits this field.
+   */
+  readonly typeOnly: boolean;
 }
 
 export interface Reexport {
@@ -264,6 +277,10 @@ export interface Reexport {
    * Start of the export statement.
    */
   readonly exportStart: number;
+  /**
+   * `true` for a TypeScript type-only re-export.
+   */
+  readonly typeOnly: boolean;
 }
 
 export interface ReexportAll {
@@ -288,6 +305,10 @@ export interface ReexportAll {
    * Start of the export statement.
    */
   readonly exportStart: number;
+  /**
+   * `true` for a TypeScript type-only star re-export.
+   */
+  readonly typeOnly: boolean;
 }
 
 export type Export = DirectExport | Reexport | ReexportAll;
@@ -338,7 +359,8 @@ export function parse (source: string, name = '@'): readonly [
 
   const imports: Import[] = [], exports: Export[] = [];
   while (wasm.ri()) {
-    const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
+    const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 15;
+    const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
       n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
@@ -368,7 +390,7 @@ export function parse (source: string, name = '@'): readonly [
     }
     else {
       const phase: ImportPhase = t === ImportType.StaticSourcePhase ? 'source' : t === ImportType.StaticDeferPhase ? 'defer' : null;
-      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
+      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
     }
   }
   let exportPtr = wasm.re();
@@ -383,7 +405,7 @@ export function parse (source: string, name = '@'): readonly [
       continue;
     }
 
-    // Full-build Export ABI: six 32-bit fields followed by two byte tags.
+    // Full-build Export ABI: six 32-bit fields followed by byte tags.
     const s = (memoryView!.getUint32(exportPtr, true) - addr) >>> 1;
     const e = (memoryView!.getUint32(exportPtr + 4, true) - addr) >>> 1;
     const localStart = memoryView!.getUint32(exportPtr + 8, true);
@@ -393,31 +415,34 @@ export function parse (source: string, name = '@'): readonly [
     const ss = (memoryView!.getUint32(exportPtr + 16, true) - addr) >>> 1;
     const fi = memoryView!.getUint32(exportPtr + 20, true);
     const t = memoryView!.getUint8(exportPtr + 24) as ExportType;
+    const importNameType = memoryView!.getUint8(exportPtr + 25);
+    const tp = !!(importNameType & 4);
     if (t === ExportType.ReexportAll) {
-      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier as string, importIndex: fi, start: s, end: e, exportStart: ss });
+      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier as string, importIndex: fi, start: s, end: e, exportStart: ss, typeOnly: tp });
     }
     else {
       const n = decodeIfQuoted(source.slice(s, e));
       if (t === ExportType.Direct) {
         const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
-        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss });
+        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss, typeOnly: tp });
       }
       else {
-        const importNameType = memoryView!.getUint8(exportPtr + 25);
-        const im = importNameType === 0
+        const nameType = importNameType & 3;
+        const im = nameType === 0
           ? decodeIfQuoted(source.slice(ls, le))
-          : importNameType === 1 ? 'default' : null;
+          : nameType === 1 ? 'default' : null;
         exports.push({
           type: 'reexport',
           name: n,
           importName: im,
-          importNameStart: importNameType === 0 ? ls : -1,
-          importNameEnd: importNameType === 0 ? le : -1,
+          importNameStart: nameType === 0 ? ls : -1,
+          importNameEnd: nameType === 0 ? le : -1,
           from: (imports[fi] as StaticImport).specifier as string,
           importIndex: fi,
           start: s,
           end: e,
-          exportStart: ss
+          exportStart: ss,
+          typeOnly: tp
         });
       }
     }

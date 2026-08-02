@@ -34,7 +34,8 @@ suite('Full build API', () => {
       importStart: 0,
       importEnd: source.length - 1,
       attributes: null,
-      attributesStart: -1
+      attributesStart: -1,
+      typeOnly: false
     }]);
     assert.deepStrictEqual(exports, []);
   });
@@ -106,6 +107,19 @@ suite('Full build API', () => {
     assert.strictEqual(source.substring(b.start, b.end), 'b');
     assert.strictEqual(source.substring(b.localStart, b.localEnd), 'a');
     assert.strictEqual(b.exportStart, source.indexOf('export {'));
+    assert.strictEqual(b.typeOnly, false);
+  });
+
+  test('type-only records', () => {
+    const source = `import type { T } from './t.js';\nexport type { U } from './u.js';\nexport interface I {}`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports[0].type, 'static');
+    assert.strictEqual(imports[0].typeOnly, true);
+    assert.strictEqual(exports[0].type, 'reexport');
+    assert.strictEqual(exports[0].typeOnly, true);
+    assert.strictEqual(exports[1].type, 'direct');
+    assert.strictEqual(exports[1].name, 'I');
+    assert.strictEqual(exports[1].typeOnly, true);
   });
 
   test('reexports', () => {
@@ -121,7 +135,8 @@ suite('Full build API', () => {
       importIndex: 0,
       start: source.indexOf('y }'),
       end: source.indexOf('y }') + 1,
-      exportStart: 0
+      exportStart: 0,
+      typeOnly: false
     }, {
       type: 'reexport',
       name: 'ns',
@@ -132,14 +147,16 @@ suite('Full build API', () => {
       importIndex: 1,
       start: source.indexOf('ns'),
       end: source.indexOf('ns') + 2,
-      exportStart: source.indexOf('export * as')
+      exportStart: source.indexOf('export * as'),
+      typeOnly: false
     }, {
       type: 'reexport-all',
       from: './all.js',
       importIndex: 2,
       start: source.indexOf('* from'),
       end: source.indexOf('* from') + 1,
-      exportStart: source.indexOf('export * from')
+      exportStart: source.indexOf('export * from'),
+      typeOnly: false
     }]);
     assert.strictEqual(imports[2].type, 'reexport-star');
     assert.strictEqual(imports[2].specifier, './all.js');
