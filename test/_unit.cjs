@@ -17,7 +17,46 @@ const init = (async () => {
     await m.init;
     parse = m.parse;
   }
+  if (!min) {
+    // The shared assertions below are written against the terse minimal
+    // record shape. The full builds report the string-discriminated API, so
+    // records are strictly mapped back to the terse fields here rather than
+    // forking every assertion; test/full-api.cjs asserts the full API shape
+    // directly.
+    const rawParse = parse;
+    parse = (...args) => {
+      const [imports, exports, ...rest] = rawParse(...args);
+      return [imports.map(terseImport), exports.map(terseExport), ...rest];
+    };
+  }
 })();
+
+function terseImport (record) {
+  switch (record.type) {
+    case 'import-meta':
+      return { n: undefined, t: 3, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -2, a: -1, at: null };
+    case 'dynamic':
+      return { n: record.specifier, t: record.phase === 'source' ? 5 : record.phase === 'defer' ? 7 : 2, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: record.dynamicStart, a: record.attributesStart, at: record.attributes };
+    case 'static':
+    case 'reexport-star':
+      return { n: record.specifier, t: record.type === 'reexport-star' ? 8 : record.phase === 'source' ? 4 : record.phase === 'defer' ? 6 : 1, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -1, a: record.attributesStart, at: record.attributes };
+    default:
+      throw new Error(`Unexpected full-build import record type ${record.type}`);
+  }
+}
+
+function terseExport (record) {
+  switch (record.type) {
+    case 'direct':
+      return { t: 1, n: record.name, ln: record.localName, s: record.start, e: record.end, ls: record.localStart, le: record.localEnd, ss: record.exportStart };
+    case 'reexport':
+      return { t: 2, n: record.name, im: record.importName, ims: record.importNameStart, ime: record.importNameEnd, f: record.from, fi: record.importIndex, s: record.start, e: record.end, ss: record.exportStart };
+    case 'reexport-all':
+      return { t: 3, f: record.from, fi: record.importIndex, s: record.start, e: record.end, ss: record.exportStart };
+    default:
+      throw new Error(`Unexpected full-build export record type ${record.type}`);
+  }
+}
 
 function assertExportIs(source, actual, expected) {
   if (source[actual.s] === '"' || source[actual.s] === "'") {
