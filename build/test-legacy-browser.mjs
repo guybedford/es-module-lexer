@@ -1,10 +1,12 @@
 // Runs test/legacy.html in a legacy headless Firefox over raw WebDriver HTTP,
 // asserting the non-SIMD builds still parse there. FIREFOX_BIN and GECKODRIVER
 // point at the binaries (see the CI workflow's legacy step).
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { extname } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 
 const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.mjs': 'application/javascript' };
 const server = createServer(async (req, res) => {
@@ -27,42 +29,74 @@ const driver = spawn(process.env.GECKODRIVER, ['--port', '4444'], {
   stdio: 'inherit',
   env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1', MOZ_FORCE_DISABLE_E10S: '1' }
 });
-await new Promise(resolve => setTimeout(resolve, 2000));
 
-const drive = async (path, body) => {
-  const res = await fetch('http://127.0.0.1:4444' + path, body === undefined
-    ? undefined
-    : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const json = await res.json();
-  if (!res.ok)
+const drive = async (method, path, body) => {
+  const options = { method, signal: AbortSignal.timeout(10000) };
+  if (body !== undefined) {
+    options.headers = { 'content-type': 'application/json' };
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch('http://127.0.0.1:4444' + path, options);
+  const json = await response.json();
+  if (!response.ok)
     throw new Error(`${path}: ${JSON.stringify(json).slice(0, 400)}`);
   return json.value;
 };
 
-let failure = null;
+const waitForDriver = async () => {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      await drive('GET', '/status');
+      return;
+    }
+    catch (error) {
+      if (attempt === 99)
+        throw error;
+    }
+    await setTimeout(100);
+  }
+};
+
+let failure;
+let sessionId;
 try {
-  const session = await drive('/session', {
+  await waitForDriver();
+  const session = await drive('POST', '/session', {
     capabilities: { alwaysMatch: { 'moz:firefoxOptions': { binary: process.env.FIREFOX_BIN, args: ['-headless'] } } }
   });
-  await drive(`/session/${session.sessionId}/url`, { url: 'http://127.0.0.1:8123/test/legacy.html' });
+  sessionId = session.sessionId;
+  await drive('POST', `/session/${sessionId}/url`, { url: 'http://127.0.0.1:8123/test/legacy.html' });
   let title = 'RUNNING';
   for (let i = 0; i < 30 && title === 'RUNNING'; i++) {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    title = await drive(`/session/${session.sessionId}/title`);
+    await setTimeout(500);
+    title = await drive('GET', `/session/${sessionId}/title`);
   }
   if (title !== 'PASS')
     failure = title === 'RUNNING' ? 'timed out' : title;
-  await drive(`/session/${session.sessionId}`, undefined).catch(() => {});
 }
-catch (err) {
-  failure = err.message;
+catch (error) {
+  failure = error.message;
 }
-driver.kill();
-server.close();
+finally {
+  if (sessionId !== undefined) {
+    try {
+      await drive('DELETE', `/session/${sessionId}`);
+    }
+    catch (error) {
+      failure = failure === undefined ? error.message : `${failure}; cleanup: ${error.message}`;
+    }
+  }
+  if (driver.exitCode === null && driver.signalCode === null) {
+    const exit = once(driver, 'exit');
+    driver.kill();
+    await exit;
+  }
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+}
 if (failure) {
   console.error(`legacy browser test: ${failure}`);
-  process.exit(1);
+  process.exitCode = 1;
 }
-console.log('legacy browser test: PASS');
-// Open keep-alive sockets (driver, static server) must not hold the process.
-process.exit(0);
+else {
+  console.log('legacy browser test: PASS');
+}
