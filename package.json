@@ -48,8 +48,7 @@
   },
   "files": [
     "dist",
-    "types",
-    "lexer.js"
+    "types"
   ],
   "type": "module",
   "repository": {
