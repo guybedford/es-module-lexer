@@ -154,11 +154,11 @@ run = """
 	${{ EMSDK_PATH }}/emsdk activate 6.0.0
 
 	${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -DLEXER_MIN -o lib/lexer.min.wasm -Oz -flto --no-entry -s STANDALONE_WASM=1 \
-	-mno-bulk-memory -mno-reference-types -mno-multivalue -mno-sign-ext -mno-nontrapping-fptoint \
+	-mcpu=mvp -mno-bulk-memory -mno-nontrapping-fptoint \
 	-s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','___heap_base']" \
 	-s SUPPORT_LONGJMP=0 -s ALLOW_MEMORY_GROWTH=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
 
-	WASM=lib/lexer.min.wasm node build/check-no-simd.mjs
+	${{ EMSDK_PATH }}/upstream/bin/wasm-opt lib/lexer.min.wasm --mvp-features --quiet
 """
 
 [[task]]
