@@ -2,9 +2,6 @@
   "name": "es-module-lexer",
   "version": "2.3.1",
   "description": "Lexes ES modules returning their import/export metadata",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "main": "dist/lexer.cjs",
   "module": "dist/lexer.js",
   "types": "types/lexer.d.ts",

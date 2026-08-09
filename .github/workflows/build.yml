@@ -13,10 +13,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, latest]
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v2
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Install Emscripten
         run: |

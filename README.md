@@ -350,7 +350,9 @@ hasModuleSyntax === false;
 
 ### Environment Support
 
-Node.js 18+, and [all browsers with Web Assembly support](https://caniuse.com/#feat=wasm).
+The full build requires Node.js 18+ and engines with [WebAssembly SIMD support](https://webassembly.org/features/) (Chrome 91+, Firefox 89+, Safari 16.4+).
+
+The minimal build (`es-module-lexer/minimal`) carries no SIMD requirement, running in [all browsers with WebAssembly support](https://caniuse.com/#feat=wasm), and the asm.js builds of both variants run in legacy browsers without WebAssembly — the es-module-shims use case.
 
 ### Grammar Support
 
