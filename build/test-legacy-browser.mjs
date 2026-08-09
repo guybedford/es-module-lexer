@@ -30,13 +30,8 @@ const driver = spawn(process.env.GECKODRIVER, ['--port', '4444'], {
   env: { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: '1', MOZ_FORCE_DISABLE_E10S: '1' }
 });
 
-/**
- * @param {'DELETE' | 'GET' | 'POST'} method
- * @param {string} path
- * @param {Record<string, unknown>} [body]
- */
 const drive = async (method, path, body) => {
-  const options = { method };
+  const options = { method, signal: AbortSignal.timeout(10000) };
   if (body !== undefined) {
     options.headers = { 'content-type': 'application/json' };
     options.body = JSON.stringify(body);
