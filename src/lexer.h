@@ -36,6 +36,20 @@ struct Attribute {
 typedef struct Attribute Attribute;
 #endif
 
+#ifndef LEXER_MIN
+// A ${...} substitution inside a lone dynamic-import template specifier. `end`
+// is the source position just after the closing "}". The decoders replace the
+// whole substitution with a single "*" glob wildcard, so they only need where
+// each one ends. Recorded here (in the parser, which already disambiguates
+// regex from division) so the decoders never re-tokenize the body. Glob `n` is
+// a full-build-only feature; es-module-shims reads specifiers via source.slice.
+struct TemplateSpan {
+  const char16_t* end;
+  struct TemplateSpan* next;
+};
+typedef struct TemplateSpan TemplateSpan;
+#endif
+
 struct Import {
   const char16_t* start;
   const char16_t* end;
@@ -47,6 +61,19 @@ struct Import {
   enum ImportType import_ty;
 #ifndef LEXER_MIN
   struct Attribute* attributes;
+  // Top-level ${...} substitution end positions, in source order, iff the
+  // argument is a lone interpolated template literal (so a non-empty list is
+  // itself the "this is a glob" signal). NULL otherwise. `template_span_tail`
+  // and `specifier_template_depth` are recording scratch, valid only while the
+  // specifier template is open; kept per-import so a nested import(`...`) in a
+  // substitution cannot corrupt an enclosing import's list.
+  struct TemplateSpan* template_spans;
+  struct TemplateSpan* template_span_tail;
+  // Position of the specifier template's closing backtick, once seen. The
+  // argument is a lone template glob iff this is the last token before ")" or
+  // ",", so a concatenation (`a${x}` + b) is rejected at finalization.
+  const char16_t* template_close;
+  uint16_t specifier_template_depth;
 #endif
   struct Import* next;
 };
@@ -163,6 +190,10 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->safe = dynamic == STANDARD_IMPORT;
 #ifndef LEXER_MIN
   import->attributes = NULL;
+  import->template_spans = NULL;
+  import->template_span_tail = NULL;
+  import->template_close = NULL;
+  import->specifier_template_depth = 0;
 #endif
   import->next = NULL;
 #ifndef LEXER_MIN
@@ -234,6 +265,38 @@ uint32_t id () {
 uint32_t ip () {
   return import_read_head->safe;
 }
+
+#ifndef LEXER_MIN
+// The last span node rt() returned. template_span_started distinguishes "not
+// started" from "exhausted": once exhausted rt() stays false rather than
+// reloading the first span, which would make the decoder jump backward and
+// loop. rts() re-arms both for the next import.
+TemplateSpan* template_span_read_head;
+bool template_span_started;
+
+// readTemplateSpan: advance to the next ${...} substitution end of the current
+// import's lone template specifier. False once exhausted, and stays false.
+bool rt () {
+  if (!template_span_started) {
+    template_span_started = true;
+    template_span_read_head = import_read_head->template_spans;
+  }
+  else if (template_span_read_head != NULL) {
+    template_span_read_head = template_span_read_head->next;
+  }
+  return template_span_read_head != NULL;
+}
+// getTemplateSpanEnd: source offset just after the current substitution's "}".
+uint32_t te () {
+  return template_span_read_head->end - source;
+}
+// resetTemplateSpans
+void rts () {
+  template_span_read_head = NULL;
+  template_span_started = false;
+}
+#endif
+
 // getExportStart
 uint32_t es () {
   return export_read_head->start - source;
