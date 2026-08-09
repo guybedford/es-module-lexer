@@ -2039,6 +2039,17 @@ function x() {
     assert.strictEqual(exports[count - 1].fi, count - 1);
   });
 
+  test('Template-span-dense sources report every glob', () => {
+    if (min) return;
+    // Each statement's Import record and span outgrow its source bytes, so the
+    // span allocation has to hit the same grow/retry path as the records.
+    const count = 4000;
+    const [imports] = parse('import(`${a}`);'.repeat(count));
+    assert.strictEqual(imports.length, count);
+    assert.strictEqual(imports[0].n, '*');
+    assert.strictEqual(imports[count - 1].n, '*');
+  });
+
   test('Full Wasm keeps temporary export tables out of initial memory', async () => {
     if (!process.env.WASM || min) return;
     const { instance } = await WebAssembly.instantiate(await readFile('lib/lexer.wasm'));

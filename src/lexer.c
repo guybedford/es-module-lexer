@@ -227,6 +227,7 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         if (dynamicImportStackDepth > 0) {
           Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
           if (cur_dynamic_import->specifier_template_depth == openTokenDepth) {
+            ensureAnalysisCapacity(sizeof(TemplateSpan));
             TemplateSpan* span = (TemplateSpan*)(analysis_head);
             analysis_head = analysis_head + sizeof(TemplateSpan);
             span->end = pos + 1;
