@@ -8,8 +8,12 @@
 #include "lexer.h"
 #include <stdio.h>
 #include <string.h>
+// SIMD scanning is full-build only: the minimal build favors footprint
+#if defined(__wasm_simd128__) && !defined(LEXER_MIN)
+#define LEXER_SIMD
+#include <wasm_simd128.h>
+#endif
 
-// NOTE: MESSING WITH THESE REQUIRES MANUAL ASM DICTIONARY CONSTRUCTION (via lexer.emcc.js base64 decoding)
 static const char16_t XPORT[] = { 'x', 'p', 'o', 'r', 't' };
 static const char16_t PORT[] = { 'p', 'o', 'r', 't' };
 static const char16_t LASS[] = { 'l', 'a', 's', 's' };
@@ -292,6 +296,21 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
   return true;
 }
 
+#ifdef LEXER_SIMD
+// first char at or after p not in {\t..\r, space}; the null sentinel stops the scan
+static inline char16_t* simdWsSkip (char16_t* p) {
+  for (;;) {
+    v128_t chunk = wasm_v128_load(p);
+    uint32_t bits = wasm_i16x8_bitmask(wasm_v128_or(
+        wasm_i16x8_eq(chunk, wasm_i16x8_splat(32)),
+        wasm_u16x8_lt(wasm_i16x8_sub(chunk, wasm_i16x8_splat(9)), wasm_i16x8_splat(5)))) ^ 0xFF;
+    if (bits)
+      return p + __builtin_ctz(bits);
+    p += 8;
+  }
+}
+#endif
+
 // Note: parsing is based on the _assumption_ that the source is already valid
 bool parse () {
   // stack allocations
@@ -323,8 +342,14 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (ch == 32 || ch < 14 && ch > 8)
+    if (ch == 32 || ch < 14 && ch > 8) {
+#ifdef LEXER_SIMD
+      ch = *(pos + 1);
+      if (ch == 32 || ch < 14 && ch > 8)
+        pos = simdWsSkip(pos + 2) - 1;
+#endif
       continue;
+    }
 
     switch (ch) {
       case 'e':
@@ -375,8 +400,14 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (ch == 32 || ch < 14 && ch > 8)
+    if (ch == 32 || ch < 14 && ch > 8) {
+#ifdef LEXER_SIMD
+      ch = *(pos + 1);
+      if (ch == 32 || ch < 14 && ch > 8)
+        pos = simdWsSkip(pos + 2) - 1;
+#endif
       continue;
+    }
 
     if (!consumeToken(ch))
       return false;
@@ -1547,6 +1578,76 @@ char16_t commentWhitespace (bool br) {
   return ch;
 }
 
+#ifdef LEXER_SIMD
+// Returns the next position at or after p holding one of {a, b, c, d, e, 0}.
+// Relies on the source null sentinel to terminate; may overread one vector
+// past it. Padded duplicate chars at call sites are CSE'd away when inlined.
+__attribute__((always_inline))
+static inline char16_t* simdScan (char16_t* p, char16_t a, char16_t b, char16_t c, char16_t d, char16_t e) {
+  const v128_t va = wasm_i16x8_splat(a);
+  const v128_t vb = wasm_i16x8_splat(b);
+  const v128_t vc = wasm_i16x8_splat(c);
+  const v128_t vd = wasm_i16x8_splat(d);
+  const v128_t ve = wasm_i16x8_splat(e);
+  const v128_t zero = wasm_i16x8_splat(0);
+  for (;;) {
+    v128_t chunk = wasm_v128_load(p);
+    uint32_t mask = wasm_i8x16_bitmask(wasm_v128_or(wasm_v128_or(
+        wasm_v128_or(wasm_i16x8_eq(chunk, va), wasm_i16x8_eq(chunk, vb)),
+        wasm_v128_or(wasm_i16x8_eq(chunk, vc), wasm_i16x8_eq(chunk, vd))),
+        wasm_v128_or(wasm_i16x8_eq(chunk, ve), wasm_i16x8_eq(chunk, zero))));
+    if (mask)
+      return p + __builtin_ctz(mask) / 2;
+    p += 8;
+  }
+}
+
+void templateString () {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, '$', '`', '\\', '$', '$');
+    char16_t ch = *p;
+    if (ch == '$') {
+      if (*(p + 1) != '{')
+        continue;
+      pos = p + 1;
+      openTokenStack[openTokenDepth].token = TemplateBrace;
+      openTokenStack[openTokenDepth++].pos = pos;
+      return;
+    }
+    if (ch == '`') {
+      pos = p;
+      if (openTokenStack[--openTokenDepth].token != Template)
+        syntaxError();
+      // The specifier template just closed. Note its closing backtick and stop
+      // recording (depth back to 0); finalization keeps the spans only if this
+      // backtick is the last token of the argument.
+      if (dynamicImportStackDepth > 0) {
+        Import* cur_dynamic_import = dynamicImportStack[dynamicImportStackDepth - 1];
+        if (cur_dynamic_import->specifier_template_depth == openTokenDepth + 1) {
+          cur_dynamic_import->template_close = pos;
+          cur_dynamic_import->specifier_template_depth = 0;
+        }
+      }
+      return;
+    }
+    if (ch == '\\') {
+      p++;
+      if (p > end) {
+        pos = p + 1;
+        syntaxError();
+        return;
+      }
+      continue;
+    }
+    if (p <= end)   // embedded null: keep looking
+      continue;
+    pos = p;        // the terminating sentinel at end + 1
+    syntaxError();
+    return;
+  }
+}
+#else
 void templateString () {
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1578,12 +1679,40 @@ void templateString () {
   }
   syntaxError();
 }
+#endif
 
 // pos AT the opening backtick. A no-substitution template literal (no ${...})
 // is a constant string, so a dynamic import can record it as a safe specifier.
 // On success consumes it, leaves pos AT the closing backtick and returns true.
 // On a substitution or EOF restores pos and returns false, leaving the literal
 // to the main loop's template handling.
+#ifdef LEXER_SIMD
+bool noSubstitutionTemplate () {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, '`', '\\', '$', '`', '`');
+    char16_t ch = *p;
+    if (ch == '`') {
+      pos = p;
+      return true;
+    }
+    if (ch == '\\') {
+      p++;
+      if (p > end)
+        return false;
+      continue;
+    }
+    if (ch == '$') {
+      if (*(p + 1) == '{')
+        return false;
+      continue;
+    }
+    if (p > end)   // the terminating sentinel
+      return false;
+    // embedded null: keep looking
+  }
+}
+#else
 bool noSubstitutionTemplate () {
   char16_t* startPos = pos;
   while (pos++ < end) {
@@ -1600,7 +1729,27 @@ bool noSubstitutionTemplate () {
   pos = startPos;
   return false;
 }
+#endif
 
+#ifdef LEXER_SIMD
+void blockComment (bool br) {
+  char16_t* p = pos + 1;
+  for (;;) {
+    p = simdScan(p + 1, '*', br ? '*' : '\n', br ? '*' : '\r', '*', '*');
+    char16_t ch = *p;
+    if (ch == '*') {
+      if (*(p + 1) != '/')
+        continue;
+      pos = p + 1;
+      return;
+    }
+    if (ch == 0 && p <= end)   // embedded null: keep looking
+      continue;
+    pos = p;                   // br char, or the sentinel at end + 1
+    return;
+  }
+}
+#else
 void blockComment (bool br) {
   pos++;
   // br is loop invariant and a comment body is scanned one character at a time,
@@ -1624,7 +1773,21 @@ void blockComment (bool br) {
     }
   }
 }
+#endif
 
+#ifdef LEXER_SIMD
+void lineComment () {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, '\n', '\r', '\n', '\n', '\n');
+    if (*p != 0 || p > end) {   // newline, or the terminating sentinel
+      pos = p;
+      return;
+    }
+    // embedded null: keep looking
+  }
+}
+#else
 void lineComment () {
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1632,7 +1795,37 @@ void lineComment () {
       return;
   }
 }
+#endif
 
+#ifdef LEXER_SIMD
+void stringLiteral (char16_t quote) {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, quote, '\\', '\n', '\r', quote);
+    char16_t ch = *p;
+    if (ch == quote) {
+      pos = p;
+      return;
+    }
+    if (ch == '\\') {
+      p++;
+      if (*p == '\r' && *(p + 1) == '\n')
+        p++;
+      if (p > end) {
+        pos = p + 1;
+        syntaxError();
+        return;
+      }
+      continue;
+    }
+    if (ch == 0 && p <= end)   // embedded null: keep looking
+      continue;
+    pos = p;   // unescaped newline, or the terminating sentinel at end + 1
+    syntaxError();
+    return;
+  }
+}
+#else
 void stringLiteral (char16_t quote) {
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1648,7 +1841,67 @@ void stringLiteral (char16_t quote) {
   }
   syntaxError();
 }
+#endif
 
+#ifdef LEXER_SIMD
+char16_t regexCharacterClass () {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, ']', '\\', '\n', '\r', ']');
+    char16_t ch = *p;
+    if (ch == ']') {
+      pos = p;
+      return ch;
+    }
+    if (ch == '\\') {
+      p++;
+      if (p > end) {
+        pos = p + 1;
+        break;
+      }
+      continue;
+    }
+    if (ch == 0 && p <= end)   // embedded null: keep looking
+      continue;
+    pos = p;   // unescaped newline, or the terminating sentinel at end + 1
+    break;
+  }
+  syntaxError();
+  return '\0';
+}
+
+void regularExpression () {
+  char16_t* p = pos;
+  for (;;) {
+    p = simdScan(p + 1, '/', '[', '\\', '\n', '\r');
+    char16_t ch = *p;
+    if (ch == '/') {
+      pos = p;
+      return;
+    }
+    if (ch == '[') {
+      pos = p;
+      if (regexCharacterClass() == '\0')
+        return;
+      p = pos;
+      continue;
+    }
+    if (ch == '\\') {
+      p++;
+      if (p > end) {
+        pos = p + 1;
+        break;
+      }
+      continue;
+    }
+    if (ch == 0 && p <= end)   // embedded null: keep looking
+      continue;
+    pos = p;   // unescaped newline, or the terminating sentinel at end + 1
+    break;
+  }
+  syntaxError();
+}
+#else
 char16_t regexCharacterClass () {
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1677,7 +1930,54 @@ void regularExpression () {
   }
   syntaxError();
 }
+#endif
 
+#ifdef LEXER_SIMD
+// vector isBrOrWs(c) || isPunctuator(c) || c == 0
+static inline v128_t stopMask (v128_t c) {
+  #define EQ(n)      wasm_i16x8_eq(c, wasm_i16x8_splat(n))
+  #define RANGE(a,n) wasm_u16x8_lt(wasm_i16x8_sub(c, wasm_i16x8_splat(a)), wasm_i16x8_splat(n))
+  v128_t m =            RANGE(9, 5);      // \t \n \v \f \r
+  m = wasm_v128_or(m, EQ(32));            // space
+  m = wasm_v128_or(m, EQ(160));           // nbsp
+  m = wasm_v128_or(m, EQ('!'));
+  m = wasm_v128_or(m, EQ('%'));
+  m = wasm_v128_or(m, EQ('&'));
+  m = wasm_v128_or(m, RANGE(40, 8));      // ( ) * + , - . /
+  m = wasm_v128_or(m, RANGE(58, 6));      // : ; < = > ?
+  m = wasm_v128_or(m, EQ('['));
+  m = wasm_v128_or(m, EQ(']'));
+  m = wasm_v128_or(m, EQ('^'));
+  m = wasm_v128_or(m, RANGE(123, 4));     // { | } ~
+  m = wasm_v128_or(m, EQ(0));             // sentinel / any null (matches scalar)
+  return m;
+  #undef EQ
+  #undef RANGE
+}
+
+char16_t readToWsOrPunctuator (char16_t ch) {
+  for (;;) {
+    v128_t chunk = wasm_v128_load(pos);
+    uint32_t bits = wasm_i16x8_bitmask(stopMask(chunk));
+    if (!bits) {
+      pos += 8;
+      continue;
+    }
+    pos += __builtin_ctz(bits);
+    ch = *pos;
+    // The '{' of a \u{...} identifier escape is part of the run, not a
+    // punctuator: step over the whole escape and keep scanning.
+    if (ch == '{' && pos - source >= 2 && *(pos - 1) == 'u' && *(pos - 2) == '\\') {
+      pos -= 2;
+      if (skipBracedEscape() < 0)
+        return '\0';
+      pos++;
+      continue;
+    }
+    return ch;
+  }
+}
+#else
 char16_t readToWsOrPunctuator (char16_t ch) {
   do {
 #ifndef LEXER_MIN
@@ -1695,6 +1995,7 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   } while (ch = *(++pos));
   return ch;
 }
+#endif
 
 // Note: non-asii BR and whitespace checks omitted for perf / footprint
 // if there is a significant user need this can be reconsidered
