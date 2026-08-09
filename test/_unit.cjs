@@ -1,8 +1,10 @@
 const assert = require('assert');
+const { readFile } = require('fs/promises');
 
 // The minimal builds (MINIMAL=1) drop the fields es-module-shims never reads:
-// the parsed attribute list `at`, export `ss`, and the facade/hasModuleSyntax
-// flags. Tests asserting on those are gated behind `!min`.
+// the parsed attribute list `at`, export analysis / `ss`, and the
+// facade/hasModuleSyntax flags. Tests asserting on those are gated behind
+// `!min`.
 const min = !!process.env.MINIMAL;
 let parse;
 const init = (async () => {
@@ -23,16 +25,59 @@ function assertExportIs(source, actual, expected) {
   } else {
     assert.strictEqual(source.substring(actual.s, actual.e), expected.n, `export.s, export.e: ${source.substring(actual.s, actual.e)} != ${expected.n}`);
   }
-  if (expected.ln === undefined) {
-    assert.strictEqual(actual.ls, -1, `export.ls: ${actual.ls} != -1`);
-    assert.strictEqual(actual.le, -1, `export.le: ${actual.le} != -1`);
-  } else if (source[actual.ls] === '"' || source[actual.ls] === "'") {
-    assert.strictEqual(source[actual.ls], source[actual.le - 1], `export.ls, export.le: ${source[actual.ls]} != ${source[actual.le - 1]}`);
+  if (!min && actual.t === 2) {
+    assert.strictEqual('ln' in actual, false);
+    assert.strictEqual('ls' in actual, false);
+    assert.strictEqual('le' in actual, false);
   } else {
-    assert.strictEqual(source.substring(actual.ls, actual.le), expected.ln, `export.ls, export.le: ${source.substring(actual.ls, actual.le)} != ${expected.ln}`);
+    if (!min)
+      assert.strictEqual(actual.t, 1);
+    if (expected.ln === undefined) {
+      assert.strictEqual(actual.ls, -1, `export.ls: ${actual.ls} != -1`);
+      assert.strictEqual(actual.le, -1, `export.le: ${actual.le} != -1`);
+    } else if (source[actual.ls] === '"' || source[actual.ls] === "'") {
+      assert.strictEqual(source[actual.ls], source[actual.le - 1], `export.ls, export.le: ${source[actual.ls]} != ${source[actual.le - 1]}`);
+    } else {
+      assert.strictEqual(source.substring(actual.ls, actual.le), expected.ln, `export.ls, export.le: ${source.substring(actual.ls, actual.le)} != ${expected.ln}`);
+    }
   }
   assert.strictEqual(actual.n, expected.n, `export.n: ${actual.n} != ${expected.n}`);
   assert.strictEqual(actual.ln, expected.ln, `export.ln: ${actual.ln} != ${expected.ln}`);
+}
+
+/**
+ * @param {number} count
+ * @param {boolean} commentedClause
+ * @param {boolean} [compact]
+ * @returns {string}
+ */
+function createDetachedExportSource(count, commentedClause, compact = false) {
+  const imports = [];
+  const exports = [];
+  for (let i = 0; i < count; i++) {
+    const suffix = compact ? i.toString(36) : i;
+    imports.push(`${compact ? 'i' : 'imported'}${suffix} as ${compact ? 'l' : 'local'}${suffix}`);
+    exports.push(`${compact ? 'l' : 'local'}${suffix} as ${compact ? 'e' : 'exported'}${suffix}`);
+  }
+  const exportStart = commentedClause ? 'export /* comment */ {' : 'export {';
+  return `${exportStart}${exports.join(',')}};import {${imports.join(',')}} from './bulk';`;
+}
+
+/**
+ * @param {string} source
+ * @returns {Promise<number>}
+ */
+async function parseWasmMemory(source) {
+  const { instance } = await WebAssembly.instantiate(await readFile('lib/lexer.wasm'));
+  const wasm = instance.exports;
+  const heapBase = Number(wasm.__heap_base.value);
+  const required = heapBase + (source.length + 1) * 4 - wasm.memory.buffer.byteLength;
+  if (required > 0)
+    wasm.memory.grow(Math.ceil(required / 65536));
+  const address = wasm.sa(source.length);
+  Buffer.from(wasm.memory.buffer, address, source.length * 2).write(source, 'utf16le');
+  assert.strictEqual(wasm.parse(), 1);
+  return wasm.memory.buffer.byteLength;
 }
 
 suite('Lexer', () => {
@@ -234,6 +279,14 @@ suite('Lexer', () => {
     assert.strictEqual(imports[3].t, 1);
     assert.strictEqual(imports[4].t, 4);
     assert.strictEqual(imports[5].t, 3);
+  });
+
+  test('source remains contextual before mixed import clauses', () => {
+    for (const separator of [',', ' ,', ' /* comment */,', '\n,']) {
+      const [imports] = parse(`import source${separator} { named } from './source';`);
+      assert.strictEqual(imports.length, 1, separator);
+      assert.strictEqual(imports[0].t, 1, separator);
+    }
   });
 
   test(`Source phase imports`, () => {
@@ -1353,6 +1406,662 @@ function x() {
     assert.strictEqual(exports.length, 2);
     assertExportIs(source, exports[0], { n: 'X', ln: undefined });
     assertExportIs(source, exports[1], { n: 'yy', ln: undefined });
+  });
+
+  test('Export analysis classifies reexports independent of statement order', () => {
+    const source = [
+      `export { before as exposed };`,
+      `import { original as before } from './before' with { type: 'javascript' };`,
+      `import fallback, { named } from './mixed';`,
+      `export { fallback, named as alias };`,
+      `const direct = 1;`,
+      `export { direct as renamed };`,
+      `export { explicit as out } from './explicit';`,
+      `export * as namespace from './namespace';`,
+      `export * from './all';`
+    ].join('\n');
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports[4].t, 8);
+
+    if (min) {
+      assert.strictEqual(exports.length, 6);
+      assertExportIs(source, exports[0], { n: 'exposed', ln: 'before' });
+      assertExportIs(source, exports[1], { n: 'fallback', ln: 'fallback' });
+      assertExportIs(source, exports[2], { n: 'alias', ln: 'named' });
+      assertExportIs(source, exports[3], { n: 'renamed', ln: 'direct' });
+      assertExportIs(source, exports[4], { n: 'out', ln: undefined });
+      assertExportIs(source, exports[5], { n: 'namespace', ln: undefined });
+      return;
+    }
+
+    assert.strictEqual(imports.length, 5);
+    assert.strictEqual(exports.length, 7);
+    assert.deepStrictEqual(exports[0], {
+      t: 2,
+      n: 'exposed',
+      im: 'original',
+      ims: source.indexOf('original'),
+      ime: source.indexOf('original') + 8,
+      f: './before',
+      fi: 0,
+      s: source.indexOf('exposed'),
+      e: source.indexOf('exposed') + 7,
+      ss: 0
+    });
+    assert.deepStrictEqual(exports[1], {
+      t: 2,
+      n: 'fallback',
+      im: 'default',
+      ims: -1,
+      ime: -1,
+      f: './mixed',
+      fi: 1,
+      s: source.indexOf('fallback', source.indexOf(`export { fallback`)),
+      e: source.indexOf('fallback', source.indexOf(`export { fallback`)) + 8,
+      ss: source.indexOf(`export { fallback`)
+    });
+    assert.deepStrictEqual(exports[2], {
+      t: 2,
+      n: 'alias',
+      im: 'named',
+      ims: source.indexOf('named'),
+      ime: source.indexOf('named') + 5,
+      f: './mixed',
+      fi: 1,
+      s: source.indexOf('alias'),
+      e: source.indexOf('alias') + 5,
+      ss: source.indexOf(`export { fallback`)
+    });
+    assert.deepStrictEqual(exports[3], {
+      t: 1,
+      n: 'renamed',
+      ln: 'direct',
+      ls: source.indexOf('direct', source.indexOf(`export { direct`)),
+      le: source.indexOf('direct', source.indexOf(`export { direct`)) + 6,
+      s: source.indexOf('renamed'),
+      e: source.indexOf('renamed') + 7,
+      ss: source.indexOf(`export { direct`)
+    });
+    assert.deepStrictEqual(exports[4], {
+      t: 2,
+      n: 'out',
+      im: 'explicit',
+      ims: source.indexOf('explicit'),
+      ime: source.indexOf('explicit') + 8,
+      f: './explicit',
+      fi: 2,
+      s: source.indexOf('out'),
+      e: source.indexOf('out') + 3,
+      ss: source.indexOf(`export { explicit`)
+    });
+    assert.deepStrictEqual(exports[5], {
+      t: 2,
+      n: 'namespace',
+      im: null,
+      ims: -1,
+      ime: -1,
+      f: './namespace',
+      fi: 3,
+      s: source.indexOf('namespace'),
+      e: source.indexOf('namespace') + 9,
+      ss: source.indexOf(`export * as namespace`)
+    });
+    assert.deepStrictEqual(exports[6], {
+      t: 3,
+      f: './all',
+      fi: 4,
+      s: source.lastIndexOf('*'),
+      e: source.lastIndexOf('*') + 1,
+      ss: source.indexOf(`export * from`)
+    });
+  });
+
+  test('Export analysis resolves escaped imported bindings', () => {
+    if (min) return;
+    const source = String.raw`
+      export {
+        imported as escaped,
+        \u0073econd as reverse,
+        braced as bracedOut,
+        x𓀀 as astral
+      };
+      import {
+        original as \u0069mported,
+        other as second,
+        bracedOriginal as \u{62}raced,
+        astralOriginal as x\u{13000}
+      } from './escaped';
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 4);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].n, 'escaped');
+    assert.strictEqual(exports[0].im, 'original');
+    assert.strictEqual(exports[0].f, './escaped');
+    assert.strictEqual(exports[0].fi, 0);
+    assert.strictEqual(source.slice(exports[0].ims, exports[0].ime), 'original');
+    assert.strictEqual(exports[1].t, 2);
+    assert.strictEqual(exports[1].n, 'reverse');
+    assert.strictEqual(exports[1].im, 'other');
+    assert.strictEqual(exports[1].f, './escaped');
+    assert.strictEqual(exports[1].fi, 0);
+    assert.strictEqual(source.slice(exports[1].ims, exports[1].ime), 'other');
+    assert.strictEqual(exports[2].t, 2);
+    assert.strictEqual(exports[2].n, 'bracedOut');
+    assert.strictEqual(exports[2].im, 'bracedOriginal');
+    assert.strictEqual(exports[2].f, './escaped');
+    assert.strictEqual(exports[2].fi, 0);
+    assert.strictEqual(exports[3].t, 2);
+    assert.strictEqual(exports[3].n, 'astral');
+    assert.strictEqual(exports[3].im, 'astralOriginal');
+    assert.strictEqual(exports[3].f, './escaped');
+    assert.strictEqual(exports[3].fi, 0);
+  });
+
+  test('Braced Unicode escapes in import bindings', () => {
+    if (min) return;
+    const source = String.raw`
+      import { original as \u{62}inding } from './escaped';
+      export { binding };
+    `;
+    const [imports, exports] = parse(source);
+
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(exports.length, 1);
+    if (!min)
+      assert.strictEqual(exports[0].t, 2);
+  });
+
+  test('Export analysis preserves facade traversal after finalization', () => {
+    if (min) return;
+    const source = `
+      import { original as local } from './facade';
+      export { local as exposed };
+    `;
+    const [, exports, facade] = parse(source);
+
+    assert.strictEqual(facade, true);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].n, 'exposed');
+    assert.strictEqual(exports[0].im, 'original');
+  });
+
+  test('Export analysis resolves a clause interrupted by a comment', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      export /* comment */ { local as exposed };
+      import { original as local } from './fallback';
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].n, 'exposed');
+    assert.strictEqual(exports[0].im, 'original');
+    assert.strictEqual(exports[0].f, './fallback');
+  });
+
+  test('Export analysis ignores an export clause inside a comment', () => {
+    if (min) return;
+    const commentedOut = `/* export { ${'x'.repeat(5000)} */ import { value } from './commented';`;
+    const [imports, exports] = parse(commentedOut);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(exports.length, 0);
+
+    const source = `import { next } from './next'; export { next };`;
+    const [, nextExports] = parse(source);
+    assert.strictEqual(nextExports.length, 1);
+    assert.strictEqual(nextExports[0].t, 2);
+    assert.strictEqual(nextExports[0].im, 'next');
+  });
+
+  test('Export analysis resolves contextual default imports for every clause spelling', () => {
+    if (min) return;
+    const modes = [
+      { name: 'short source', prefix: '', exportStart: 'export {' },
+      { name: 'padded source', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export {' },
+      { name: 'no space before clause', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export{' },
+      { name: 'comment before clause', prefix: `/* ${'x'.repeat(5000)} */`, exportStart: 'export /* comment */ {' }
+    ];
+
+    for (const keyword of ['source', 'defer']) {
+      for (const importFirst of [false, true]) {
+        for (const mode of modes) {
+          const importStatement = `import ${keyword} from './${keyword}';`;
+          const exportStatement = `${mode.exportStart} ${keyword} };`;
+          const statements = importFirst
+            ? `${importStatement}${exportStatement}`
+            : `${exportStatement}${importStatement}`;
+          const source = `${mode.prefix}${statements}`;
+          const [, exports] = parse(source);
+          const label = `${keyword}, ${importFirst ? 'import first' : 'export first'}, ${mode.name}`;
+
+          assert.strictEqual(exports.length, 1, label);
+          assert.strictEqual(exports[0].t, 2, label);
+          assert.strictEqual(exports[0].n, keyword, label);
+          assert.strictEqual(exports[0].im, 'default', label);
+          assert.strictEqual(exports[0].f, `./${keyword}`, label);
+          assert.strictEqual(exports[0].fi, 0, label);
+        }
+      }
+    }
+  });
+
+  test('Export analysis resolves contextual defaults in mixed import clauses', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import source /* comment */, { named as sourceNamed } from './source';
+      import defer
+        , * as deferNamespace from './defer';
+      export { source, sourceNamed, defer, deferNamespace };
+    `;
+    const [, exports] = parse(source);
+    const expected = [
+      ['source', 'default', './source', 0],
+      ['sourceNamed', 'named', './source', 0],
+      ['defer', 'default', './defer', 1],
+      ['deferNamespace', null, './defer', 1]
+    ];
+
+    assert.strictEqual(exports.length, expected.length);
+    for (let i = 0; i < expected.length; i++) {
+      const [name, imported, from, importIndex] = expected[i];
+      assert.strictEqual(exports[i].n, name, name);
+      assert.strictEqual(exports[i].im, imported, name);
+      assert.strictEqual(exports[i].f, from, name);
+      assert.strictEqual(exports[i].fi, importIndex, name);
+    }
+  });
+
+  test('Export analysis resolves source defaults before named clauses', () => {
+    if (min) return;
+    for (const separator of [',', ' ,', ' /* comment */,', '\n,']) {
+      const source = `
+        /* ${'x'.repeat(5000)} */
+        import source${separator} { named as sourceNamed } from './source';
+        export { source, sourceNamed };
+      `;
+      const [, exports] = parse(source);
+
+      assert.strictEqual(exports.length, 2, separator);
+      assert.strictEqual(exports[0].im, 'default', separator);
+      assert.strictEqual(exports[1].im, 'named', separator);
+    }
+
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import source /* comment */, * as sourceNamespace from './source';
+      export { source, sourceNamespace };
+    `;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0].im, 'default');
+    assert.strictEqual(exports[1].im, null);
+  });
+
+  test('Export analysis covers resolver table growth boundaries', () => {
+    if (min) return;
+    // The table holds two buckets per pending export, doubling from four.
+    for (const count of [1, 2, 3, 4, 5, 8, 9, 2048, 2049]) {
+      const source = createDetachedExportSource(count, false);
+      const [, exports] = parse(source);
+
+      assert.strictEqual(exports.length, count, `${count} exports`);
+      assert.strictEqual(exports[0].t, 2, `${count} first export`);
+      assert.strictEqual(exports[0].im, 'imported0', `${count} first import`);
+      assert.strictEqual(exports[count - 1].t, 2, `${count} last export`);
+      assert.strictEqual(exports[count - 1].im, `imported${count - 1}`, `${count} last import`);
+    }
+  });
+
+  test('Export analysis resolves duplicate local names through hash collisions', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import { imported as local } from './duplicate';
+      export {
+        local as one,
+        local as two,
+        local as three,
+        local as four,
+        local as five
+      };
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 5);
+    for (const item of exports) {
+      assert.strictEqual(item.t, 2);
+      assert.strictEqual(item.im, 'imported');
+      assert.strictEqual(item.f, './duplicate');
+    }
+  });
+
+  test('Export analysis resolves clauses far past the largest table step', () => {
+    if (min) return;
+    for (const commentedClause of [true, false]) {
+      for (const count of [32768, 32769]) {
+        const source = createDetachedExportSource(count, commentedClause);
+        const [, exports] = parse(source);
+        const label = `${count} exports, ${commentedClause ? 'commented' : 'plain'} clause`;
+
+        assert.strictEqual(exports.length, count, label);
+        assert.strictEqual(exports[0].im, 'imported0', label);
+        assert.strictEqual(exports[count - 1].im, `imported${count - 1}`, label);
+      }
+    }
+
+    const source = 'const local = 1; export { local };';
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].t, 1);
+  });
+
+  test('Export analysis indexes origins in the complete imports array', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import('dynamic');
+      import.meta;
+      export { original as exposed } from './static';
+    `;
+    const [imports, exports] = parse(source);
+
+    assert.strictEqual(imports.length, 3);
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].fi, 2);
+    assert.strictEqual(exports[0].f, './static');
+  });
+
+  test('Export analysis resolves namespace and phase imports', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      export { namespace, sourceBinding as sourceOut, deferred };
+      import * as namespace from './namespace';
+      import source sourceBinding from './source';
+      import defer * as deferred from './deferred';
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 3);
+    assert.deepStrictEqual(exports.map(({ t, n, im, ims, ime, f, fi }) => ({
+      t,
+      n,
+      im,
+      ims,
+      ime,
+      f,
+      fi
+    })), [
+      { t: 2, n: 'namespace', im: null, ims: -1, ime: -1, f: './namespace', fi: 0 },
+      { t: 2, n: 'sourceOut', im: null, ims: -1, ime: -1, f: './source', fi: 1 },
+      { t: 2, n: 'deferred', im: null, ims: -1, ime: -1, f: './deferred', fi: 2 }
+    ]);
+  });
+
+  test('Export star reexport is module syntax', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
+    const [,,, hasModuleSyntax] = parse(`export * from './core'`);
+    assert.strictEqual(hasModuleSyntax, true);
+  });
+
+  test('Export star reexport facade', () => {
+    if (min) return; // facade/hasModuleSyntax not emitted in minimal build
+    const [,, facade] = parse(`export * from './core'`);
+    assert.strictEqual(facade, true);
+  });
+
+  test('Export analysis captures every static import binding form', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import defaultOnly from './default' with { type: 'json' };
+      import { named } from './named';
+      import { original as alias } from './alias';
+      import { "quoted name" as quoted } from './quoted';
+      import defaultNamed, { mixed as mixedNamed } from './default-named';
+      import defaultNamespace, * as mixedNamespace from './default-namespace';
+      import * as namespace from './namespace';
+      import source sourceValue from './source';
+      import defer * as deferred from './deferred';
+      import './side-effect';
+      export {
+        defaultOnly,
+        named,
+        alias,
+        quoted,
+        defaultNamed,
+        mixedNamed,
+        defaultNamespace,
+        mixedNamespace,
+        namespace,
+        sourceValue,
+        deferred
+      };
+    `;
+    const [imports, exports] = parse(source);
+    const expected = [
+      ['defaultOnly', 'default', './default', 0],
+      ['named', 'named', './named', 1],
+      ['alias', 'original', './alias', 2],
+      ['quoted', 'quoted name', './quoted', 3],
+      ['defaultNamed', 'default', './default-named', 4],
+      ['mixedNamed', 'mixed', './default-named', 4],
+      ['defaultNamespace', 'default', './default-namespace', 5],
+      ['mixedNamespace', null, './default-namespace', 5],
+      ['namespace', null, './namespace', 6],
+      ['sourceValue', null, './source', 7],
+      ['deferred', null, './deferred', 8]
+    ];
+
+    assert.strictEqual(imports.length, 10);
+    assert.strictEqual(exports.length, expected.length);
+    for (let i = 0; i < expected.length; i++) {
+      const [name, imported, from, importIndex] = expected[i];
+      assert.strictEqual(exports[i].t, 2, name);
+      assert.strictEqual(exports[i].n, name, name);
+      assert.strictEqual(exports[i].im, imported, name);
+      assert.strictEqual(exports[i].f, from, name);
+      assert.strictEqual(exports[i].fi, importIndex, name);
+    }
+  });
+
+  test('Export analysis keeps direct and imported names distinct', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      import fallback, { direct as importedDirect } from './mixed';
+      const direct = 1;
+      export { fallback as one, fallback as two, direct };
+      export { "external name" as "public name" } from './quoted';
+      export default 42;
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 5);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].im, 'default');
+    assert.strictEqual(exports[0].ims, -1);
+    assert.strictEqual(exports[0].ime, -1);
+    assert.strictEqual(exports[0].f, './mixed');
+    assert.strictEqual(exports[1].t, 2);
+    assert.strictEqual(exports[1].im, 'default');
+    assert.strictEqual(exports[2].t, 1);
+    assert.strictEqual(exports[2].n, 'direct');
+    assert.strictEqual(exports[2].ln, 'direct');
+    assert.strictEqual(exports[3].t, 2);
+    assert.strictEqual(exports[3].n, 'public name');
+    assert.strictEqual(exports[3].im, 'external name');
+    assert.strictEqual(source.slice(exports[3].ims, exports[3].ime), '"external name"');
+    assert.strictEqual(exports[3].f, './quoted');
+    assert.strictEqual(exports[4].t, 1);
+    assert.strictEqual(exports[4].n, 'default');
+    assert.strictEqual(exports[4].ln, undefined);
+    assert.strictEqual(exports[4].ls, -1);
+    assert.strictEqual(exports[4].le, -1);
+  });
+
+  test('Export analysis does not treat explicit reexports as bindings', () => {
+    if (min) return;
+    const source = `
+      /* ${'x'.repeat(5000)} */
+      const original = 1;
+      export { original as fromRemote } from './remote';
+      export { original as direct };
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].n, 'fromRemote');
+    assert.strictEqual(exports[0].f, './remote');
+    assert.strictEqual(exports[1].t, 1);
+    assert.strictEqual(exports[1].n, 'direct');
+    assert.strictEqual(exports[1].ln, 'original');
+  });
+
+  test('Export analysis resolves many bindings', () => {
+    if (min) return;
+    const count = 1000;
+    const imports = Array.from({ length: count }, (_, i) => `value${i} as local${i}`);
+    const exportsSource = Array.from({ length: count }, (_, i) => `local${i} as public${i}`);
+    const source = `
+      export { ${exportsSource.join(', ')} };
+      import { ${imports.join(', ')} } from './bulk';
+    `;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, count);
+    for (let i = 0; i < count; i++) {
+      assert.strictEqual(exports[i].t, 2);
+      assert.strictEqual(exports[i].n, `public${i}`);
+      assert.strictEqual(exports[i].im, `value${i}`);
+      assert.strictEqual(exports[i].f, './bulk');
+      assert.strictEqual(exports[i].fi, 0);
+    }
+  });
+
+  test('Export analysis bounds malformed identifier escapes', () => {
+    if (min) return;
+    const source = String.raw`/* ${'x'.repeat(5000)} */ export { x }; import { value as \u } from './malformed';`;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, 1);
+    assert.strictEqual(exports[0].t, 1);
+    assert.strictEqual(exports[0].n, 'x');
+  });
+
+  test('Export analysis grows for dense export records', () => {
+    if (min) return;
+    const count = 10000;
+    const names = Array.from({ length: count }, (_, i) => String.fromCharCode(0x4e00 + i));
+    const source = `export {${names.join(',')}};`;
+    const [, exports] = parse(source);
+
+    assert.strictEqual(exports.length, count);
+    assert.strictEqual(exports[0].t, 1);
+    assert.strictEqual(exports[count - 1].t, 1);
+  });
+
+  test('A failed parse leaves no state behind', () => {
+    assert.throws(() => parse(`export * from bar`), { idx: 14 });
+
+    const source = `import { a } from 'y'; export { a };`;
+    const [imports, exports] = parse(source);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'y');
+    assert.strictEqual(exports.length, 1);
+    if (!min)
+      assert.strictEqual(exports[0].t, 2);
+  });
+
+  test('Export star without a module specifier reports nothing', () => {
+    for (const source of ['export *;', 'export *', 'export*;', 'export * ']) {
+      const [imports, exports] = parse(source);
+      assert.deepStrictEqual(imports, [], source);
+      assert.deepStrictEqual(exports, [], source);
+    }
+  });
+
+  test('Import clause holding a stray operator still terminates', () => {
+    for (const prefix of ['', `/* export { ${'x'.repeat(5000)} */`]) {
+      const [imports] = parse(`${prefix}import { a - b } from 'x';`);
+      assert.strictEqual(imports.length, 1);
+      assert.strictEqual(imports[0].n, 'x');
+    }
+  });
+
+  test('Block comment carrying a line break ends a no-line-break scan', () => {
+    // `export default async` may only continue into `function` on the same line,
+    // so a line break inside the comment has to end the scan.
+    const sameLine = parse(`export default async /* c */ function foo () {}`)[1][0];
+    assert.strictEqual(sameLine.ln, 'foo');
+
+    const broken = parse(`export default async /*\n*/ function foo () {}`)[1][0];
+    assert.strictEqual(broken.ln, undefined);
+    assert.strictEqual(broken.ls, -1);
+  });
+
+  test('Import binding renamed with no space after as', () => {
+    if (min) return;
+    const source = `import { a as/*c*/b } from './x'; export { b }; export { a };`;
+    const [, exports] = parse(source);
+    assert.strictEqual(exports.length, 2);
+    assert.strictEqual(exports[0].t, 2);
+    assert.strictEqual(exports[0].im, 'a');
+    // `a` was renamed away, so nothing local or imported carries that name.
+    assert.strictEqual(exports[1].t, 1);
+  });
+
+  test('Export declaration with consecutive braced escapes', () => {
+    if (min) return;
+    const [, exports] = parse(String.raw`export let \u{61}\u{62}, c;`);
+    assert.deepStrictEqual(exports.map(({ n }) => n), [String.raw`\u{61}\u{62}`, 'c']);
+  });
+
+  test('Record-dense sources report every record', () => {
+    if (min) return;
+    // Each statement needs more analysis space than its own source bytes, so the
+    // arena has to grow (Wasm) or the parse has to be retried (asm.js).
+    const count = 4000;
+    const [imports, exports] = parse(`export*from'a'with{t:'j'};`.repeat(count));
+    assert.strictEqual(imports.length, count);
+    assert.strictEqual(exports.length, count);
+    assert.strictEqual(imports[count - 1].n, 'a');
+    assert.deepStrictEqual(imports[count - 1].at, [['t', 'j']]);
+    assert.strictEqual(exports[count - 1].t, 3);
+    assert.strictEqual(exports[count - 1].fi, count - 1);
+  });
+
+  test('Template-span-dense sources report every glob', () => {
+    if (min) return;
+    // Each statement's Import record and span outgrow its source bytes, so the
+    // span allocation has to hit the same grow/retry path as the records.
+    const count = 4000;
+    const [imports] = parse('import(`${a}`);'.repeat(count));
+    assert.strictEqual(imports.length, count);
+    assert.strictEqual(imports[0].n, '*');
+    assert.strictEqual(imports[count - 1].n, '*');
+  });
+
+  test('Full Wasm keeps temporary export tables out of initial memory', async () => {
+    if (!process.env.WASM || min) return;
+    const { instance } = await WebAssembly.instantiate(await readFile('lib/lexer.wasm'));
+    assert.ok(Number(instance.exports.__heap_base.value) < 131072);
+  });
+
+  test('Full Wasm grows the resolver table one step at a time', async () => {
+    if (!process.env.WASM || min) return;
+    // 16384 pending exports fill a 32768-bucket table; one more doubles it.
+    const beforeStep = await parseWasmMemory(createDetachedExportSource(16384, false, true));
+    const afterStep = await parseWasmMemory(createDetachedExportSource(16385, false, true));
+    assert.ok(afterStep - beforeStep <= 262144, `${beforeStep} -> ${afterStep}`);
   });
 
   test('Export statement start', () => {
