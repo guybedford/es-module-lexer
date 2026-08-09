@@ -1,6 +1,7 @@
 // Build-time variant flag. The minimal build (lib/lexer.min.asm.in.js) rewrites
 // this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
-// ms/attributes), matching the stripped LEXER_MIN wasm/asm exports.
+// ms/attributes/export analysis), matching the stripped LEXER_MIN wasm/asm
+// exports.
 const MINIMAL = false;
 
 let asm, asmBuffer, allocSize = 2<<19, addr;
@@ -29,9 +30,10 @@ export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
   // 2 bytes per string code point
-  // + analysis space (2^17)
-  // remaining space is EMCC stack space (2^17)
-  const memBound = source.length * 2 + (2 << 18);
+  // + analysis space (2 bytes per code point, grown on overflow below)
+  // + EMCC stack space (2^18)
+  const analysisSize = Math.max(2 << 17, source.length * 2);
+  const memBound = source.length * 2 + analysisSize + (2 << 17);
   if (memBound > allocSize || !asm) {
     while (memBound > allocSize) allocSize *= 2;
     asmBuffer = new ArrayBuffer(allocSize);
@@ -39,6 +41,8 @@ export function parse (_source, _name = '@') {
     asm = asmInit(typeof globalThis !== 'undefined' ? globalThis : self, {}, asmBuffer);
     // lexer.c bulk allocates string space + analysis space
     addr = asm.su(allocSize - (2<<17), {{STATIC_TOP}});
+    if (!MINIMAL)
+      asm.sal(allocSize - (2<<17));
   }
   const len = source.length + 1;
   asm.ses(addr);
@@ -47,6 +51,13 @@ export function parse (_source, _name = '@') {
   copy(source, new Uint16Array(asmBuffer, addr, len));
 
   if (!asm.p()) {
+    // -1 is the analysis arena running out: nothing is reported, so double the
+    // buffer and lex again rather than truncating the records.
+    if (!MINIMAL && asm.e() === -1) {
+      allocSize *= 2;
+      asm = undefined;
+      return parse(_source, _name);
+    }
     acornPos = asm.e();
     syntaxError();
   }
@@ -75,12 +86,43 @@ export function parse (_source, _name = '@') {
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
-    const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
-    const n = decodeIfQuoted(s, e);
-    if (MINIMAL)
+    if (MINIMAL) {
+      const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
+      const n = decodeIfQuoted(s, e);
       exports.push({ s, e, ls, le, n, ln });
-    else
-      exports.push({ s, e, ls, le, ss: asm.ess(), n, ln });
+      continue;
+    }
+
+    const t = asm.et(), ss = asm.ess();
+    if (t === 3) {
+      const fi = asm.eii();
+      exports.push({ t, f: imports[fi].n, fi, s, e, ss });
+    }
+    else {
+      const n = decodeIfQuoted(s, e);
+      if (t === 1) {
+        const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
+        exports.push({ t, n, ln, s, e, ls, le, ss });
+      }
+      else {
+        const fi = asm.eii(), importNameType = asm.eit();
+        const im = importNameType === 0
+          ? decodeIfQuoted(ls, le)
+          : importNameType === 1 ? 'default' : null;
+        exports.push({
+          t,
+          n,
+          im,
+          ims: importNameType === 0 ? ls : -1,
+          ime: importNameType === 0 ? le : -1,
+          f: imports[fi].n,
+          fi,
+          s,
+          e,
+          ss
+        });
+      }
+    }
   }
 
   return MINIMAL ? [imports, exports] : [imports, exports, !!asm.f(), !!asm.ms()];

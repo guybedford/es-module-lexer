@@ -23,9 +23,25 @@ enum ImportType {
   DynamicSourcePhase = 5,
   StaticDeferPhase = 6,
   DynamicDeferPhase = 7,
+  StaticReexportStar = 8,
 };
 
 #ifndef LEXER_MIN
+enum ExportType {
+  Direct = 1,
+  Reexport = 2,
+  ReexportAll = 3,
+  // Internal: an export clause with no `from`, until the module is fully lexed.
+  Pending = 4,
+};
+
+enum ExportImportNameType {
+  NamedImport = 0,
+  DefaultImport = 1,
+  NamespaceImport = 2,
+  SourceImport = 3,
+};
+
 struct Attribute {
   const char16_t* key_start;
   const char16_t* key_end;
@@ -103,10 +119,24 @@ struct Export {
   const char16_t* local_end;
 #ifndef LEXER_MIN
   const char16_t* statement_start;
+  uint32_t import_index;
+  uint8_t export_ty;
+  uint8_t import_name_ty;
+  // Chains the pending-export table bucket; see resolvePendingExports().
+  struct Export* bucket_next;
 #endif
   struct Export* next;
 };
 typedef struct Export Export;
+
+#ifndef LEXER_MIN
+_Static_assert(
+  offsetof(Export, end) == 4 && offsetof(Export, local_start) == 8 && offsetof(Export, local_end) == 12 &&
+  offsetof(Export, statement_start) == 16 && offsetof(Export, import_index) == 20 &&
+  offsetof(Export, export_ty) == 24 && offsetof(Export, import_name_ty) == 25,
+  "src/lexer.ts reads the full-build Export record straight out of memory"
+);
+#endif
 
 Import* first_import = NULL;
 Export* first_export = NULL;
@@ -117,9 +147,15 @@ Import* import_write_head_last = NULL;
 Export* export_write_head = NULL;
 #ifndef LEXER_MIN
 const char16_t* export_statement_start = NULL;
+uint32_t import_count = 0;
+uint32_t pending_export_count = 0;
+bool has_import_bindings = false;
 #endif
 void* analysis_base;
 void* analysis_head;
+#ifndef LEXER_MIN
+uintptr_t analysis_limit;
+#endif
 
 bool facade;
 #ifndef LEXER_MIN
@@ -152,16 +188,65 @@ const char16_t* sa (uint32_t utf16Len) {
   *(char16_t*)(source + utf16Len) = '\0';
   analysis_base = (void*)sourceEnd;
   analysis_head = analysis_base;
+#if defined(__wasm__) && !defined(LEXER_MIN)
+  analysis_limit = (uintptr_t)__builtin_wasm_memory_size(0) << 16;
+#endif
   first_import = NULL;
   import_write_head = NULL;
   import_read_head = NULL;
   first_export = NULL;
   export_write_head = NULL;
   export_read_head = NULL;
+#ifndef LEXER_MIN
+  import_count = 0;
+  pending_export_count = 0;
+  has_import_bindings = false;
+#endif
   return source;
 }
 
+#ifndef LEXER_MIN
+#ifdef __wasm__
+// Out of line so each allocation site inlines the bounds test alone: growing is
+// rare enough that its code only costs the record path i-cache.
+static __attribute__((noinline)) void growAnalysis (uintptr_t required) {
+  uint32_t pages = (required - analysis_limit + 65535) >> 16;
+  if (__builtin_wasm_memory_grow(0, pages) == (size_t)-1)
+    __builtin_trap();
+  analysis_limit += (uintptr_t)pages << 16;
+}
+
+static inline void ensureAnalysisCapacity (size_t size) {
+  uintptr_t required = (uintptr_t)analysis_head + size;
+  if (required > analysis_limit)
+    growAnalysis(required);
+}
+#else
+// setAnalysisLimit: the asm.js build cannot grow its heap, so the JS wrapper owns
+// the arena bound and re-parses into a larger buffer when a parse reports -1.
+void sal (uint32_t limit) {
+  analysis_limit = limit;
+}
+
+static void bailAnalysisCapacity () {
+  // Rewinding keeps every record write inside the arena. The result is discarded:
+  // the wrapper sees the -1 error position and retries.
+  analysis_head = analysis_base;
+  parse_error = -1;
+  has_error = true;
+}
+
+static inline void ensureAnalysisCapacity (size_t size) {
+  if ((uintptr_t)analysis_head + size > analysis_limit)
+    bailAnalysisCapacity();
+}
+#endif
+#endif
+
 void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
+#ifndef LEXER_MIN
+  ensureAnalysisCapacity(sizeof(Import));
+#endif
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
   if (import_write_head == NULL)
@@ -197,12 +282,16 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
 #endif
   import->next = NULL;
 #ifndef LEXER_MIN
+  import_count++;
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
     hasModuleSyntax = true;
 #endif
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
+#ifndef LEXER_MIN
+  ensureAnalysisCapacity(sizeof(Export));
+#endif
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)
@@ -216,6 +305,9 @@ void addExport (const char16_t* start, const char16_t* end, const char16_t* loca
   export->local_end = local_end;
 #ifndef LEXER_MIN
   export->statement_start = export_statement_start;
+  export->import_index = -1;
+  export->export_ty = Direct;
+  export->import_name_ty = NamedImport;
 #endif
   export->next = NULL;
 #ifndef LEXER_MIN
@@ -314,6 +406,18 @@ int32_t ele () {
   return export_read_head->local_end ? export_read_head->local_end - source : -1;
 }
 #ifndef LEXER_MIN
+// getExportType
+uint32_t et () {
+  return export_read_head->export_ty;
+}
+// getExportImportIndex
+uint32_t eii () {
+  return export_read_head->import_index;
+}
+// getExportImportNameType
+uint32_t eit () {
+  return export_read_head->import_name_ty;
+}
 // getExportStatementStart
 uint32_t ess () {
   return export_read_head->statement_start - source;
@@ -330,14 +434,12 @@ bool ri () {
   return true;
 }
 // readExport
-bool re () {
+uintptr_t re () {
   if (export_read_head == NULL)
     export_read_head = first_export;
   else
     export_read_head = export_read_head->next;
-  if (export_read_head == NULL)
-    return false;
-  return true;
+  return (uintptr_t)export_read_head;
 }
 #ifndef LEXER_MIN
 bool f () {
