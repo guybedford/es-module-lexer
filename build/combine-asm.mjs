@@ -35,7 +35,7 @@ const replacements = [
 		a = a | 0;
 		b = b | 0;
 		v = a + b + 15 & -16;
-		return b;
+		return b | 0;
 	}
 	return {
 		su,`],
