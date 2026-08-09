@@ -49,16 +49,16 @@ const drive = async (method, path, body) => {
 };
 
 const waitForDriver = async () => {
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 100; attempt++) {
     try {
       await drive('GET', '/status');
       return;
     }
     catch (error) {
-      if (attempt === 9)
+      if (attempt === 99)
         throw error;
     }
-    await setTimeout(1000);
+    await setTimeout(100);
   }
 };
 
