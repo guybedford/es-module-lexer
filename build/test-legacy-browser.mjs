@@ -64,3 +64,5 @@ if (failure) {
   process.exit(1);
 }
 console.log('legacy browser test: PASS');
+// Open keep-alive sockets (driver, static server) must not hold the process.
+process.exit(0);
