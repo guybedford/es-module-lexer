@@ -56,6 +56,14 @@ jobs:
           EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
         run: chomp test
 
+      - name: Legacy Browser Test (Firefox 67)
+        if: matrix.node == 18
+        run: |
+          sudo apt-get install -y libdbus-glib-1-2 libxt6 >/dev/null
+          curl -sL https://archive.mozilla.org/pub/firefox/releases/67.0.4/linux-x86_64/en-US/firefox-67.0.4.tar.bz2 | tar xj
+          curl -sL https://github.com/mozilla/geckodriver/releases/download/v0.26.0/geckodriver-v0.26.0-linux64.tar.gz | tar xz
+          FIREFOX_BIN=$PWD/firefox/firefox GECKODRIVER=$PWD/geckodriver node build/test-legacy-browser.mjs
+
       - name: Footprint
         env:
           EMSDK_PATH: './emsdk'

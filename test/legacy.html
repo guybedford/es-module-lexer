@@ -1,0 +1,27 @@
+<!doctype html>
+<title>RUNNING</title>
+<script type="module">
+// Legacy-browser (Firefox 60 era) smoke test: no top-level await, no optional
+// chaining. The full wasm build requires SIMD and is deliberately absent.
+import { parse as parseMinAsm } from '../dist/lexer.minimal.asm.js';
+import { parse as parseFullAsm } from '../dist/lexer.asm.js';
+import { init, parse as parseMinWasm } from '../dist/lexer.minimal.js';
+
+var SOURCE = "import a from './b.js'; export const c = 1;";
+
+function check (parse, label) {
+  var result = parse(SOURCE);
+  if (result[0].length !== 1 || result[0][0].n !== './b.js')
+    throw new Error(label + ' imports');
+  if (result[1].length !== 1 || result[1][0].n !== 'c')
+    throw new Error(label + ' exports');
+}
+
+Promise.resolve()
+  .then(function () { check(parseMinAsm, 'minimal asm.js'); })
+  .then(function () { check(parseFullAsm, 'full asm.js'); })
+  .then(function () { return init; })
+  .then(function () { check(parseMinWasm, 'minimal wasm'); })
+  .then(function () { document.title = 'PASS'; })
+  .catch(function (err) { document.title = 'FAIL: ' + err.message; });
+</script>
