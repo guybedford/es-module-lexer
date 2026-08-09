@@ -166,6 +166,11 @@ function decodeTemplate (s, e) {
       index += 2;
       continue;
     }
+    if (ch === 42/***/) {
+      out += source.slice(chunkStart, index) + '\\*';
+      chunkStart = ++index;
+      continue;
+    }
     if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {
       out += source.slice(chunkStart, index) + '*';
       index = chunkStart = spanEnd;

@@ -324,8 +324,10 @@ export function parse (source: string, name = '@'): readonly [
   // rt() of false means "not a glob" (a concatenation such as `a${x}` + b, or a
   // nested template) and yields undefined. Walking from the opening backtick,
   // each top-level ${...} becomes a single "*" and is skipped via its recorded
-  // end; static runs are copied raw so the three ports agree byte-for-byte. The
-  // walk ends at the specifier's unescaped closing backtick.
+  // end. A literal unescaped "*" in a static run is emitted as "\*" so the glob
+  // stays invertible: "*" is always a wildcard, "\*" always a literal star
+  // (a source-escaped star is already copied through as "\*"). The walk ends at
+  // the specifier's unescaped closing backtick.
   function decodeTemplate (s: number, e: number) {
     wasm.rts();
     if (!wasm.rt())
@@ -339,6 +341,11 @@ export function parse (source: string, name = '@'): readonly [
         break;
       if (ch === 92/*\*/) {
         index += 2;
+        continue;
+      }
+      if (ch === 42/***/) {
+        out += source.slice(chunkStart, index) + '\\*';
+        chunkStart = ++index;
         continue;
       }
       if (ch === 36/*$*/ && source.charCodeAt(index + 1) === 123/*{*/ && index + 2 <= spanEnd) {

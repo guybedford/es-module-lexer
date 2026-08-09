@@ -474,10 +474,13 @@ suite('Lexer', () => {
     assert.strictEqual(parse('import(`./a/${x}.js` )')[0][0].n, './a/*.js');
     assert.strictEqual(parse('import( `./a/${x}.js`)')[0][0].n, './a/*.js');
     assert.strictEqual(parse('import(\t`./a/${x}.js`\n)')[0][0].n, './a/*.js');
-    // Static parts are raw source: CR/CRLF is not normalized and a literal "*"
-    // is emitted verbatim next to substitution wildcards.
+    // Static parts are raw source: CR/CRLF is not normalized. A literal star is
+    // always emitted as "\*" (whether or not escaped in the source), keeping
+    // "*" unambiguously a substitution wildcard.
     assert.strictEqual(parse('import(`a\r\nb${x}`)')[0][0].n, 'a\r\nb*');
     assert.strictEqual(parse('import(`a\\*${x}.js`)')[0][0].n, 'a\\**.js');
+    assert.strictEqual(parse('import(`a*b${x}.js`)')[0][0].n, 'a\\*b*.js');
+    assert.strictEqual(parse('import(`${x}*`)')[0][0].n, '*\\*');
     // More top-level ${...} than the parser could ever record must not loop or
     // reuse a stale span (a regression for the rt() reload / decoder hang).
     assert.strictEqual(parse('import(`${a}${b}${c}${d}` + x)')[0][0].n, undefined);
