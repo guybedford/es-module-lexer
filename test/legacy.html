@@ -9,7 +9,7 @@ import { init, parse as parseMinWasm } from '../dist/lexer.minimal.js';
 
 var SOURCE = "import a from './b.js'; export const c = 1;";
 
-function check (parse, label) {
+function checkMin (parse, label) {
   var result = parse(SOURCE);
   if (result[0].length !== 1 || result[0][0].n !== './b.js')
     throw new Error(label + ' imports');
@@ -17,11 +17,19 @@ function check (parse, label) {
     throw new Error(label + ' exports');
 }
 
+function checkFull (parse, label) {
+  var result = parse(SOURCE);
+  if (result[0].length !== 1 || result[0][0].type !== 'static' || result[0][0].specifier !== './b.js')
+    throw new Error(label + ' imports');
+  if (result[1].length !== 1 || result[1][0].type !== 'direct' || result[1][0].name !== 'c')
+    throw new Error(label + ' exports');
+}
+
 Promise.resolve()
-  .then(function () { check(parseMinAsm, 'minimal asm.js'); })
-  .then(function () { check(parseFullAsm, 'full asm.js'); })
+  .then(function () { checkMin(parseMinAsm, 'minimal asm.js'); })
+  .then(function () { checkFull(parseFullAsm, 'full asm.js'); })
   .then(function () { return init; })
-  .then(function () { check(parseMinWasm, 'minimal wasm'); })
+  .then(function () { checkMin(parseMinWasm, 'minimal wasm'); })
   .then(function () { document.title = 'PASS'; })
   .catch(function (err) { document.title = 'FAIL: ' + err.message; });
 </script>

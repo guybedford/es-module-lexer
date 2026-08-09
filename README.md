@@ -8,13 +8,26 @@ Outputs the list of exports and locations of import specifiers, including dynami
 
 Supports new syntax features including import attributes and source phase imports.
 
-A very small single JS file (~7KiB gzipped) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
-For an example of the performance, Angular 1 (720KiB) is fully parsed in 5ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
+For an example of the performance, Angular 1 (720KiB) is fully parsed in 1ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
-_Comprehensively handles the JS language grammar while remaining small and fast. - ~10ms per MB of JS cold and ~5ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
+_Comprehensively handles the JS language grammar while remaining small and fast. - ~5ms per MB of JS cold and ~3ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
 
 > [Built with](https://github.com/guybedford/es-module-lexer/blob/main/chompfile.toml) [Chomp](https://chompbuild.com/)
+
+## Package Exports
+
+| Export | Build | Footprint (Brotli) |
+| --- | --- | --- |
+| `es-module-lexer` | [Full build](#full-build), Wasm | 10.0KiB |
+| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build) | 9.2KiB |
+| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm | 6.8KiB |
+| `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build) | 6.5KiB |
+
+See [Environment Support](#environment-support) for the engine requirements of each build.
+
+## Full Build
 
 ### Usage
 
@@ -36,11 +49,9 @@ const { init, parse } = require('es-module-lexer');
 
   const source = 'export var p = 5';
   const [imports, exports] = parse(source);
-  
+
   // Returns "p"
-  source.slice(exports[0].s, exports[0].e);
-  // Returns "p"
-  source.slice(exports[0].ls, exports[0].le);
+  source.slice(exports[0].start, exports[0].end);
 })();
 ```
 
@@ -48,133 +59,146 @@ An ES module version is also available:
 
 ```js
 import { init, parse } from 'es-module-lexer';
+```
 
-(async () => {
-  await init;
+The full build reports each import and export as a tagged union discriminated
+by `type` (see [src/lexer.ts](src/lexer.ts) for the authoritative
+declarations):
 
-  const source = `
-    import { name } from 'mod\\u1011';
-    import json from './json.json' with { type: 'json' }
-    export var p = 5;
-    export function q () {
+```ts
+type Import = StaticImport | DynamicImport | ImportMetaRef;
 
-    };
-    export { x as 'external name' } from 'external';
+interface StaticImport {
+  // 'reexport-star' is the module request of `export * from 'mod'`
+  type: 'static' | 'reexport-star';
+  // decoded specifier, undefined when it does not decode as a JS string
+  specifier: string | undefined;
+  phase: 'source' | 'defer' | null;
+  // module specifier range
+  start: number;
+  end: number;
+  // import statement range (importEnd excludes a trailing semicolon)
+  importStart: number;
+  importEnd: number;
+  // parsed attribute [key, value] pairs and the `with { ... }` start,
+  // or null / -1 for no attributes
+  attributes: [string, string][] | null;
+  attributesStart: number;
+}
 
-    // Comments provided to demonstrate edge cases
-    import /*comment!*/ (  'asdf', { with: { type: 'json' }});
-    import /*comment!*/.meta.asdf;
+interface DynamicImport {
+  type: 'dynamic';
+  // decoded specifier when statically analyzable; a lone template literal
+  // argument reports a glob with each ${...} collapsed to "*"; else undefined
+  specifier: string | undefined;
+  phase: 'source' | 'defer' | null;
+  // argument range and the `(` position
+  start: number;
+  end: number;
+  dynamicStart: number;
+  importStart: number;
+  importEnd: number;
+  attributes: [string, string][] | null;
+  attributesStart: number;
+}
 
-    // Source phase imports:
-    import source mod from './mod.wasm';
-    import.source('./mod.wasm');
-  `;
+interface ImportMetaRef {
+  type: 'import-meta';
+  // the `import.meta` expression range
+  start: number;
+  end: number;
+  importStart: number;
+  importEnd: number;
+}
 
-  const [imports, exports] = parse(source, 'optional-sourcename');
+type Export = DirectExport | Reexport | ReexportAll;
 
-  // Returns "modထ"
-  imports[0].n
-  // Returns "mod\u1011"
-  source.slice(imports[0].s, imports[0].e);
-  // "s" = start
-  // "e" = end
+interface DirectExport {
+  type: 'direct';
+  name: string;
+  // undefined for anonymous default exports
+  localName: string | undefined;
+  // exported name and local name ranges (local -1 when absent)
+  start: number;
+  end: number;
+  localStart: number;
+  localEnd: number;
+  // only the start of the export statement is tracked
+  exportStart: number;
+}
 
-  // Returns "import { name } from 'mod'"
-  source.slice(imports[0].ss, imports[0].se);
-  // "ss" = statement start
-  // "se" = statement end
+interface Reexport {
+  type: 'reexport';
+  name: string;
+  // imported name, null for namespace and source phase reexports
+  importName: string | null;
+  importNameStart: number;
+  importNameEnd: number;
+  // module specifier and index of the originating entry in imports
+  from: string;
+  importIndex: number;
+  start: number;
+  end: number;
+  exportStart: number;
+}
 
-  // Returns "{ type: 'json' }"
-  source.slice(imports[1].a, imports[1].se);
-  // "a" = attribute start, -1 for no import attributes
+interface ReexportAll {
+  type: 'reexport-all';
+  from: string;
+  importIndex: number;
+  // the `*` range
+  start: number;
+  end: number;
+  exportStart: number;
+}
+```
 
-  // Parsed import attributes are available in `at`
-  // Returns [['type', 'json']]
-  imports[1].at;
-  // Returns 'json'
-  imports[1].at[0][1];
+For example:
 
-  // Returns null (no attributes)
-  imports[0].at;
+```js
+import { init, parse } from 'es-module-lexer';
 
-  // Returns "external"
-  source.slice(imports[2].s, imports[2].e);
+await init;
 
-  // Returns "p"
-  source.slice(exports[0].s, exports[0].e);
-  // Returns "p"
-  source.slice(exports[0].ls, exports[0].le);
-  // Returns "q"
-  source.slice(exports[1].s, exports[1].e);
-  // Returns "q"
-  source.slice(exports[1].ls, exports[1].le);
+const source = `
+  import { name } from 'mod';
+  import json from './json.json' with { type: 'json' };
+  export var p = 5;
+  export { x as 'external name' } from 'external';
+  import ('asdf');
+  import.meta.url;
+  import source mod from './mod.wasm';
+`;
 
-  // "ss" = export statement start (only the start is tracked, not the end)
-  // Returns "export"
-  source.slice(exports[0].ss, exports[0].ss + 6);
+const [imports, exports] = parse(source, 'optional-sourcename');
 
-  // Reexports identify their imported name and source module.
-  // Returns "external name"
-  exports[2].n;
-  // Returns "x"
-  exports[2].im;
-  // Returns "external"
-  exports[2].f;
-  // Returns 2, the index of the corresponding entry in imports.
-  exports[2].fi;
-  // Returns "'external name'"
-  source.slice(exports[2].s, exports[2].e);
-  // Returns "x"
-  source.slice(exports[2].ims, exports[2].ime);
+// { type: 'static', specifier: 'mod', phase: null, ... }
+imports[0];
+// Returns "import { name } from 'mod'"
+source.slice(imports[0].importStart, imports[0].importEnd);
 
-  // Import type is provided by `t` value
-  // (1 for static, 2 for dynamic)
-  // Returns true
-  imports[2].t == 1;
+// Returns [['type', 'json']]
+imports[1].attributes;
+// Returns "{ type: 'json' }"
+source.slice(imports[1].attributesStart, imports[1].importEnd);
 
-  // Returns "asdf" (only for string literal dynamic imports)
-  imports[3].n
-  // Returns "import /*comment!*/ (  'asdf', { with: { type: 'json' } })"
-  source.slice(imports[3].ss, imports[3].se);
-  // Returns "'asdf'"
-  source.slice(imports[3].s, imports[3].e);
-  // Returns "(  'asdf', { with: { type: 'json' } })"
-  source.slice(imports[3].d, imports[3].se);
-  // Returns "{ with: { type: 'json' } }"
-  source.slice(imports[3].a, imports[3].se - 1);
+// { type: 'static', specifier: 'external', ... } from the reexport
+imports[2];
+// { type: 'dynamic', specifier: 'asdf', dynamicStart, ... }
+imports[3];
+// { type: 'import-meta', ... } spanning "import.meta"
+imports[4];
+// { type: 'static', phase: 'source', specifier: './mod.wasm', ... }
+imports[5];
 
-  // For non-string dynamic import expressions:
-  // - n will be undefined, except for a lone template literal: import(`./a/${x}.js`)
-  //   reports n as a glob with each ${...} collapsed to "*" (e.g. "./a/*.js")
-  // - a is currently -1 even if there is an import attribute
-  // - e is currently the character before the closing )
-
-  // For nested dynamic imports, the se value of the outer import is -1 as end tracking does not
-  // currently support nested dynamic immports
-
-  // import.meta is indicated by imports[4].d === -2
-  // Returns true
-  imports[4].d === -2;
-  // Returns "import /*comment!*/.meta"
-  source.slice(imports[4].s, imports[4].e);
-  // ss and se are the same for import meta
-
-  // Returns "'./mod.wasm'"
-  source.slice(imports[5].s, imports[5].e);
-
-  // Import type 4 and 5 for static and dynamic source phase
-  imports[5].t === 4;
-  imports[6].t === 5;
-})();
+// { type: 'direct', name: 'p', localName: 'p', ... }
+exports[0];
+// { type: 'reexport', name: 'external name', importName: 'x',
+//   from: 'external', importIndex: 2, ... }
+exports[1];
 ```
 
 ### Export Analysis
-
-Full builds return each export as a tagged union:
-
-* Direct exports have `t === 1` and provide `n`, `ln`, `s`, `e`, `ls`, `le`, and `ss`.
-* Named and namespace reexports have `t === 2`. They provide the exported name `n`, imported name `im`, imported-name range `ims` / `ime`, module specifier `f`, corresponding import index `fi`, exported-name range `s` / `e`, and statement start `ss`. `im` is `null` for namespace and source phase imports; `ims` and `ime` are `-1` when there is no source range.
-* `export * from 'module'` has `t === 3` and provides `f`, `fi`, the `*` range `s` / `e`, and `ss`.
 
 Detached exports are resolved after the complete module is lexed. An imported
 binding is therefore classified as a reexport regardless of whether its import
@@ -187,59 +211,28 @@ const source = `
 `;
 const [imports, exports] = parse(source);
 
-exports[0].t === 2;
-exports[0].n === 'publicValue';
-exports[0].im === 'original';
-exports[0].f === 'dep';
-exports[0].fi === 0;
-imports[0].n === 'dep';
+exports[0].type === 'reexport';
+exports[0].name === 'publicValue';
+exports[0].importName === 'original';
+exports[0].from === 'dep';
+exports[0].importIndex === 0;
+imports[0].specifier === 'dep';
 ```
 
-The import entry corresponding to `export * from 'module'` has import type 8 in
-every build, including the minimal one.
-
-When migrating a full-build consumer from v2, switch on `t` before reading
-kind-specific fields. Reexports no longer expose placeholder local-name
-properties, and bare star reexports now appear in the exports array. Their
-origins are available through `im` and `imports[fi]` without rescanning source
-statements.
-
-### CSP asm.js Build
-
-The default version of the library uses Wasm and (safe) eval usage for performance and a minimal footprint.
-
-Neither of these represent security escalation possibilities since there are no execution string injection vectors, but that can still violate existing CSP policies for applications.
-
-For a version that works with CSP eval disabled, use the `es-module-lexer/js` build:
-
-```js
-import { parse } from 'es-module-lexer/js';
-```
-
-Instead of Web Assembly, this uses an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
-
-### Minimal Build
-
-For size-sensitive embedders, the `es-module-lexer/minimal` build drops certain features to reduce the binary size. This is used for example by [es-module-shims](https://github.com/guybedford/es-module-shims):
-
-```js
-import { parse } from 'es-module-lexer/minimal';
-```
-
-Compared to the full build:
-
-* `parse` returns a two-element `[imports, exports]` tuple only - the third and fourth facade and `hasModuleSyntax` booleans are dropped.
-* Imports drop the parsed attribute list `at` (the attribute source remains recoverable via the `a` attributes index).
-* Exports keep the v2 flat `{ n, ln, s, e, ls, le }` shape and do not include export classification, origins, statement starts, or `export *` records.
-* The import type for `export * from 'module'` is 8 here as well, so a consumer switching on `t` sees the same values as the full build.
-
-For CSP eval disabled support, the equivalent asm.js build is available as `es-module-lexer/minimal/js`.
+When migrating a full-build consumer from v2, switch on `type` before reading
+kind-specific fields: the terse v2 field names and numeric type tags are
+replaced by the descriptive names above, reexports no longer expose
+placeholder local-name properties, and bare star reexports now appear in the
+exports array with their origins available through `importName` and
+`imports[importIndex]` without rescanning source statements.
 
 ### Import Attributes
 
-The `a` field provides the index of the start of the `{` attributes bracket, or -1 for no attributes.
+The `attributesStart` field provides the index of the start of the `{`
+attributes bracket, or -1 for no attributes.
 
-The list of attribute key and value pairs are provided on the `at` field (full build only):
+The list of attribute key and value pairs is provided on the `attributes`
+field:
 
 ```js
 const [imports] = parse(`
@@ -249,70 +242,76 @@ const [imports] = parse(`
 `);
 
 // Returns [['type', 'json']]
-imports[0].at;
+imports[0].attributes;
 
 // Returns [['type', 'css']]
-imports[1].at;
+imports[1].attributes;
 
 // Multiple attributes
 // Returns [['type', 'json'], ['integrity', 'sha384-...']]
-imports[2].at;
+imports[2].attributes;
 ```
 
-The `at` field is an array of `[key, value]` tuples, or `null` if there are no attributes.
+The `attributes` field is an array of `[key, value]` tuples, or `null` if
+there are no attributes.
 
 Both keys and values support escape sequences:
 
 ```js
 const [imports] = parse(`
   import foo from './foo.js' with { "custom-key": "value" };
-  import bar from './bar.js' with { "key\\nwith\\nnewlines": "value\\twith\\ttabs" };
 `);
 
-// Quoted keys are unquoted
+// Quoted keys are unquoted, escape sequences are processed
 // Returns [['custom-key', 'value']]
-imports[0].at;
-
-// Escape sequences are processed
-// Returns [['key\nwith\nnewlines', 'value\twith\ttabs']]
-imports[1].at;
+imports[0].attributes;
 ```
 
 ### Escape Sequences
 
-To handle escape sequences in specifier strings, the `.n` field of imported specifiers will be provided where possible.
+To handle escape sequences in specifier strings, the `specifier` field of
+imports is decoded where possible, and is `undefined` when the specifier does
+not decode as a JS string.
 
-For dynamic import expressions, this field will be empty if not a valid JS string.
+When the entire dynamic import argument is a single template literal,
+`specifier` is reported as a glob: each `${...}` substitution is collapsed to
+a single `*` (for example `` import(`./locales/${locale}.js`) `` yields
+`./locales/*.js`). A template concatenated with anything else, or any other
+expression, resolves to `undefined`. Substitutions are matched by the parser
+itself, so a `/` inside one is correctly disambiguated as regex or division
+and does not affect the glob.
 
-When the entire dynamic import argument is a single template literal, `.n` is reported as a glob: each `${...}` substitution is collapsed to a single `*` (for example `` import(`./locales/${locale}.js`) `` yields `./locales/*.js`). This is a full-build-only feature; the minimal build reports `undefined`. A template concatenated with anything else, or any other expression, resolves to `undefined`. Substitutions are matched by the parser itself, so a `/` inside one is correctly disambiguated as regex or division and does not affect the glob.
-
-The static parts are the raw specifier source: escape sequences are not cooked, and a literal `*` in the specifier is emitted as-is, so a consumer treating `.n` as a glob has to apply its own escaping.
+The static parts are the raw specifier source: escape sequences are not
+cooked, and a literal `*` in the specifier is emitted as-is, so a consumer
+treating the glob `specifier` as a pattern has to apply its own escaping.
 
 ### Star Re-exports
 
-`export * from 'module'` is both a dependency on `module` and a re-export of its
-names. It is reported on both sides:
+`export * from 'module'` is both a dependency on `module` and a re-export of
+its names. It is reported on both sides:
 
 ```js
-const [imports, exports] = parse(`export * from './core'`);
+const source = `export * from './core'`;
+const [imports, exports] = parse(source);
 
-// The exported name is "*"
-exports[0].n;
-// Returns "*"
+// Returns "reexport-all"
+exports[0].type;
+// Returns "./core"
+exports[0].from;
 
-// The specifier is an import, typed StaticReexportStar (8) so it is not
-// confused with a side-effect `import './core'` (which is type 1).
-imports[0].t === 8;
-imports[0].n;
+// The specifier is an import record typed 'reexport-star' so it is not
+// confused with a side-effect `import './core'` (which is 'static').
+imports[0].type === 'reexport-star';
+imports[0].specifier;
 // Returns "./core"
 
 // The two halves share the same statement range.
-source.slice(imports[0].ss, imports[0].se);
+source.slice(imports[0].importStart, imports[0].importEnd);
 // Returns "export * from './core'"
 ```
 
 `export * as ns from 'module'` is unchanged: it already reports the namespace
-name `ns` as the export, with the specifier as a normal static import.
+name `ns` as a `'reexport'`, with the specifier as a normal static import.
 
 ### Facade Detection
 
@@ -348,6 +347,93 @@ const [,,, hasModuleSyntax] = parse(`
 hasModuleSyntax === false;
 ```
 
+## Minimal Build
+
+For size-sensitive embedders, the `es-module-lexer/minimal` build drops
+certain features to reduce the binary size. This is used for example by
+[es-module-shims](https://github.com/guybedford/es-module-shims):
+
+```js
+import { parse } from 'es-module-lexer/minimal';
+```
+
+The minimal build keeps the terse v2 record shapes rather than the full
+build's discriminated unions, and `parse` returns a two-element
+`[imports, exports]` tuple only (the facade and `hasModuleSyntax` booleans
+are dropped):
+
+```js
+import { parse } from 'es-module-lexer/minimal';
+
+const source = `
+  import { name } from 'mod';
+  import json from './json.json' with { type: 'json' };
+  export var p = 5;
+  import ('asdf');
+  import.meta.url;
+`;
+
+const [imports, exports] = parse(source);
+
+// Returns "mod"
+imports[0].n
+// Returns "mod"
+source.slice(imports[0].s, imports[0].e);
+// "s" = start
+// "e" = end
+
+// Returns "import { name } from 'mod'"
+source.slice(imports[0].ss, imports[0].se);
+// "ss" = statement start
+// "se" = statement end
+
+// Import type is provided by the numeric `t` value
+// (see the ImportType enum; 8 is the `export * from 'mod'` module request)
+// Returns true
+imports[0].t === 1;
+
+// Returns "{ type: 'json' }"
+source.slice(imports[1].a, imports[1].se);
+// "a" = attribute start, -1 for no import attributes
+// (the parsed attribute list `at` is always null in the minimal build)
+
+// Dynamic imports have "d" as the start of the expression argument,
+// with -1 for static imports and -2 for import.meta
+// Returns "asdf" (only for string literal dynamic imports)
+imports[2].n
+// Returns "('asdf')"
+source.slice(imports[2].d, imports[2].se);
+
+// import.meta is indicated by d === -2
+// Returns true
+imports[3].d === -2;
+
+// Exports keep the v2 flat { n, ln, s, e, ls, le } shape with no export
+// classification, origins, statement starts, or `export *` records
+// Returns "p"
+source.slice(exports[0].s, exports[0].e);
+// Returns "p"
+source.slice(exports[0].ls, exports[0].le);
+```
+
+Interpolated template specifiers are not globbed in the minimal build (`n` is
+`undefined` for them), and escape sequences in specifiers are decoded into
+`n` where possible just as in the full build.
+
+## CSP asm.js Build
+
+The default versions of the library use Wasm and (safe) eval usage for performance and a minimal footprint.
+
+Neither of these represent security escalation possibilities since there are no execution string injection vectors, but that can still violate existing CSP policies for applications.
+
+For versions that work with CSP eval disabled, use the `es-module-lexer/js` and `es-module-lexer/minimal/js` builds:
+
+```js
+import { parse } from 'es-module-lexer/js';
+```
+
+Instead of Web Assembly, these use an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
+
 ### Environment Support
 
 The full build requires Node.js 18+ and engines with [WebAssembly SIMD support](https://webassembly.org/features/) (Chrome 91+, Firefox 89+, Safari 16.4+).
@@ -378,10 +464,10 @@ Current results on a standard desktop machine:
 
 ```
 Module load time
-> 1ms
+> 5ms
 Cold Run, All Samples
 test/samples/*.js (3057 KiB)
-> 13ms
+> 14ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (719 KiB)
@@ -391,51 +477,51 @@ test/samples/angular.min.js (188 KiB)
 test/samples/d3.js (491 KiB)
 > 2ms
 test/samples/d3.min.js (274 KiB)
-> 1.04ms
+> 1ms
 test/samples/magic-string.js (34 KiB)
 > 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (902 KiB)
-> 3ms
+> 2.08ms
 test/samples/rollup.min.js (429 KiB)
 > 2ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3057 KiB)
-> 10m
+> 8.92ms
 ```
 
 ### JS Build (asm.js)
 
 ```
 Module load time
-> 1ms
+> 2ms
 Cold Run, All Samples
 test/samples/*.js (3057 KiB)
-> 92ms
+> 35ms
 
 Warm Runs (average of 25 runs)
 test/samples/angular.js (719 KiB)
-> 3.6ms
-test/samples/angular.min.js (188 KiB)
 > 2ms
+test/samples/angular.min.js (188 KiB)
+> 1ms
 test/samples/d3.js (491 KiB)
-> 4ms
+> 3ms
 test/samples/d3.min.js (274 KiB)
-> 2.52ms
+> 2ms
 test/samples/magic-string.js (34 KiB)
 > 0ms
 test/samples/magic-string.min.js (20 KiB)
 > 0ms
 test/samples/rollup.js (902 KiB)
-> 6ms
+> 5.04ms
 test/samples/rollup.min.js (429 KiB)
-> 3.2ms
+> 3ms
 
 Warm Runs, All Samples (average of 25 runs)
 test/samples/*.js (3057 KiB)
-> 20.88ms
+> 16.04ms
 ```
 
 ### Building

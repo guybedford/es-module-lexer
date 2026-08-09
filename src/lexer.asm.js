@@ -82,7 +82,20 @@ export function parse (_source, _name = '@') {
       }
       at = at.length > 0 ? at : null;
     }
-    imports.push({ t, n, s, e, ss, se, d, a, at });
+    if (MINIMAL) {
+      imports.push({ t, n, s, e, ss, se, d, a, at });
+    }
+    else if (t === 3/*ImportMeta*/) {
+      imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
+    }
+    else if (d !== -1) {
+      const phase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
+      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a });
+    }
+    else {
+      const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
+      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
+    }
   }
   while (asm.re()) {
     const s = asm.es(), e = asm.ee(), ls = asm.els(), le = asm.ele();
@@ -96,13 +109,13 @@ export function parse (_source, _name = '@') {
     const t = asm.et(), ss = asm.ess();
     if (t === 3) {
       const fi = asm.eii();
-      exports.push({ t, f: imports[fi].n, fi, s, e, ss });
+      exports.push({ type: 'reexport-all', from: imports[fi].specifier, importIndex: fi, start: s, end: e, exportStart: ss });
     }
     else {
       const n = decodeIfQuoted(s, e);
       if (t === 1) {
         const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
-        exports.push({ t, n, ln, s, e, ls, le, ss });
+        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss });
       }
       else {
         const fi = asm.eii(), importNameType = asm.eit();
@@ -110,16 +123,16 @@ export function parse (_source, _name = '@') {
           ? decodeIfQuoted(ls, le)
           : importNameType === 1 ? 'default' : null;
         exports.push({
-          t,
-          n,
-          im,
-          ims: importNameType === 0 ? ls : -1,
-          ime: importNameType === 0 ? le : -1,
-          f: imports[fi].n,
-          fi,
-          s,
-          e,
-          ss
+          type: 'reexport',
+          name: n,
+          importName: im,
+          importNameStart: importNameType === 0 ? ls : -1,
+          importNameEnd: importNameType === 0 ? le : -1,
+          from: imports[fi].specifier,
+          importIndex: fi,
+          start: s,
+          end: e,
+          exportStart: ss
         });
       }
     }
