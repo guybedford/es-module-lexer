@@ -6,6 +6,7 @@ import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 
 const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.mjs': 'application/javascript' };
 const server = createServer(async (req, res) => {
@@ -48,16 +49,16 @@ const drive = async (method, path, body) => {
 };
 
 const waitForDriver = async () => {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
       await drive('GET', '/status');
       return;
     }
     catch (error) {
-      if (attempt === 99)
+      if (attempt === 9)
         throw error;
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await setTimeout(1000);
   }
 };
 
@@ -72,7 +73,7 @@ try {
   await drive('POST', `/session/${sessionId}/url`, { url: 'http://127.0.0.1:8123/test/legacy.html' });
   let title = 'RUNNING';
   for (let i = 0; i < 30 && title === 'RUNNING'; i++) {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await setTimeout(500);
     title = await drive('GET', `/session/${sessionId}/title`);
   }
   if (title !== 'PASS')
