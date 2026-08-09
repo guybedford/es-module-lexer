@@ -1,34 +1,66 @@
-import {
-  ExportType,
-  type ExportSpecifier,
+import type {
+  Import,
+  Export,
 } from '../types/lexer.js';
 import type {
+  ImportSpecifier as MinimalImportSpecifier,
   ExportSpecifier as MinimalExportSpecifier,
 } from '../types/lexer.minimal.js';
 
-declare const exportSpecifier: ExportSpecifier;
+declare const imported: Import;
 
-switch (exportSpecifier.t) {
-  case ExportType.Direct:
-    exportSpecifier.ln;
-    // @ts-expect-error Imported names only exist on reexports.
-    exportSpecifier.im;
+switch (imported.type) {
+  case 'static':
+  case 'reexport-star':
+    imported.specifier;
+    imported.attributes;
+    // @ts-expect-error Only dynamic imports have a dynamic argument start.
+    imported.dynamicStart;
     break;
-  case ExportType.Reexport:
-    exportSpecifier.im;
-    // @ts-expect-error Local names only exist on direct exports.
-    exportSpecifier.ln;
+  case 'dynamic':
+    imported.specifier;
+    imported.dynamicStart;
+    imported.phase;
     break;
-  case ExportType.ReexportAll:
-    exportSpecifier.f;
-    // @ts-expect-error Star reexports do not have an exported name.
-    exportSpecifier.n;
+  case 'import-meta':
+    imported.start;
+    // @ts-expect-error import.meta references have no specifier.
+    imported.specifier;
     break;
   default: {
-    const exhaustive: never = exportSpecifier;
+    const exhaustive: never = imported;
     exhaustive;
   }
 }
+
+declare const exported: Export;
+
+switch (exported.type) {
+  case 'direct':
+    exported.localName;
+    // @ts-expect-error Imported names only exist on reexports.
+    exported.importName;
+    break;
+  case 'reexport':
+    exported.importName;
+    // @ts-expect-error Local names only exist on direct exports.
+    exported.localName;
+    break;
+  case 'reexport-all':
+    exported.from;
+    // @ts-expect-error Star reexports do not have an exported name.
+    exported.name;
+    break;
+  default: {
+    const exhaustive: never = exported;
+    exhaustive;
+  }
+}
+
+declare const minimalImportSpecifier: MinimalImportSpecifier;
+minimalImportSpecifier.n;
+// @ts-expect-error Minimal import records keep the v2 shape.
+minimalImportSpecifier.specifier;
 
 declare const minimalExportSpecifier: MinimalExportSpecifier;
 minimalExportSpecifier.ln;

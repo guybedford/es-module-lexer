@@ -5,6 +5,10 @@
 // to the false literal.
 const MINIMAL = false as boolean;
 
+/**
+ * Numeric import type reported by the minimal build (`ImportSpecifier.t`).
+ * The full build reports string `type` / `phase` discriminants instead.
+ */
 export enum ImportType {
   /**
    * A normal static using any syntax variations
@@ -46,85 +50,58 @@ export enum ImportType {
   StaticReexportStar = 8,
 }
 
-export interface ImportSpecifier {
-  /**
-   * Module name
-   *
-   * To handle escape sequences in specifier strings, the .n field of imported specifiers will be provided where possible.
-   *
-   * For dynamic import expressions, this field will be empty if not a valid JS string.
-   * For static import expressions, this field will always be populated.
-   *
-   * A dynamic import whose entire argument is a single template literal is
-   * reported as a glob: each `${...}` substitution is collapsed to a single
-   * `*` (full build only; the minimal build reports undefined). Other
-   * expressions (including a template concatenated with anything else) remain
-   * undefined.
-   *
-   * @example
-   * const [imports1, exports1] = parse(String.raw`import './\u0061\u0062.js'`);
-   * imports1[0].n;
-   * // Returns "./ab.js"
-   *
-   * const [imports2, exports2] = parse(`import("./ab.js")`);
-   * imports2[0].n;
-   * // Returns "./ab.js"
-   *
-   * const [imports3, exports3] = parse(`import("./" + "ab.js")`);
-   * imports3[0].n;
-   * // Returns undefined
-   *
-   * const [imports4, exports4] = parse('import(`./locales/${locale}.js`)');
-   * imports4[0].n;
-   * // Returns "./locales/*.js"
-   */
-  readonly n: string | undefined;
-  /**
-   * Type of import statement
-   */
-  readonly t: ImportType;
+/**
+ * Import phase modifier: `import source` / `import.source(...)` report
+ * `'source'`, `import defer` / `import.defer(...)` report `'defer'`, all
+ * other imports report `null`.
+ */
+export type ImportPhase = 'source' | 'defer' | null;
+
+interface ImportBase {
   /**
    * Start of module specifier
    *
    * @example
    * const source = `import { a } from 'asdf'`;
    * const [imports, exports] = parse(source);
-   * source.substring(imports[0].s, imports[0].e);
+   * source.substring(imports[0].start, imports[0].end);
    * // Returns "asdf"
    */
-  readonly s: number;
+  readonly start: number;
   /**
    * End of module specifier
    */
-  readonly e: number;
+  readonly end: number;
 
   /**
-   * Start of import statement
+   * Start of the import
    *
    * @example
    * const source = `import { a } from 'asdf'`;
    * const [imports, exports] = parse(source);
-   * source.substring(imports[0].ss, imports[0].se);
-   * // Returns "import { a } from 'asdf';"
+   * source.substring(imports[0].importStart, imports[0].importEnd);
+   * // Returns "import { a } from 'asdf'"
    */
-  readonly ss: number;
+  readonly importStart: number;
   /**
-   * End of import statement
+   * End of the import
    */
-  readonly se: number;
+  readonly importEnd: number;
+}
 
+export interface StaticImport extends ImportBase {
   /**
-   * If this import keyword is a dynamic import, this is the start value.
-   * If this import keyword is a static import, this is -1.
-   * If this import keyword is an import.meta expresion, this is -2.
+   * `'reexport-star'` is the module request record of an
+   * `export * from 'module'` statement; every other static form is
+   * `'static'`.
    */
-  readonly d: number;
-
+  readonly type: 'static' | 'reexport-star';
   /**
-   * If this import has an import attribute, this is the start value.
-   * Otherwise this is `-1`.
+   * Decoded module specifier, handling escape sequences where possible;
+   * `undefined` when the specifier string does not decode as JS.
    */
-  readonly a: number;
+  readonly specifier: string | undefined;
+  readonly phase: ImportPhase;
   /**
    * Parsed import attributes as an array of [key, value] tuples.
    * If this import has no attributes, this is `null`.
@@ -132,146 +109,188 @@ export interface ImportSpecifier {
    * @example
    * const source = `import foo from 'bar' with { type: "json" }`;
    * const [imports] = parse(source);
-   * imports[0].at;
+   * imports[0].attributes;
    * // Returns [['type', 'json']]
-   *
-   * @example
-   * const source = `import foo from 'bar' with { type: "json", integrity: "sha384-..." }`;
-   * const [imports] = parse(source);
-   * imports[0].at;
-   * // Returns [['type', 'json'], ['integrity', 'sha384-...']]
    */
-  readonly at: ReadonlyArray<readonly [string, string]> | null;
+  readonly attributes: ReadonlyArray<readonly [string, string]> | null;
+  /**
+   * Start of the import attributes (`with { ... }`), or -1 if none.
+   */
+  readonly attributesStart: number;
 }
 
-export enum ExportType {
+export interface DynamicImport extends ImportBase {
+  readonly type: 'dynamic';
+  /**
+   * Decoded module specifier when statically analyzable, else `undefined`.
+   *
+   * A dynamic import whose entire argument is a single template literal is
+   * reported as a glob: each `${...}` substitution is collapsed to a single
+   * `*`. Other expressions (including a template concatenated with anything
+   * else) remain `undefined`.
+   *
+   * @example
+   * const [imports1] = parse(`import("./ab.js")`);
+   * imports1[0].specifier;
+   * // Returns "./ab.js"
+   *
+   * const [imports2] = parse(`import("./" + "ab.js")`);
+   * imports2[0].specifier;
+   * // Returns undefined
+   *
+   * const [imports3] = parse('import(`./locales/${locale}.js`)');
+   * imports3[0].specifier;
+   * // Returns "./locales/*.js"
+   */
+  readonly specifier: string | undefined;
+  readonly phase: ImportPhase;
+  /**
+   * Start of the dynamic import expression argument.
+   */
+  readonly dynamicStart: number;
+  /**
+   * Parsed import attributes as an array of [key, value] tuples, or `null`.
+   */
+  readonly attributes: ReadonlyArray<readonly [string, string]> | null;
+  /**
+   * Start of the import attributes option, or -1 if none.
+   */
+  readonly attributesStart: number;
+}
+
+/**
+ * An `import.meta` reference; `start` / `end` span the `import.meta`
+ * expression itself.
+ */
+export interface ImportMetaRef extends ImportBase {
+  readonly type: 'import-meta';
+}
+
+export type Import = StaticImport | DynamicImport | ImportMetaRef;
+
+// Internal wire values of the export ABI type tag; the public API reports the
+// string discriminants.
+enum ExportType {
   Direct = 1,
   Reexport = 2,
   ReexportAll = 3,
 }
 
-interface ExportBase {
+export interface DirectExport {
+  readonly type: 'direct';
   /**
    * Exported name
    *
    * @example
    * const source = `export default []`;
    * const [imports, exports] = parse(source);
-   * exports[0].n;
+   * exports[0].name;
    * // Returns "default"
-   *
-   * @example
-   * const source = `export const asdf = 42`;
-   * const [imports, exports] = parse(source);
-   * exports[0].n;
-   * // Returns "asdf"
    */
-  readonly n: string;
-
+  readonly name: string;
   /**
    * Start of exported name
    *
    * @example
-   * const source = `export default []`;
-   * const [imports, exports] = parse(source);
-   * source.substring(exports[0].s, exports[0].e);
-   * // Returns "default"
-   *
-   * @example
    * const source = `export { 42 as asdf }`;
    * const [imports, exports] = parse(source);
-   * source.substring(exports[0].s, exports[0].e);
+   * source.substring(exports[0].start, exports[0].end);
    * // Returns "asdf"
    */
-  readonly s: number;
+  readonly start: number;
   /**
    * End of exported name
    */
-  readonly e: number;
-
-  /**
-   * Start of the export statement.
-   *
-   * Only the statement start is provided; the statement end is not tracked
-   * (see https://github.com/guybedford/es-module-lexer/issues/112). Every
-   * specifier of a statement reports the same start, so `export { a, b }`
-   * returns the same `ss` for both `a` and `b`.
-   *
-   * @example
-   * const source = `export { a, b } from 'mod'`;
-   * const [imports, exports] = parse(source);
-   * source.slice(exports[0].ss, exports[0].ss + 6);
-   * // Returns "export"
-   */
-  readonly ss: number;
-}
-
-export interface DirectExport extends ExportBase {
-  readonly t: ExportType.Direct;
+  readonly end: number;
   /**
    * Local name, or undefined for anonymous default exports.
    */
-  readonly ln: string | undefined;
+  readonly localName: string | undefined;
   /**
    * Start of local name, or -1.
    */
-  readonly ls: number;
+  readonly localStart: number;
   /**
    * End of local name, or -1.
    */
-  readonly le: number;
+  readonly localEnd: number;
+  /**
+   * Start of the export statement.
+   *
+   * Only the start is provided; the statement end is not tracked
+   * (see https://github.com/guybedford/es-module-lexer/issues/112). Every
+   * specifier of a statement reports the same start, so `export { a, b }`
+   * returns the same `exportStart` for both `a` and `b`.
+   */
+  readonly exportStart: number;
 }
 
-export interface Reexport extends ExportBase {
-  readonly t: ExportType.Reexport;
+export interface Reexport {
+  readonly type: 'reexport';
+  /**
+   * Exported name
+   */
+  readonly name: string;
+  /**
+   * Start of exported name
+   */
+  readonly start: number;
+  /**
+   * End of exported name
+   */
+  readonly end: number;
   /**
    * Imported name, or null for namespace and source phase imports.
    */
-  readonly im: string | null;
+  readonly importName: string | null;
   /**
-   * Start of imported name, or -1 when `im` is null or `"default"` from a
-   * default import.
+   * Start of imported name, or -1 when `importName` is null or `"default"`
+   * from a default import.
    */
-  readonly ims: number;
+  readonly importNameStart: number;
   /**
-   * End of imported name, or -1 when `ims` is -1.
+   * End of imported name, or -1 when `importNameStart` is -1.
    */
-  readonly ime: number;
+  readonly importNameEnd: number;
   /**
-   * Module specifier.
+   * Module specifier reexported from.
    */
-  readonly f: string;
-  /**
-   * Index of the originating import in the imports array.
-   */
-  readonly fi: number;
-}
-
-export interface ReexportAll {
-  readonly t: ExportType.ReexportAll;
-  /**
-   * Module specifier.
-   */
-  readonly f: string;
+  readonly from: string;
   /**
    * Index of the originating import in the imports array.
    */
-  readonly fi: number;
-  /**
-   * Start of the `*`.
-   */
-  readonly s: number;
-  /**
-   * End of the `*`.
-   */
-  readonly e: number;
+  readonly importIndex: number;
   /**
    * Start of the export statement.
    */
-  readonly ss: number;
+  readonly exportStart: number;
 }
 
-export type ExportSpecifier = DirectExport | Reexport | ReexportAll;
+export interface ReexportAll {
+  readonly type: 'reexport-all';
+  /**
+   * Module specifier reexported from.
+   */
+  readonly from: string;
+  /**
+   * Index of the originating import in the imports array.
+   */
+  readonly importIndex: number;
+  /**
+   * Start of the `*`.
+   */
+  readonly start: number;
+  /**
+   * End of the `*`.
+   */
+  readonly end: number;
+  /**
+   * Start of the export statement.
+   */
+  readonly exportStart: number;
+}
+
+export type Export = DirectExport | Reexport | ReexportAll;
 
 export interface ParseError extends Error {
   idx: number
@@ -288,8 +307,8 @@ const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
  * @returns Tuple contaning imports list and exports list.
  */
 export function parse (source: string, name = '@'): readonly [
-  imports: ReadonlyArray<ImportSpecifier>,
-  exports: ReadonlyArray<ExportSpecifier>,
+  imports: ReadonlyArray<Import>,
+  exports: ReadonlyArray<Export>,
   facade: boolean,
   hasModuleSyntax: boolean
 ] {
@@ -317,7 +336,7 @@ export function parse (source: string, name = '@'): readonly [
   if (!wasm.parse())
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
-  const imports: ImportSpecifier[] = [], exports: ExportSpecifier[] = [];
+  const imports: Import[] = [], exports: Export[] = [];
   while (wasm.ri()) {
     const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
@@ -337,7 +356,20 @@ export function parse (source: string, name = '@'): readonly [
       }
       if (at.length === 0) at = null;
     }
-    imports.push({ n, t, s, e, ss, se, d, a, at });
+    if (MINIMAL) {
+      imports.push({ n, t, s, e, ss, se, d, a, at } as unknown as Import);
+    }
+    else if (t === ImportType.ImportMeta) {
+      imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
+    }
+    else if (d !== -1) {
+      const phase: ImportPhase = t === ImportType.DynamicSourcePhase ? 'source' : t === ImportType.DynamicDeferPhase ? 'defer' : null;
+      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a });
+    }
+    else {
+      const phase: ImportPhase = t === ImportType.StaticSourcePhase ? 'source' : t === ImportType.StaticDeferPhase ? 'defer' : null;
+      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
+    }
   }
   let exportPtr = wasm.re();
   const memoryView = MINIMAL || exportPtr === 0 ? undefined : new DataView(wasm.memory.buffer);
@@ -346,7 +378,7 @@ export function parse (source: string, name = '@'): readonly [
       const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
       const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
       const n = decodeIfQuoted(source.slice(s, e));
-      exports.push({ s, e, ls, le, n, ln } as unknown as ExportSpecifier);
+      exports.push({ s, e, ls, le, n, ln } as unknown as Export);
       exportPtr = wasm.re();
       continue;
     }
@@ -362,13 +394,13 @@ export function parse (source: string, name = '@'): readonly [
     const fi = memoryView!.getUint32(exportPtr + 20, true);
     const t = memoryView!.getUint8(exportPtr + 24) as ExportType;
     if (t === ExportType.ReexportAll) {
-      exports.push({ t, f: imports[fi].n as string, fi, s, e, ss });
+      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier as string, importIndex: fi, start: s, end: e, exportStart: ss });
     }
     else {
       const n = decodeIfQuoted(source.slice(s, e));
       if (t === ExportType.Direct) {
         const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
-        exports.push({ t, n, ln, s, e, ls, le, ss });
+        exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss });
       }
       else {
         const importNameType = memoryView!.getUint8(exportPtr + 25);
@@ -376,16 +408,16 @@ export function parse (source: string, name = '@'): readonly [
           ? decodeIfQuoted(source.slice(ls, le))
           : importNameType === 1 ? 'default' : null;
         exports.push({
-          t,
-          n,
-          im,
-          ims: importNameType === 0 ? ls : -1,
-          ime: importNameType === 0 ? le : -1,
-          f: imports[fi].n as string,
-          fi,
-          s,
-          e,
-          ss
+          type: 'reexport',
+          name: n,
+          importName: im,
+          importNameStart: importNameType === 0 ? ls : -1,
+          importNameEnd: importNameType === 0 ? le : -1,
+          from: (imports[fi] as StaticImport).specifier as string,
+          importIndex: fi,
+          start: s,
+          end: e,
+          exportStart: ss
         });
       }
     }
