@@ -506,6 +506,10 @@ suite('Lexer', () => {
     // same as for the quoted forms.
     assert.strictEqual(parse('import("./x.js")')[0][0].n, './x.js');
     assert.strictEqual(parse("import('./x.js')")[0][0].n, './x.js');
+    const scalarTemplateWarmup = '``;'.repeat(16);
+    assert.strictEqual(parse(scalarTemplateWarmup + 'import(``)')[0][0].n, '');
+    assert.strictEqual(parse(scalarTemplateWarmup + 'import(`a`)')[0][0].n, 'a');
+    assert.strictEqual(parse(scalarTemplateWarmup + 'import(`$`)')[0][0].n, '$');
     assert.strictEqual(parse('import(`./x.js`)')[0][0].n, './x.js');
   });
 
@@ -1328,6 +1332,19 @@ function x() {
     assert.strictEqual(source.slice(imports[0].ss, imports[0].se), `import util from 'util'`);
     assert.strictEqual(exports.length, 1);
     assertExportIs(source, exports[0], { n: 'a', ln: 'a' });
+  });
+
+  test('Line comments preserve scalar and SIMD scan boundaries', () => {
+    for (const [length, terminator] of [[8, '\n'], [9, '\n'], [9, '\r']]) {
+      const [imports] = parse(`//${'x'.repeat(length)}${terminator}import 'boundary';`);
+      assert.strictEqual(imports.length, 1);
+      assert.strictEqual(imports[0].n, 'boundary');
+    }
+
+    const [imports] = parse(`//${'x'.repeat(9)}\0tail\nimport 'embedded-null';`);
+    assert.strictEqual(imports.length, 1);
+    assert.strictEqual(imports[0].n, 'embedded-null');
+    assert.deepStrictEqual(parse(`//${'x'.repeat(9)}`)[0], []);
   });
 
   test('Strings', () => {
