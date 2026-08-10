@@ -91,7 +91,7 @@ export function parse (_source, _name = '@') {
     }
     else if (d !== -1) {
       const phase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a });
+      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;

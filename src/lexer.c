@@ -68,6 +68,9 @@ static const char16_t KEYWORDS[] = {
   'i', 'm', 'p', 'o', 'r', 't',
   'r', 'e', 'a', 'd', 'o', 'n', 'l', 'y',
   'a', 'b', 's', 't', 'r', 'a', 'c', 't',
+  't', 'h', 'e', 'n',
+  'c', 'a', 't', 'c', 'h',
+  'f', 'i', 'n', 'a', 'l', 'l', 'y',
 #endif
 };
 
@@ -110,6 +113,9 @@ static const char16_t KEYWORDS[] = {
 #define IMPORT (UNIQUE + 6)
 #define READONLY (IMPORT + 6)
 #define ABSTRACT (READONLY + 8)
+#define THEN (ABSTRACT + 8)
+#define CATCH_KW (THEN + 4)
+#define FINALLY_KW (CATCH_KW + 5)
 #endif
 
 
@@ -213,6 +219,35 @@ static inline __attribute__((always_inline)) void dropUncommittedGlob (Import* i
 #endif
 }
 
+#ifdef LEX_TS
+// A promise has no members besides then / catch / finally, so a qualified
+// (`import('m').T`) or indexed (`import('m')['x']`) access on a dynamic import
+// never dereferences in real JS and marks a type-position `import()` type.
+// Called at the closing paren; peeks over whitespace only (not comments).
+static void classifyDynamicImportMember (Import* impt) {
+  if (impt->type_only || impt->type_value_certain)
+    return;
+  char16_t* p = pos + 1;
+  while (isBrOrWs(*p)) p++;
+  if (*p == '[') {
+    impt->type_only = true;
+    return;
+  }
+  if (*p != '.') return;
+  p++;
+  while (isBrOrWs(*p)) p++;
+  char16_t* s = p;
+  while (isIdentifierCodeUnit(*p)) p++;
+  size_t len = p - s;
+  if (len == 0 ||
+      len == 4 && memcmp(s, THEN, 4 * 2) == 0 ||
+      len == 5 && memcmp(s, CATCH_KW, 5 * 2) == 0 ||
+      len == 7 && memcmp(s, FINALLY_KW, 7 * 2) == 0)
+    return;
+  impt->type_only = true;
+}
+#endif
+
 // Consume one token at the current ch/pos, updating the global tokenizer state.
 // The single source of tokenization: the main loop and skipExpression both call
 // it, so the regex/keyword/import rules never diverge. Comments do not advance
@@ -297,6 +332,9 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
           dropUncommittedGlob(cur_dynamic_import);
         }
         cur_dynamic_import->statement_end = pos + 1;
+#ifdef LEX_TS
+        classifyDynamicImportMember(cur_dynamic_import);
+#endif
         dynamicImportStackDepth--;
       }
       break;
@@ -625,6 +663,13 @@ void tryParseImportStatement () {
     pos++;
     ch = commentWhitespace(true);
     addImport(startPos, pos, 0, dynamicPos);
+#ifdef LEX_TS
+    // `await` cannot precede a type, vetoing the member peek; `typeof
+    // import('m')` is a namespace type in TS and dead code on a promise in JS.
+    import_write_head->type_value_certain = *lastTokenPos == 't' && readPrecedingKeywordn(lastTokenPos - 1, AWAI, 4);
+    if (*lastTokenPos == 'f' && readPrecedingKeywordn(lastTokenPos, TYPEOF, 6))
+      import_write_head->type_only = true;
+#endif
     if (phase_keyword > 0)
       import_write_head->import_ty = phase_keyword == 1 ? DynamicSourcePhase : DynamicDeferPhase;
     dynamicImportStack[dynamicImportStackDepth++] = import_write_head;
@@ -660,6 +705,9 @@ void tryParseImportStatement () {
       import_write_head->end = endPos;
       import_write_head->statement_end = pos + 1;
       import_write_head->safe = true;
+#ifdef LEX_TS
+      classifyDynamicImportMember(import_write_head);
+#endif
       dynamicImportStackDepth--;
     }
     else {

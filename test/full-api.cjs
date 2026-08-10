@@ -72,7 +72,8 @@ suite('Full build API', () => {
       importEnd: source.indexOf(')') + 1,
       dynamicStart: source.indexOf('('),
       attributes: null,
-      attributesStart: -1
+      attributesStart: -1,
+      probablyTypeOnly: false
     }]);
   });
 

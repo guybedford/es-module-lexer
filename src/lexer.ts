@@ -162,6 +162,16 @@ export interface DynamicImport extends ImportBase {
    * Start of the import attributes option, or -1 if none.
    */
   readonly attributesStart: number;
+  /**
+   * Best-effort TypeScript type-position `import()` classification. As a
+   * lexer without a full parser, type annotation positions cannot be
+   * comprehensively classified, so this is heuristic: `true` when the result
+   * is used in a way no runtime promise is (`typeof import('m')`, or a
+   * member / indexed access other than `then` / `catch` / `finally`, unless
+   * preceded by `await`). Bare type positions (`const x: import('m') = y`)
+   * stay `false`.
+   */
+  readonly probablyTypeOnly: boolean;
 }
 
 /**
@@ -386,7 +396,7 @@ export function parse (source: string, name = '@'): readonly [
     }
     else if (d !== -1) {
       const phase: ImportPhase = t === ImportType.DynamicSourcePhase ? 'source' : t === ImportType.DynamicDeferPhase ? 'defer' : null;
-      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a });
+      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
       const phase: ImportPhase = t === ImportType.StaticSourcePhase ? 'source' : t === ImportType.StaticDeferPhase ? 'defer' : null;

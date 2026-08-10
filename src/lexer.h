@@ -79,6 +79,7 @@ struct Import {
   bool safe;
 #ifdef LEX_TS
   bool type_only;
+  bool type_value_certain;
 #endif
   enum ImportType import_ty;
 #ifndef LEXER_MIN
@@ -281,6 +282,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->safe = dynamic == STANDARD_IMPORT;
 #ifdef LEX_TS
   import->type_only = false;
+  import->type_value_certain = false;
 #endif
 #ifndef LEXER_MIN
   import->attributes = NULL;

@@ -267,7 +267,15 @@ Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The
 
 Default-exported interfaces and declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, only a following `|` or `&` is recognized as a continuation; other cross-line continuation forms are outside this increment.
 
-This increment covers type-only imports and exports and `type` / `interface` declarations. Type annotations on values and generic type arguments in value positions are not yet handled: an `import(...)` type there (`const x: import('m').T`, `f<import('m').T>()`) is still reported as a runtime import, since telling a type argument from a `<` comparison needs full type context. `as` / `satisfies` and the rest of the erasable surface also follow later. Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
+#### Caveats
+
+All type-only imports and exports and `type` / `interface` declarations are grammar-certain and reported exactly via `typeOnly`. The one heuristic case is dynamic `import()` types: es-module-lexer is a lexer, not a full parser, so an `import()` type in an annotation position (annotations, generic arguments, `as` / `satisfies`) is classified best-effort by how its result is used, reported as `probablyTypeOnly` on the dynamic import record:
+
+* `typeof import('m')`, or a member or indexed access on the result other than the promise members `then` / `catch` / `finally` (`import('m').T`, `import('m')['x']`), reports `probablyTypeOnly: true` — no runtime promise is used this way.
+* `await import('m')` and promise member access always remain runtime imports.
+* A bare unqualified `import('m')` annotation type is indistinguishable from a value use and reports `probablyTypeOnly: false`: runtime module graphs over-report rather than under-report.
+
+Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
 
 ### Import Attributes
 

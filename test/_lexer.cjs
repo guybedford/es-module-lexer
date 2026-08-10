@@ -25,7 +25,7 @@ function terseImport (record) {
     case 'import-meta':
       return { n: undefined, t: 3, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -2, a: -1, at: null, tp: false };
     case 'dynamic':
-      return { n: record.specifier, t: record.phase === 'source' ? 5 : record.phase === 'defer' ? 7 : 2, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: record.dynamicStart, a: record.attributesStart, at: record.attributes, tp: false };
+      return { n: record.specifier, t: record.phase === 'source' ? 5 : record.phase === 'defer' ? 7 : 2, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: record.dynamicStart, a: record.attributesStart, at: record.attributes, tp: record.probablyTypeOnly };
     case 'static':
     case 'reexport-star':
       return { n: record.specifier, t: record.type === 'reexport-star' ? 8 : record.phase === 'source' ? 4 : record.phase === 'defer' ? 6 : 1, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -1, a: record.attributesStart, at: record.attributes, tp: record.typeOnly };
