@@ -2091,6 +2091,19 @@ export { d as a, p as b, z as c, r as d, q }`;
     }
   });
 
+  // Only the wasm builds have a pre-init branch, reached by the documented
+  // "either await init, or call parse asynchronously" path.
+  if (process.env.WASM) {
+    test('Sourcename on the pre-init async path', async () => {
+      // The query string yields a second, uninitialized instance; the one this
+      // file imported has already awaited init.
+      const { parse } = await import(min ? '../dist/lexer.minimal.js?preinit' : '../dist/lexer.js?preinit');
+      const pending = parse('import{', 'my-file.js');
+      assert(pending instanceof Promise, 'init resolved first, so the pre-init path was not exercised');
+      await assert.rejects(pending, /^Error: Parse error my-file\.js:\d+:\d+$/);
+    });
+  }
+
   test('Large source', () => {
     const source = `import 'a';\nconst x = "${'a'.repeat(5 * 1024 * 1024)}";\nexport { x }`;
     const [imports, exports] = parse(source);

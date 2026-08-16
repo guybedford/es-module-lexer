@@ -242,7 +242,7 @@ export function parse (source: string, name = '@'): readonly [
   if (!wasm)
     // actually returns a promise if init hasn't resolved (not type safe).
     // casting to avoid a breaking type change.
-    return init.then(() => parse(source)) as unknown as ReturnType<typeof parse>;
+    return init.then(() => parse(source, name)) as unknown as ReturnType<typeof parse>;
 
   const len = source.length + 1;
 
