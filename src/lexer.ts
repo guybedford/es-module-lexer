@@ -97,10 +97,11 @@ export interface StaticImport extends ImportBase {
    */
   readonly type: 'static' | 'reexport-star';
   /**
-   * Decoded module specifier, handling escape sequences where possible;
-   * `undefined` when the specifier string does not decode as JS.
+   * Decoded module specifier with escape sequences processed. A specifier
+   * that does not decode as a JS string (invalid escape sequences) is a
+   * parse error.
    */
-  readonly specifier: string | undefined;
+  readonly specifier: string;
   readonly phase: ImportPhase;
   /**
    * Parsed import attributes as an array of [key, value] tuples.
@@ -341,7 +342,7 @@ export function parse (source: string, name = '@'): readonly [
     const s = wasm.is(), e = wasm.ie(), t = wasm.it(), a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     let n;
     if (wasm.ip())
-      n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e));
+      n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e), s);
     else if (!MINIMAL && d !== -1 && source[s] === '`')
       n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
@@ -352,7 +353,7 @@ export function parse (source: string, name = '@'): readonly [
       wasm.rsa();
       while (wasm.ra()) {
         const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
-        at.push([decodeIfQuoted(source.slice(aks, ake)), decodeIfQuoted(source.slice(avs, ave))]);
+        at.push([decodeIfQuoted(source.slice(aks, ake), aks), decodeIfQuoted(source.slice(avs, ave), avs)]);
       }
       if (at.length === 0) at = null;
     }
@@ -368,7 +369,7 @@ export function parse (source: string, name = '@'): readonly [
     }
     else {
       const phase: ImportPhase = t === ImportType.StaticSourcePhase ? 'source' : t === ImportType.StaticDeferPhase ? 'defer' : null;
-      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
+      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a });
     }
   }
   let exportPtr = wasm.re();
@@ -376,8 +377,8 @@ export function parse (source: string, name = '@'): readonly [
   while (exportPtr !== 0) {
     if (MINIMAL) {
       const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
-      const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
-      const n = decodeIfQuoted(source.slice(s, e));
+      const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le), ls);
+      const n = decodeIfQuoted(source.slice(s, e), s);
       exports.push({ s, e, ls, le, n, ln } as unknown as Export);
       exportPtr = wasm.re();
       continue;
@@ -394,18 +395,18 @@ export function parse (source: string, name = '@'): readonly [
     const fi = memoryView!.getUint32(exportPtr + 20, true);
     const t = memoryView!.getUint8(exportPtr + 24) as ExportType;
     if (t === ExportType.ReexportAll) {
-      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier as string, importIndex: fi, start: s, end: e, exportStart: ss });
+      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier, importIndex: fi, start: s, end: e, exportStart: ss });
     }
     else {
-      const n = decodeIfQuoted(source.slice(s, e));
+      const n = decodeIfQuoted(source.slice(s, e), s);
       if (t === ExportType.Direct) {
-        const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le));
+        const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le), ls);
         exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss });
       }
       else {
         const importNameType = memoryView!.getUint8(exportPtr + 25);
         const im = importNameType === 0
-          ? decodeIfQuoted(source.slice(ls, le))
+          ? decodeIfQuoted(source.slice(ls, le), ls)
           : importNameType === 1 ? 'default' : null;
         exports.push({
           type: 'reexport',
@@ -413,7 +414,7 @@ export function parse (source: string, name = '@'): readonly [
           importName: im,
           importNameStart: importNameType === 0 ? ls : -1,
           importNameEnd: importNameType === 0 ? le : -1,
-          from: (imports[fi] as StaticImport).specifier as string,
+          from: (imports[fi] as StaticImport).specifier,
           importIndex: fi,
           start: s,
           end: e,
@@ -424,18 +425,21 @@ export function parse (source: string, name = '@'): readonly [
     exportPtr = wasm.re();
   }
 
-  function decode (str: string) {
+  // strict mode matches the asm build's eval-free decoder in rejecting
+  // legacy octal escapes
+  function decode (str: string, idx: number): string {
     try {
-      return (0, eval)(str)
+      return (0, eval)('"use strict";' + str)
     }
-    catch (e) {}
+    catch (e) {
+      throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, idx).split('\n').length}:${idx - source.lastIndexOf('\n', idx - 1)}`), { idx });
+    }
   }
 
-  function decodeIfQuoted (str: string): string {
-    if (!str) return str;
+  function decodeIfQuoted (str: string, idx: number): string {
     const firstChar = str[0];
     if (firstChar === '"' || firstChar === "'")
-      return decode(str) || str;
+      return decode(str, idx);
     return str;
   }
 
