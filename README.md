@@ -40,26 +40,24 @@ See [src/lexer.ts](src/lexer.ts) for the type definitions.
 For use in CommonJS:
 
 ```js
-const { parse } = require('es-module-lexer');
+const { init, parse } = require('es-module-lexer');
 
-const source = 'export var p = 5';
-const [imports, exports] = parse(source);
+(async () => {
+  // in browsers, await init first for the WebAssembly boot
+  await init;
 
-// Returns "p"
-source.slice(exports[0].start, exports[0].end);
+  const source = 'export var p = 5';
+  const [imports, exports] = parse(source);
+
+  // Returns "p"
+  source.slice(exports[0].start, exports[0].end);
+})();
 ```
 
 `parse` initializes the WebAssembly automatically on first use, compiling it
 synchronously if the `init` promise has not been awaited. Browser main threads
-restrict synchronous WebAssembly compilation, so `init` must be awaited
-there first:
-
-```js
-import { init, parse } from 'es-module-lexer';
-
-await init;
-parse(source);
-```
+restrict synchronous WebAssembly compilation, so awaiting `init` remains
+required there, while in Node.js and other environments it is optional.
 
 An ES module version is also available:
 
