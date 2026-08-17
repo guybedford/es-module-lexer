@@ -43,8 +43,7 @@ For use in CommonJS:
 const { init, parse } = require('es-module-lexer');
 
 (async () => {
-  // either await init, or call parse asynchronously
-  // this is necessary for the Web Assembly boot
+  // in browsers, await init first for the WebAssembly boot
   await init;
 
   const source = 'export var p = 5';
@@ -54,6 +53,11 @@ const { init, parse } = require('es-module-lexer');
   source.slice(exports[0].start, exports[0].end);
 })();
 ```
+
+`parse` initializes the WebAssembly automatically on first use, compiling it
+synchronously if the `init` promise has not been awaited. Browser main threads
+restrict synchronous WebAssembly compilation, so awaiting `init` remains
+required there, while in Node.js and other environments it is optional.
 
 An ES module version is also available:
 

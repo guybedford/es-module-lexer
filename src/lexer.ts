@@ -313,9 +313,9 @@ export function parse (source: string, name = '@'): readonly [
   hasModuleSyntax: boolean
 ] {
   if (!wasm)
-    // actually returns a promise if init hasn't resolved (not type safe).
-    // casting to avoid a breaking type change.
-    return init.then(() => parse(source, name)) as unknown as ReturnType<typeof parse>;
+    // synchronous compile is restricted on browser main threads — await init
+    // there before calling parse
+    initSync();
 
   const len = source.length + 1;
 
