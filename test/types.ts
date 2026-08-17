@@ -16,6 +16,7 @@ switch (imported.type) {
   case 'reexport-star':
     imported.specifier;
     imported.attributes;
+    imported.typeOnly;
     // @ts-expect-error Only dynamic imports have a dynamic argument start.
     imported.dynamicStart;
     break;
@@ -40,6 +41,7 @@ declare const exported: Export;
 switch (exported.type) {
   case 'direct':
     exported.localName;
+    exported.typeOnly;
     // @ts-expect-error Imported names only exist on reexports.
     exported.importName;
     break;
@@ -68,6 +70,9 @@ declare const minimalExportSpecifier: MinimalExportSpecifier;
 minimalExportSpecifier.ln;
 // @ts-expect-error Minimal export records keep the v2 shape.
 minimalExportSpecifier.t;
+
+// @ts-expect-error Minimal export records omit TypeScript metadata.
+minimalExportSpecifier.typeOnly;
 
 // parse is synchronous — no promise in its return type.
 const syncImports: ReadonlyArray<Import> = parse('')[0];

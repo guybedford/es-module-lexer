@@ -6,7 +6,7 @@ A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford
 
 Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
 
-Supports new syntax features including import attributes and source phase imports.
+Supports new syntax features including import attributes and source phase imports, as well as [lexing type-only TypeScript imports and exports](#typescript) in the full build.
 
 A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
 
@@ -20,14 +20,16 @@ _Comprehensively handles the JS language grammar while remaining small and fast.
 
 | Export | Build | Footprint (Brotli) |
 | --- | --- | --- |
-| `es-module-lexer` | [Full build](#full-build), Wasm | 10.0KiB |
-| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build) | 9.2KiB |
-| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm | 6.8KiB |
-| `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build) | 6.5KiB |
+| `es-module-lexer` | [Full build](#full-build), Wasm, JS & [TypeScript](#typescript) | 11.8KiB |
+| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build), JS & [TypeScript](#typescript) | 10.8KiB |
+| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm, JS only | 6.8KiB |
+| `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build), JS only | 6.5KiB |
 
 See [Environment Support](#environment-support) for the engine requirements of each build.
 
 ## Full Build
+
+The full build lexes both JavaScript and erasable [type-only TypeScript](#typescript) syntax, reporting type-only imports and exports with a `typeOnly` flag.
 
 ### Usage
 
@@ -88,6 +90,8 @@ interface StaticImport {
   // or null / -1 for no attributes
   attributes: [string, string][] | null;
   attributesStart: number;
+  // true for a TypeScript type-only import
+  typeOnly: boolean;
 }
 
 interface DynamicImport {
@@ -129,6 +133,8 @@ interface DirectExport {
   localEnd: number;
   // only the start of the export statement is tracked
   exportStart: number;
+  // true for a TypeScript type-only export
+  typeOnly: boolean;
 }
 
 interface Reexport {
@@ -139,21 +145,24 @@ interface Reexport {
   importNameStart: number;
   importNameEnd: number;
   // module specifier and index of the originating entry in imports
-  from: string;
+  // (undefined when the specifier string does not decode as JS)
+  from: string | undefined;
   importIndex: number;
   start: number;
   end: number;
   exportStart: number;
+  typeOnly: boolean;
 }
 
 interface ReexportAll {
   type: 'reexport-all';
-  from: string;
+  from: string | undefined;
   importIndex: number;
   // the `*` range
   start: number;
   end: number;
   exportStart: number;
+  typeOnly: boolean;
 }
 ```
 
@@ -229,6 +238,47 @@ replaced by the descriptive names above, reexports no longer expose
 placeholder local-name properties, and bare star reexports now appear in the
 exports array with their origins available through `importName` and
 `imports[importIndex]` without rescanning source statements.
+
+### TypeScript
+
+The default `parse` lexes the type-only import and export syntax that [Node.js type stripping](https://nodejs.org/api/typescript.html#type-stripping) erases, so the same lexer that handles your JavaScript also handles those TypeScript edges without a separate transform step:
+
+```js
+const [imports, exports] = parse(`
+  import type { Foo } from './foo';
+  import { bar } from './bar';
+  export type { Baz } from './baz';
+`);
+```
+
+Type-only imports and exports are reported rather than elided, marked with the `typeOnly` field:
+
+```js
+// import type { Foo } from './foo'  ->  { type: 'static', specifier: './foo', typeOnly: true, ... }
+// import { bar } from './bar'       ->  { type: 'static', specifier: './bar', typeOnly: false, ... }
+imports[0].typeOnly; // true
+imports[1].typeOnly; // false
+```
+
+`typeOnly` is present on every static import and every export record. Inline modifiers are tracked per specifier, so `export { type A, b }` marks only `A`, and directly-exported `export type Foo = ...` / `export interface Foo {}` declarations are marked too. Plain JavaScript always reports `typeOnly: false`: every type-only form is a syntax error in JavaScript except `import type from 'x'`, which is a value import of the default binding named `type` and keeps its runtime edge, so nothing changes for JavaScript consumers.
+
+Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The minimal build (`es-module-lexer/minimal`) lexes JavaScript only and omits `typeOnly`.
+
+`type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import.
+
+Default-exported interfaces and declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, a line-leading token that can only continue a type (`|`, `&`, `?`, `:`, `.`, `=>`, `extends`) keeps the erased region open, so multi-line conditional and union types stay erased.
+
+#### Caveats
+
+All type-only imports and exports and `type` / `interface` declarations are grammar-certain and reported exactly via `typeOnly`. The one heuristic case is dynamic `import()` types: es-module-lexer is a lexer, not a full parser, so an `import()` type in an annotation position (annotations, generic arguments, `as` / `satisfies`) is classified best-effort by how its result is used, reported as `probablyTypeOnly` on the dynamic import record:
+
+* `typeof import('m')`, or a member or indexed access on the result other than the promise members `then` / `catch` / `finally` (`import('m').T`, `import('m')['x']` — quoted promise members like `import('m')['then']` stay runtime), reports `probablyTypeOnly: true` — no runtime promise is used this way.
+* `await import('m')` and promise member access always remain runtime imports.
+* A bare unqualified `import('m')` annotation type is indistinguishable from a value use and reports `probablyTypeOnly: false`: runtime module graphs over-report rather than under-report.
+
+`export declare` ambient declarations are erased with their names reported as type-only exports, and TS import-equals is lexed: `import A = require('m')` keeps a runtime import edge (type-only under `import type`), while a namespace alias right-hand side (`import A = N.M`) is erased.
+
+Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping — though `export enum E` and `export namespace N` do report their declared value name as a runtime export.
 
 ### Import Attributes
 
