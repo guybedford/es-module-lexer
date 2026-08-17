@@ -68,7 +68,7 @@ export function parse (_source, _name = '@') {
     const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
     let n;
     if (asm.ip())
-      n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
+      n = tryReadString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
     else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
       n = decodeTemplate(s, e);
     let at = null;
@@ -146,8 +146,17 @@ export function parse (_source, _name = '@') {
   function decodeIfQuoted (pos, end) {
     const ch = source.charCodeAt(pos);
     if (ch === 34 || ch === 39)
-      return readString(pos + 1, ch);
+      return tryReadString(pos + 1, ch) || source.slice(pos, end);
     return source.slice(pos, end);
+  }
+
+  // Matches the wasm build's decode(): an undecodable string is undefined, not
+  // a parse error or a mis-decode.
+  function tryReadString (start, quote) {
+    try {
+      return readString(start, quote);
+    }
+    catch (e) {}
   }
 }
 
@@ -318,7 +327,9 @@ function readCodePointToString () {
   let code;
   if (ch === 123) { // '{'
     ++acornPos;
-    code = readHexChar(source.indexOf('}', acornPos) - acornPos);
+    const len = source.indexOf('}', acornPos) - acornPos;
+    if (len < 1) syntaxError();
+    code = readHexChar(len);
     ++acornPos;
     if (code > 0x10FFFF) syntaxError();
   } else {

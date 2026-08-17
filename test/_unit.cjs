@@ -1432,7 +1432,7 @@ function x() {
       `export * from './all';`
     ].join('\n');
     const [imports, exports] = parse(source);
-    assert.strictEqual(imports[4].t, 8);
+    assert.strictEqual(imports[4].t, min ? 1 : 8);
 
     if (min) {
       assert.strictEqual(exports.length, 6);

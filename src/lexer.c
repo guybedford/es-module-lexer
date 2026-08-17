@@ -71,6 +71,13 @@ static const char16_t KEYWORDS[] = {
   't', 'h', 'e', 'n',
   'c', 'a', 't', 'c', 'h',
   'f', 'i', 'n', 'a', 'l', 'l', 'y',
+  'e', 'c', 'l', 'a', 'r', 'e',
+  'x', 't', 'e', 'n', 'd', 's',
+  'n', 'u', 'm',
+  'a', 'm', 'e', 's', 'p', 'a', 'c', 'e',
+  'o', 'n', 's', 't',
+  'o', 'd', 'u', 'l', 'e',
+  'e', 'q', 'u', 'i', 'r', 'e',
 #endif
 };
 
@@ -116,6 +123,13 @@ static const char16_t KEYWORDS[] = {
 #define THEN (ABSTRACT + 8)
 #define CATCH_KW (THEN + 4)
 #define FINALLY_KW (CATCH_KW + 5)
+#define ECLARE (FINALLY_KW + 7)
+#define XTENDS (ECLARE + 6)
+#define NUM (XTENDS + 6)
+#define AMESPACE (NUM + 3)
+#define ONST (AMESPACE + 8)
+#define ODULE (ONST + 4)
+#define EQUIRE (ODULE + 5)
 #endif
 
 
@@ -147,7 +161,9 @@ static int skipBracedEscape () {
 }
 
 static char16_t readImportName (char16_t ch) {
-  while (isIdentifierCodeUnit(ch)) {
+  // isBrOrWs excludes U+00A0, which is ES whitespace but passes the >= 128
+  // identifier test.
+  while (isIdentifierCodeUnit(ch) && !isBrOrWs(ch)) {
     if (ch == '\\' && skipBracedEscape() < 0)
       return '\0';
     ch = *(++pos);
@@ -220,31 +236,47 @@ static inline __attribute__((always_inline)) void dropUncommittedGlob (Import* i
 }
 
 #ifdef LEX_TS
+static inline __attribute__((always_inline)) bool isPromiseMember (const char16_t* s, size_t len) {
+  return len == 4 && memcmp(s, THEN, 4 * 2) == 0 ||
+         len == 5 && memcmp(s, CATCH_KW, 5 * 2) == 0 ||
+         len == 7 && memcmp(s, FINALLY_KW, 7 * 2) == 0;
+}
+
 // A promise has no members besides then / catch / finally, so a qualified
 // (`import('m').T`) or indexed (`import('m')['x']`) access on a dynamic import
 // never dereferences in real JS and marks a type-position `import()` type.
-// Called at the closing paren; peeks over whitespace only (not comments).
+// Called at the closing paren; a pure peek, so pos is restored.
 static void classifyDynamicImportMember (Import* impt) {
   if (impt->type_only || impt->type_value_certain)
     return;
-  char16_t* p = pos + 1;
-  while (isBrOrWs(*p)) p++;
-  if (*p == '[') {
-    impt->type_only = true;
-    return;
+  char16_t* savePos = pos;
+  pos++;
+  char16_t ch = commentWhitespace(true);
+  bool type_only = false;
+  if (ch == '[') {
+    // Only a quoted promise-member name (`import('m')['then']`) keeps an
+    // indexed access runtime.
+    type_only = true;
+    pos++;
+    ch = commentWhitespace(true);
+    if (isQuote(ch)) {
+      char16_t* s = pos + 1;
+      char16_t* p = s;
+      while (p <= end && isIdentifierCodeUnit(*p) && !isBrOrWs(*p) && *p != '\\') p++;
+      if (*p == ch && isPromiseMember(s, p - s))
+        type_only = false;
+    }
   }
-  if (*p != '.') return;
-  p++;
-  while (isBrOrWs(*p)) p++;
-  char16_t* s = p;
-  while (isIdentifierCodeUnit(*p)) p++;
-  size_t len = p - s;
-  if (len == 0 ||
-      len == 4 && memcmp(s, THEN, 4 * 2) == 0 ||
-      len == 5 && memcmp(s, CATCH_KW, 5 * 2) == 0 ||
-      len == 7 && memcmp(s, FINALLY_KW, 7 * 2) == 0)
-    return;
-  impt->type_only = true;
+  else if (ch == '.') {
+    pos++;
+    ch = commentWhitespace(true);
+    char16_t* s = pos;
+    char16_t* p = s;
+    while (p <= end && isIdentifierCodeUnit(*p) && !isBrOrWs(*p)) p++;
+    type_only = p != s && !isPromiseMember(s, p - s);
+  }
+  pos = savePos;
+  impt->type_only = type_only;
 }
 #endif
 
@@ -776,6 +808,47 @@ void tryParseImportStatement () {
       pos--;
       return;
     }
+#ifdef LEX_TS
+    // TS import-equals: `import A = require('m')` keeps a runtime CJS edge
+    // (type-only under an `import type` modifier); a namespace alias RHS
+    // (`import A = N.M`) is erased.
+    if (phase_keyword == 0 && isTsIdentifierStart(ch)) {
+      char16_t* clausePos = pos;
+      readImportName(ch);
+      if (pos != clausePos) {
+        char16_t eqCh = commentWhitespace(true);
+        if (eqCh == '=' && *(pos + 1) != '=') {
+          pos++;
+          char16_t rhCh = commentWhitespace(true);
+          if (rhCh == 'r' && memcmp(pos + 1, EQUIRE, 6 * 2) == 0 && !isIdentifierCodeUnit(*(pos + 7))) {
+            char16_t* requirePos = pos;
+            pos += 7;
+            if (commentWhitespace(true) == '(') {
+              pos++;
+              char16_t quote = commentWhitespace(true);
+              if (isQuote(quote)) {
+                readImportString(startPos, quote, false);
+                if (has_error)
+                  return;
+                if (typeOnly && import_write_head)
+                  import_write_head->type_only = true;
+                pos++;
+                if (commentWhitespace(true) != ')')
+                  pos--;
+                return;
+              }
+            }
+            pos = requirePos;
+          }
+          skipTsErasedTail(true);
+          pos--;
+          return;
+        }
+        pos = clausePos;
+        ch = *pos;
+      }
+    }
+#endif
 #ifndef LEXER_MIN
     if (!isQuote(ch))
       collectStaticImportBindings(ch, phase_keyword, import_count, false);
@@ -839,7 +912,14 @@ static inline __attribute__((always_inline)) bool tryTsTypeModifier (char16_t* c
     char16_t* asPos = pos;
     pos += 2;
     char16_t afterAs = commentWhitespace(true);
-    typeIsName = !(afterAs == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2)));
+    typeIsName = true;
+    if (afterAs == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
+      // `type as as X` renames the type `as`; a terminated `type as as` is
+      // still the value `type` renamed `as`.
+      pos += 2;
+      char16_t afterSecond = commentWhitespace(true);
+      typeIsName = !isTsIdentifierStart(afterSecond) && afterSecond != '\\';
+    }
     pos = asPos;
   }
   if (typeIsName) {
@@ -894,11 +974,23 @@ bool skipTsTrivia (char16_t ch, bool stopAtLineBreak) {
   return false;
 }
 
-static inline __attribute__((always_inline)) bool tryTsTypeContinuation () {
+// A line-leading token that can only continue a type keeps the erased region
+// open across the break: union/intersection arms, conditional-type branches
+// (`? X : Y`), a `extends` constraint, an arrow result or a qualified-name
+// segment. None of these can begin a JS statement, so ASI never applies there.
+static bool tryTsTypeContinuation () {
   char16_t* savePos = pos;
   char16_t ch = commentWhitespace(true);
-  if (ch == '|' || ch == '&') {
+  if (ch == '|' || ch == '&' || ch == '?' || ch == ':' || ch == '.') {
     pos++;
+    return true;
+  }
+  if (ch == '=' && *(pos + 1) == '>') {
+    pos += 2;
+    return true;
+  }
+  if (ch == 'e' && memcmp(pos + 1, XTENDS, 6 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 7))) {
+    pos += 7;
     return true;
   }
   pos = savePos;
@@ -1043,85 +1135,89 @@ bool tryTsTypeDeclaration (bool bare) {
       skipTsBalanced();
   }
   else {
-    // `type Foo = <rhs>`: skip to '=', then skip the erased RHS. Nested
-    // `<...>`, `(...)`, `[...]`, `{...}` and templates are consumed balanced so
-    // an `import(...)` inside the type records no edge. The RHS ends at a
-    // depth-0 ';', EOF, or an ASI line break once the type is complete.
-    // `operandPending` tracks that: it is true after '=' and after any operator
-    // or prefix keyword (`keyof`, `|`, `=>`, ...) that still needs an operand,
-    // so a line break there keeps the type open (`type T = keyof\n Foo`); it is
-    // false after a value (name, string, template, balanced region), where a
-    // line break ends the alias by ASI (`type T = A\n const x`).
+    // `type Foo = <rhs>`: skip to '=', then skip the erased RHS
+    // (skipTsErasedTail), pending an operand so a line break directly after the
+    // '=' keeps the type open.
     while (pos < end && ch != '=' && ch != ';' && !isBr(ch))
       ch = (pos++, commentWhitespace(false));
     if (ch == '=') {
       pos++;
-      bool operandPending = true;
-      while (pos <= end) {
-        ch = *pos;
-        if (ch == ';')
-          break;
-        if (isBr(ch)) {
-          if (!operandPending) {
-            if (!tryTsTypeContinuation())
-              break;
-            operandPending = true;
-          }
-          else {
-            pos++;
-          }
-          continue;
-        }
-        if (isWsNotBr(ch)) {
-          pos++;
-          continue;
-        }
-        if (ch == '}' && openTokenDepth > 0)
-          break;
-        if (ch == '<' || ch == '(' || ch == '[' || ch == '{') {
-          if (!skipTsBalanced())
-            break;
-          operandPending = false;
-          continue;
-        }
-        bool multilineComment = ch == '/' && *(pos + 1) == '*';
-        if (skipTsTrivia(ch, true)) {
-          bool sawLineBreak = ch == '/' && isBr(*pos);
-          if (sawLineBreak && multilineComment) {
-            // blockComment starts scanning after its opening position.
-            pos--;
-            blockComment(true);
-          }
-          // A comment leaves operandPending unchanged (it is not a token); a
-          // string / template is a value, so the operand is now satisfied.
-          if (ch != '/')
-            operandPending = false;
-          pos++;
-          if (sawLineBreak && !operandPending) {
-            if (!tryTsTypeContinuation())
-              break;
-            operandPending = true;
-          }
-          continue;
-        }
-        if (isTsIdentifierStart(ch)) {
-          // A prefix type keyword (`keyof Foo`, `typeof x`, `new () => T`, ...)
-          // still needs an operand, so a following line break must not end the
-          // alias; any other identifier completes the current operand.
-          char16_t* wordStart = pos;
-          readToWsOrPunctuator(ch);
-          operandPending = isTsTypePrefixKeyword(wordStart, pos);
-          continue;
-        }
-        // An operator (`|`, `&`, `.`, `?`, `:`, `,`, `=>`, ...) needs an
-        // operand next; `)`, `]`, `}` already advanced via skipTsBalanced.
-        operandPending = true;
-        pos++;
-      }
+      skipTsErasedTail(true);
     }
   }
   pos--;
   return true;
+}
+
+// Erased-region scan to the statement end: a depth-0 ';', EOF, or an ASI line
+// break once the current operand is complete. `operandPending` is true after
+// any operator or prefix keyword (`keyof`, `|`, `=>`, ...) that still needs an
+// operand, so a line break there keeps the region open (`type T = keyof\n
+// Foo`); it is false after a value (name, string, template, balanced region),
+// where a line break ends the region by ASI unless a type-only continuation
+// token follows (tryTsTypeContinuation). Leaves pos AT the terminator.
+void skipTsErasedTail (bool operandPending) {
+  while (pos <= end) {
+    char16_t ch = *pos;
+    if (ch == ';')
+      break;
+    if (isBr(ch)) {
+      if (!operandPending) {
+        if (!tryTsTypeContinuation())
+          break;
+        operandPending = true;
+      }
+      else {
+        pos++;
+      }
+      continue;
+    }
+    if (isWsNotBr(ch)) {
+      pos++;
+      continue;
+    }
+    if (ch == '}' && openTokenDepth > 0)
+      break;
+    if (ch == '<' || ch == '(' || ch == '[' || ch == '{') {
+      if (!skipTsBalanced())
+        break;
+      operandPending = false;
+      continue;
+    }
+    bool multilineComment = ch == '/' && *(pos + 1) == '*';
+    if (skipTsTrivia(ch, true)) {
+      bool sawLineBreak = ch == '/' && isBr(*pos);
+      if (sawLineBreak && multilineComment) {
+        // blockComment starts scanning after its opening position.
+        pos--;
+        blockComment(true);
+      }
+      // A comment leaves operandPending unchanged (it is not a token); a
+      // string / template is a value, so the operand is now satisfied.
+      if (ch != '/')
+        operandPending = false;
+      pos++;
+      if (sawLineBreak && !operandPending) {
+        if (!tryTsTypeContinuation())
+          break;
+        operandPending = true;
+      }
+      continue;
+    }
+    if (isTsIdentifierStart(ch)) {
+      // A prefix type keyword (`keyof Foo`, `typeof x`, `new () => T`, ...)
+      // still needs an operand, so a following line break must not end the
+      // alias; any other identifier completes the current operand.
+      char16_t* wordStart = pos;
+      readToWsOrPunctuator(ch);
+      operandPending = isTsTypePrefixKeyword(wordStart, pos);
+      continue;
+    }
+    // An operator (`|`, `&`, `.`, `?`, `:`, `,`, `=>`, ...) needs an
+    // operand next; `)`, `]`, `}` already advanced via skipTsBalanced.
+    operandPending = true;
+    pos++;
+  }
 }
 
 // True for a leading type operator keyword that must bind an operand to its
@@ -1138,6 +1234,104 @@ bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd) {
     case 8: return memcmp(start, READONLY, 8 * 2) == 0 || memcmp(start, ABSTRACT, 8 * 2) == 0;
     default: return false;
   }
+}
+
+// `export enum E` / `export namespace N`: records the declared runtime value
+// name; the (non-erasable) body tokenizes as JS. Leaves pos before the char
+// after the name, matching the class declaration convention.
+static bool tryTsValueDeclarationName (char16_t ch) {
+  int keywordLen;
+  if (ch == 'e' && memcmp(pos + 1, NUM, 3 * 2) == 0 && isBrOrWs(*(pos + 4)))
+    keywordLen = 4;
+  else if (ch == 'n' && memcmp(pos + 1, AMESPACE, 8 * 2) == 0 && isBrOrWs(*(pos + 9)))
+    keywordLen = 9;
+  else
+    return false;
+  char16_t* savePos = pos;
+  pos += keywordLen;
+  ch = commentWhitespace(true);
+  if (!isTsIdentifierStart(ch)) {
+    pos = savePos;
+    return false;
+  }
+  char16_t* nameStart = pos;
+  readToWsOrPunctuator(ch);
+  addExport(nameStart, pos, nameStart, pos);
+  pos--;
+  return true;
+}
+
+// `export declare <declaration>`: the declaration is ambient and fully erased,
+// but its name stays importable, so it is recorded as a type-only export.
+// Modifier and declaration-kind keywords are skipped to the declared name; a
+// non-identifier there (`declare module 'm'`) records nothing.
+void tsAmbientExportDeclaration () {
+  char16_t ch = commentWhitespace(true);
+  if (tryTsTypeDeclaration(false))
+    return;
+  for (bool matched = true; matched;) {
+    matched = false;
+    switch (ch) {
+      case 'a':
+        if (memcmp(pos, ABSTRACT, 8 * 2) == 0 && isBrOrWs(*(pos + 8))) {
+          pos += 8;
+          matched = true;
+        }
+        break;
+      case 'c':
+        if ((memcmp(pos + 1, LASS, 4 * 2) == 0 || memcmp(pos + 1, ONST, 4 * 2) == 0) && isBrOrWs(*(pos + 5))) {
+          pos += 5;
+          matched = true;
+        }
+        break;
+      case 'l':
+        if (*(pos + 1) == 'e' && *(pos + 2) == 't' && isBrOrWs(*(pos + 3))) {
+          pos += 3;
+          matched = true;
+        }
+        break;
+      case 'v':
+        if (*(pos + 1) == 'a' && *(pos + 2) == 'r' && isBrOrWs(*(pos + 3))) {
+          pos += 3;
+          matched = true;
+        }
+        break;
+      case 'f':
+        if (memcmp(pos + 1, UNCTION, 7 * 2) == 0 && isBrOrWs(*(pos + 8))) {
+          pos += 8;
+          matched = true;
+        }
+        break;
+      case 'e':
+        if (memcmp(pos + 1, NUM, 3 * 2) == 0 && isBrOrWs(*(pos + 4))) {
+          pos += 4;
+          matched = true;
+        }
+        break;
+      case 'n':
+        if (memcmp(pos + 1, AMESPACE, 8 * 2) == 0 && isBrOrWs(*(pos + 9))) {
+          pos += 9;
+          matched = true;
+        }
+        break;
+      case 'm':
+        if (memcmp(pos + 1, ODULE, 5 * 2) == 0 && isBrOrWs(*(pos + 6))) {
+          pos += 6;
+          matched = true;
+        }
+        break;
+    }
+    if (matched)
+      ch = commentWhitespace(true);
+  }
+  if (isTsIdentifierStart(ch)) {
+    char16_t* nameStart = pos;
+    readToWsOrPunctuator(ch);
+    addExport(nameStart, pos, nameStart, pos);
+    export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
+  }
+  skipTsErasedTail(false);
+  pos--;
 }
 #endif
 
@@ -1393,6 +1587,22 @@ bool tryParseExportStatement () {
   }
   else {
     facade = false;
+#ifdef LEX_TS
+    // `export declare ...` is an ambient declaration: erased, with its name a
+    // type-only export.
+    if (ch == 'd' && memcmp(pos + 1, ECLARE, 6 * 2) == 0 && isBrOrWs(*(pos + 7))) {
+      pos += 7;
+      tsAmbientExportDeclaration();
+      return false;
+    }
+    // `abstract` is a value-level class modifier.
+    if (ch == 'a' && memcmp(pos, ABSTRACT, 8 * 2) == 0 && isBrOrWs(*(pos + 8))) {
+      pos += 8;
+      ch = commentWhitespace(true);
+    }
+    if (tryTsValueDeclarationName(ch))
+      return false;
+#endif
     switch (ch) {
       // export default ...
       case 'd': {
@@ -1499,6 +1709,11 @@ bool tryParseExportStatement () {
         pos += 3;
         facade = false;
         ch = commentWhitespace(true);
+#ifdef LEX_TS
+        // `export const enum E`: the runtime value name, not a binding list.
+        if (tryTsValueDeclarationName(ch))
+          return false;
+#endif
         while (pos <= end) {
           char16_t* bindingStart = pos;
           ch = readBindingTarget(ch);
@@ -1538,8 +1753,8 @@ bool tryParseExportStatement () {
     if (has_error)
       return false;
     if (export_all) {
-      import_write_head->import_ty = StaticReexportStar;
 #ifndef LEXER_MIN
+      import_write_head->import_ty = StaticReexportStar;
       addExport(starPos, starPos + 1, NULL, NULL);
       export_write_head->export_ty = ReexportAll;
 #ifdef LEX_TS
@@ -1833,8 +2048,9 @@ static char16_t collectNamedImportBindings (uint32_t import_index, bool type_onl
     const char16_t* local_start = import_start;
     const char16_t* local_end = import_end;
     // Anything that cannot continue an identifier ends the `as` keyword, so
-    // `a as/*c*/b` renames just like `a as b` does.
-    if (ch == 'a' && *(pos + 1) == 's' && !isIdentifierCodeUnit(*(pos + 2))) {
+    // `a as/*c*/b` renames just like `a as b` does. U+00A0 is ES whitespace
+    // despite passing the >= 128 identifier test.
+    if (ch == 'a' && *(pos + 1) == 's' && (!isIdentifierCodeUnit(*(pos + 2)) || isBrOrWs(*(pos + 2)))) {
       pos += 2;
       ch = commentWhitespace(true);
       local_start = pos;

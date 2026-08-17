@@ -341,6 +341,65 @@ suite('TS type declarations', () => {
     assert.strictEqual(exports[0].tp, false);
   });
 
+  test('multi-line conditional type stays erased', () => {
+    const [imports, exports] = parse(
+      `export type T = A extends B\n  ? import('x')\n  : never;\nexport const y = 1;`
+    );
+    assert.deepStrictEqual(imports.map(i => i.n), []);
+    assert.deepStrictEqual(exports.map(e => e.n), ['T', 'y']);
+    assert.deepStrictEqual(exports.map(e => e.tp), [true, false]);
+  });
+
+  test('bare multi-line conditional type stays erased', () => {
+    const [imports] = parse(`type T = A extends B\n  ? import('x')\n  : never;\nimport('runtime');`);
+    assert.deepStrictEqual(imports.map(i => i.n), ['runtime']);
+  });
+
+  test('line-leading extends continues a conditional type', () => {
+    const [imports, exports] = parse(
+      `export type T = A\n  extends B\n  ? import('x')\n  : never;\nexport const y = 1;`
+    );
+    assert.deepStrictEqual(imports.map(i => i.n), []);
+    assert.deepStrictEqual(exports.map(e => e.n), ['T', 'y']);
+  });
+
+  test('export abstract class is a runtime export', () => {
+    const [, exports] = parse(`export abstract class C {}\nexport const y = 1;`);
+    assert.deepStrictEqual(exports.map(e => [e.n, e.tp]), [['C', false], ['y', false]]);
+  });
+
+  test('export declare declarations are erased type-only exports', () => {
+    for (const [source, name] of [
+      [`export declare const x: number;`, 'x'],
+      [`export declare let x2;`, 'x2'],
+      [`export declare var x3;`, 'x3'],
+      [`export declare function f(): import('m').T;`, 'f'],
+      [`export declare class C extends B { m(): import('m').T }`, 'C'],
+      [`export declare abstract class C2 {}`, 'C2'],
+      [`export declare type T = import('m').T;`, 'T'],
+      [`export declare interface I { x: import('m').T }`, 'I'],
+      [`export declare enum E { A }`, 'E'],
+      [`export declare namespace N { const x: number; }`, 'N']
+    ]) {
+      const [imports, exports] = parse(source + `\nexport const y = 1;`);
+      assert.deepStrictEqual(imports.map(i => i.n), [], source);
+      assert.deepStrictEqual(exports.map(e => e.n), [name, 'y'], source);
+      assert.deepStrictEqual(exports.map(e => e.tp), [true, false], source);
+    }
+  });
+
+  test('export enum and namespace declare runtime values', () => {
+    for (const [source, name] of [
+      [`export enum E { A, B }`, 'E'],
+      [`export const enum E2 { A = 1 << 2 }`, 'E2'],
+      [`export namespace N { const x = 1; }`, 'N']
+    ]) {
+      const [, exports] = parse(source + `\nexport const y = 1;`);
+      assert.deepStrictEqual(exports.map(e => e.n), [name, 'y'], source);
+      assert.deepStrictEqual(exports.map(e => e.tp), [false, false], source);
+    }
+  });
+
   test('special declaration exports are erased without entering the export list', () => {
     for (const source of [
       `export default interface Foo { x: import('m').T }`,

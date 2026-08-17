@@ -530,6 +530,7 @@ static inline __attribute__((always_inline)) bool isTsInterfaceKeyword (char16_t
 static inline __attribute__((always_inline)) bool isTsIdentifierStart (char16_t c);
 bool isTsTypePrefixKeyword (char16_t* start, char16_t* afterEnd);
 bool tryTsTypeDeclaration (bool bare);
+void skipTsErasedTail (bool operandPending);
 bool skipTsTrivia (char16_t ch, bool stopAtLineBreak);
 bool skipTsBalanced ();
 #endif

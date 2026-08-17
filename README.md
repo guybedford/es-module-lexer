@@ -145,7 +145,8 @@ interface Reexport {
   importNameStart: number;
   importNameEnd: number;
   // module specifier and index of the originating entry in imports
-  from: string;
+  // (undefined when the specifier string does not decode as JS)
+  from: string | undefined;
   importIndex: number;
   start: number;
   end: number;
@@ -155,7 +156,7 @@ interface Reexport {
 
 interface ReexportAll {
   type: 'reexport-all';
-  from: string;
+  from: string | undefined;
   importIndex: number;
   // the `*` range
   start: number;
@@ -265,17 +266,19 @@ Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The
 
 `type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import.
 
-Default-exported interfaces and declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, only a following `|` or `&` is recognized as a continuation; other cross-line continuation forms are outside this increment.
+Default-exported interfaces and declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, a line-leading token that can only continue a type (`|`, `&`, `?`, `:`, `.`, `=>`, `extends`) keeps the erased region open, so multi-line conditional and union types stay erased.
 
 #### Caveats
 
 All type-only imports and exports and `type` / `interface` declarations are grammar-certain and reported exactly via `typeOnly`. The one heuristic case is dynamic `import()` types: es-module-lexer is a lexer, not a full parser, so an `import()` type in an annotation position (annotations, generic arguments, `as` / `satisfies`) is classified best-effort by how its result is used, reported as `probablyTypeOnly` on the dynamic import record:
 
-* `typeof import('m')`, or a member or indexed access on the result other than the promise members `then` / `catch` / `finally` (`import('m').T`, `import('m')['x']`), reports `probablyTypeOnly: true` — no runtime promise is used this way.
+* `typeof import('m')`, or a member or indexed access on the result other than the promise members `then` / `catch` / `finally` (`import('m').T`, `import('m')['x']` — quoted promise members like `import('m')['then']` stay runtime), reports `probablyTypeOnly: true` — no runtime promise is used this way.
 * `await import('m')` and promise member access always remain runtime imports.
 * A bare unqualified `import('m')` annotation type is indistinguishable from a value use and reports `probablyTypeOnly: false`: runtime module graphs over-report rather than under-report.
 
-Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping.
+`export declare` ambient declarations are erased with their names reported as type-only exports, and TS import-equals is lexed: `import A = require('m')` keeps a runtime import edge (type-only under `import type`), while a namespace alias right-hand side (`import A = N.M`) is erased.
+
+Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, legacy decorators) is out of scope, matching Node.js type stripping — though `export enum E` and `export namespace N` do report their declared value name as a runtime export.
 
 ### Import Attributes
 

@@ -97,4 +97,49 @@ suite('TS type-only imports', () => {
     assert.deepStrictEqual(imports.map(i => i.n), ['m']);
     assert.strictEqual(imports[0].tp, true);
   });
+
+  test('bracketed promise member access stays a runtime import', () => {
+    for (const src of [
+      `import('m')['then'](f);`,
+      `import('m')["catch"](f);`,
+      `import('m')[ 'finally' ](f);`
+    ]) {
+      const [imports] = parse(src);
+      assert.strictEqual(imports[0].tp, false, src);
+    }
+  });
+
+  test('bracketed non-promise member access is classified type-only', () => {
+    const [imports] = parse(`const x: import('m')['x'] = v;`);
+    assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['m', true]]);
+  });
+
+  test('comments before a member access do not defeat classification', () => {
+    const [imports] = parse(`const p = import('m') /* c */ .Foo;`);
+    assert.strictEqual(imports[0].tp, true);
+
+    const [imports2] = parse(`const p = import('m') /* c */ .then(f);`);
+    assert.strictEqual(imports2[0].tp, false);
+  });
+
+  test('import equals require keeps a runtime edge', () => {
+    const [imports] = parse(`import A = require('m');\nimport { x } from 'y';`);
+    assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['m', false], ['y', false]]);
+  });
+
+  test('import type equals require is type-only', () => {
+    const [imports] = parse(`import type A = require('m');\nimport { x } from 'y';`);
+    assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['m', true], ['y', false]]);
+  });
+
+  test('import equals namespace alias is erased', () => {
+    const [imports] = parse(`import A = N.M;\nimport { x } from 'y';`);
+    assert.deepStrictEqual(imports.map(i => i.n), ['y']);
+  });
+
+  test('import type = require binds the value type', () => {
+    // `type` here is the imported binding name, so this is the runtime form.
+    const [imports] = parse(`import type = require('m');`);
+    assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['m', false]]);
+  });
 });

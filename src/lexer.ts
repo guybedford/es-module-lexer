@@ -276,9 +276,10 @@ export interface Reexport {
    */
   readonly importNameEnd: number;
   /**
-   * Module specifier reexported from.
+   * Module specifier reexported from; `undefined` when the specifier string
+   * does not decode as JS (see `StaticImport.specifier`).
    */
-  readonly from: string;
+  readonly from: string | undefined;
   /**
    * Index of the originating import in the imports array.
    */
@@ -296,9 +297,10 @@ export interface Reexport {
 export interface ReexportAll {
   readonly type: 'reexport-all';
   /**
-   * Module specifier reexported from.
+   * Module specifier reexported from; `undefined` when the specifier string
+   * does not decode as JS (see `StaticImport.specifier`).
    */
-  readonly from: string;
+  readonly from: string | undefined;
   /**
    * Index of the originating import in the imports array.
    */
@@ -428,7 +430,7 @@ export function parse (source: string, name = '@'): readonly [
     const importNameType = memoryView!.getUint8(exportPtr + 25);
     const tp = !!(importNameType & 4);
     if (t === ExportType.ReexportAll) {
-      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier as string, importIndex: fi, start: s, end: e, exportStart: ss, typeOnly: tp });
+      exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier, importIndex: fi, start: s, end: e, exportStart: ss, typeOnly: tp });
     }
     else {
       const n = decodeIfQuoted(source.slice(s, e));
@@ -447,7 +449,7 @@ export function parse (source: string, name = '@'): readonly [
           importName: im,
           importNameStart: nameType === 0 ? ls : -1,
           importNameEnd: nameType === 0 ? le : -1,
-          from: (imports[fi] as StaticImport).specifier as string,
+          from: (imports[fi] as StaticImport).specifier,
           importIndex: fi,
           start: s,
           end: e,
