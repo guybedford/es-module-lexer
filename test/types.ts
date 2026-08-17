@@ -2,6 +2,8 @@ import type {
   Import,
   Export,
 } from '../types/lexer.js';
+import { parse } from '../types/lexer.js';
+import { parse as minimalParse } from '../types/lexer.minimal.js';
 import type {
   ImportSpecifier as MinimalImportSpecifier,
   ExportSpecifier as MinimalExportSpecifier,
@@ -66,3 +68,12 @@ declare const minimalExportSpecifier: MinimalExportSpecifier;
 minimalExportSpecifier.ln;
 // @ts-expect-error Minimal export records keep the v2 shape.
 minimalExportSpecifier.t;
+
+// parse is synchronous — no promise in its return type.
+const syncImports: ReadonlyArray<Import> = parse('')[0];
+syncImports;
+// @ts-expect-error parse does not return a promise.
+parse('').then;
+
+const minimalSyncImports: ReadonlyArray<MinimalImportSpecifier> = minimalParse('')[0];
+minimalSyncImports;

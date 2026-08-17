@@ -2901,16 +2901,21 @@ export { d as a, p as b, z as c, r as d, q }`;
     }
   });
 
-  // Only the wasm builds have a pre-init branch, reached by the documented
-  // "either await init, or call parse asynchronously" path.
+  // Only the wasm builds require initialization; the asm.js builds are always
+  // synchronous.
   if (process.env.WASM) {
-    test('Sourcename on the pre-init async path', async () => {
+    test('parse initializes synchronously when init is not awaited', async () => {
       // The query string yields a second, uninitialized instance; the one this
       // file imported has already awaited init.
       const { parse } = await import(min ? '../dist/lexer.minimal.js?preinit' : '../dist/lexer.js?preinit');
-      const pending = parse('import{', 'my-file.js');
-      assert(pending instanceof Promise, 'init resolved first, so the pre-init path was not exercised');
-      await assert.rejects(pending, /^Error: Parse error my-file\.js:\d+:\d+$/);
+      const [imports, exports] = parse(`import 'a'; export var p = 5`);
+      assert.strictEqual(imports.length, 1);
+      assert.strictEqual(exports.length, 1);
+    });
+
+    test('Sourcename on the pre-init path', async () => {
+      const { parse } = await import(min ? '../dist/lexer.minimal.js?preinit-err' : '../dist/lexer.js?preinit-err');
+      assert.throws(() => parse('import{', 'my-file.js'), /^Error: Parse error my-file\.js:\d+:\d+$/);
     });
   }
 
