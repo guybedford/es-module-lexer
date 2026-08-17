@@ -2,13 +2,13 @@
 
 [![Build Status][actions-image]][actions-url]
 
-A JS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
+A JS/TS module syntax lexer used in [es-module-shims](https://github.com/guybedford/es-module-shims).
 
-Outputs the list of exports and locations of import specifiers, including dynamic import and import meta handling.
+Outputs the list and locations of exports and import specifiers, including dynamic import and import meta expressions.
 
-Supports new syntax features including import attributes and source phase imports.
+Supports new syntax features including import attributes, deferred evaluation, and source phase imports.
 
-A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined Web Assembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 1ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
@@ -75,8 +75,9 @@ type Import = StaticImport | DynamicImport | ImportMetaRef;
 interface StaticImport {
   // 'reexport-star' is the module request of `export * from 'mod'`
   type: 'static' | 'reexport-star';
-  // decoded specifier, undefined when it does not decode as a JS string
-  specifier: string | undefined;
+  // decoded specifier with escape sequences processed (invalid escape
+  // sequences are a parse error)
+  specifier: string;
   phase: 'source' | 'defer' | null;
   // module specifier range
   start: number;
@@ -273,9 +274,9 @@ imports[0].attributes;
 
 ### Escape Sequences
 
-To handle escape sequences in specifier strings, the `specifier` field of
-imports is decoded where possible, and is `undefined` when the specifier does
-not decode as a JS string.
+Escape sequences in specifier strings are decoded into the `specifier` field.
+A specifier that does not decode as a JS string (an invalid escape sequence)
+throws a parse error, just like the source would in a JS engine.
 
 When the entire dynamic import argument is a single template literal,
 `specifier` is reported as a glob: each `${...}` substitution is collapsed to
@@ -422,7 +423,8 @@ source.slice(exports[0].ls, exports[0].le);
 
 Interpolated template specifiers are not globbed in the minimal build (`n` is
 `undefined` for them), and escape sequences in specifiers are decoded into
-`n` where possible just as in the full build.
+`n` just as in the full build, including the parse error on invalid escape
+sequences.
 
 ## CSP asm.js Build
 
@@ -436,7 +438,7 @@ For versions that work with CSP eval disabled, use the `es-module-lexer/js` and 
 import { parse } from 'es-module-lexer/js';
 ```
 
-Instead of Web Assembly, these use an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
+Instead of WebAssembly, these use an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
 
 ### Environment Support
 
