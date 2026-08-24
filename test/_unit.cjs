@@ -960,6 +960,9 @@ suite('Lexer', () => {
     assert.throws(() => parse(`export { a as "\\uZZ" } from 'b'`));
     // legacy octal escapes are invalid in module strict mode
     assert.throws(() => parse(`import './\\01.js'`));
+    // empty and separator-containing escapes are invalid
+    assert.throws(() => parse(`import './\\u{}.js'`));
+    assert.throws(() => parse(`import './\\u0_00.js'`));
     // the minimal build never decodes the attribute list
     if (!min)
       assert.throws(() => parse(`import 'a' with { type: "\\uZZ" }`));

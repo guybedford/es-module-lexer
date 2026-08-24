@@ -284,27 +284,18 @@ function readEscapedChar () {
 
 function readHexChar (len) {
   const start = acornPos;
-  let total = 0, lastCode = 0;
+  let total = 0;
   for (let i = 0; i < len; ++i, ++acornPos) {
     let code = source.charCodeAt(acornPos), val;
-
-    if (code === 95) {
-      if (lastCode === 95 || i === 0) syntaxError();
-      lastCode = code;
-      continue;
-    }
-
     if (code >= 97) val = code - 97 + 10; // a
     else if (code >= 65) val = code - 65 + 10; // A
     else if (code >= 48 && code <= 57) val = code - 48; // 0-9
     else break;
     if (val >= 16) break;
-    lastCode = code;
     total = total * 16 + val;
   }
-
-  if (lastCode === 95 || acornPos - start !== len) syntaxError();
-
+  // len < 1 covers empty and unterminated \u{} escapes
+  if (len < 1 || acornPos - start !== len) syntaxError();
   return total;
 }
 
