@@ -14,7 +14,7 @@ declare const imported: Import;
 switch (imported.type) {
   case 'static':
   case 'reexport-star':
-    imported.specifier;
+    imported.specifier satisfies string;
     imported.attributes;
     // @ts-expect-error Only dynamic imports have a dynamic argument start.
     imported.dynamicStart;

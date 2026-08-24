@@ -953,6 +953,21 @@ suite('Lexer', () => {
     assert.strictEqual(imports[5].n, undefined);
   })
 
+  test('Invalid string escapes throw', () => {
+    // the asm decoder reports the exact bad char, eval decode the string start
+    assert.throws(() => parse(`import './\\uZZ.js'`, 'invalid.js'), /^Error: Parse error invalid\.js:1:\d+$/);
+    assert.throws(() => parse(`import('./\\u{FFFFFF}.js')`));
+    assert.throws(() => parse(`export { a as "\\uZZ" } from 'b'`));
+    // legacy octal escapes are invalid in module strict mode
+    assert.throws(() => parse(`import './\\01.js'`));
+    // empty and separator-containing escapes are invalid
+    assert.throws(() => parse(`import './\\u{}.js'`));
+    assert.throws(() => parse(`import './\\u0_00.js'`));
+    // the minimal build never decodes the attribute list
+    if (!min)
+      assert.throws(() => parse(`import 'a' with { type: "\\uZZ" }`));
+  })
+
   test('Regexp case', () => {
     parse(`
       class Number {
