@@ -155,6 +155,9 @@ source.slice(exports[0].ls, exports[0].le);
 The minimal build is a new entry point holding the v2-shaped API, with the
 following differences from v2:
 
+* `init` is a function returning a promise rather than a promise itself:
+  `await init` becomes `await init()`. Calls are idempotent and share one
+  compilation.
 * `parse` returns `[imports, exports]` only; `facade` / `hasModuleSyntax`
   are dropped.
 * `at` is dropped from import records; read attributes via
@@ -242,7 +245,8 @@ exports[0].importIndex === 0;
 imports[0].specifier === 'dep';
 ```
 
-When migrating a full-build consumer from v2, switch on `type` before reading
+When migrating a full-build consumer from v2, `await init` becomes
+`await init()` as in the minimal build, then switch on `type` before reading
 kind-specific fields: the terse v2 field names and numeric type tags are
 replaced by the descriptive names above, reexports no longer expose
 placeholder local-name properties, and bare star reexports now appear in the
