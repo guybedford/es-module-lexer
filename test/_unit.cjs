@@ -1,62 +1,12 @@
 const assert = require('assert');
 const { readFile } = require('fs/promises');
+const { init, parse } = require('./_lexer.cjs');
 
 // The minimal builds (MINIMAL=1) drop the fields es-module-shims never reads:
 // the parsed attribute list `at`, export analysis / `ss`, and the
 // facade/hasModuleSyntax flags. Tests asserting on those are gated behind
 // `!min`.
 const min = !!process.env.MINIMAL;
-let parse;
-const init = (async () => {
-  if (parse) return;
-  if (process.env.ASM) {
-    ({ parse } = await import(min ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js'));
-  }
-  else {
-    const m = await import(min ? '../dist/lexer.minimal.js' : '../dist/lexer.js');
-    await m.init;
-    parse = m.parse;
-  }
-  if (!min) {
-    // The shared assertions below are written against the terse minimal
-    // record shape. The full builds report the string-discriminated API, so
-    // records are strictly mapped back to the terse fields here rather than
-    // forking every assertion; test/full-api.cjs asserts the full API shape
-    // directly.
-    const rawParse = parse;
-    parse = (...args) => {
-      const [imports, exports, ...rest] = rawParse(...args);
-      return [imports.map(terseImport), exports.map(terseExport), ...rest];
-    };
-  }
-})();
-
-function terseImport (record) {
-  switch (record.type) {
-    case 'import-meta':
-      return { n: undefined, t: 3, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -2, a: -1, at: null };
-    case 'dynamic':
-      return { n: record.specifier, t: record.phase === 'source' ? 5 : record.phase === 'defer' ? 7 : 2, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: record.dynamicStart, a: record.attributesStart, at: record.attributes };
-    case 'static':
-    case 'reexport-star':
-      return { n: record.specifier, t: record.type === 'reexport-star' ? 8 : record.phase === 'source' ? 4 : record.phase === 'defer' ? 6 : 1, s: record.start, e: record.end, ss: record.importStart, se: record.importEnd, d: -1, a: record.attributesStart, at: record.attributes };
-    default:
-      throw new Error(`Unexpected full-build import record type ${record.type}`);
-  }
-}
-
-function terseExport (record) {
-  switch (record.type) {
-    case 'direct':
-      return { t: 1, n: record.name, ln: record.localName, s: record.start, e: record.end, ls: record.localStart, le: record.localEnd, ss: record.exportStart };
-    case 'reexport':
-      return { t: 2, n: record.name, im: record.importName, ims: record.importNameStart, ime: record.importNameEnd, f: record.from, fi: record.importIndex, s: record.start, e: record.end, ss: record.exportStart };
-    case 'reexport-all':
-      return { t: 3, f: record.from, fi: record.importIndex, s: record.start, e: record.end, ss: record.exportStart };
-    default:
-      throw new Error(`Unexpected full-build export record type ${record.type}`);
-  }
-}
 
 function assertExportIs(source, actual, expected) {
   if (source[actual.s] === '"' || source[actual.s] === "'") {
@@ -1013,6 +963,11 @@ suite('Lexer', () => {
     assert.strictEqual(imports.length, 0);
   });
 
+  test('Program-leading block keeps the following regex opaque', () => {
+    const [imports] = parse(`{}\n/import('m')/.test(x);`);
+    assert.deepStrictEqual(imports.map(impt => impt.n), []);
+  });
+
   test('Regexp division', () => {
     parse(`\nconst x = num / /'/.exec(l)[0].slice(1, -1)//'"`);
   });
@@ -1492,7 +1447,7 @@ function x() {
       `export * from './all';`
     ].join('\n');
     const [imports, exports] = parse(source);
-    assert.strictEqual(imports[4].t, 8);
+    assert.strictEqual(imports[4].t, min ? 1 : 8);
 
     if (min) {
       assert.strictEqual(exports.length, 6);
@@ -1517,7 +1472,8 @@ function x() {
       fi: 0,
       s: source.indexOf('exposed'),
       e: source.indexOf('exposed') + 7,
-      ss: 0
+      ss: 0,
+      tp: false
     });
     assert.deepStrictEqual(exports[1], {
       t: 2,
@@ -1529,7 +1485,8 @@ function x() {
       fi: 1,
       s: source.indexOf('fallback', source.indexOf(`export { fallback`)),
       e: source.indexOf('fallback', source.indexOf(`export { fallback`)) + 8,
-      ss: source.indexOf(`export { fallback`)
+      ss: source.indexOf(`export { fallback`),
+      tp: false
     });
     assert.deepStrictEqual(exports[2], {
       t: 2,
@@ -1541,7 +1498,8 @@ function x() {
       fi: 1,
       s: source.indexOf('alias'),
       e: source.indexOf('alias') + 5,
-      ss: source.indexOf(`export { fallback`)
+      ss: source.indexOf(`export { fallback`),
+      tp: false
     });
     assert.deepStrictEqual(exports[3], {
       t: 1,
@@ -1551,7 +1509,8 @@ function x() {
       le: source.indexOf('direct', source.indexOf(`export { direct`)) + 6,
       s: source.indexOf('renamed'),
       e: source.indexOf('renamed') + 7,
-      ss: source.indexOf(`export { direct`)
+      ss: source.indexOf(`export { direct`),
+      tp: false
     });
     assert.deepStrictEqual(exports[4], {
       t: 2,
@@ -1563,7 +1522,8 @@ function x() {
       fi: 2,
       s: source.indexOf('out'),
       e: source.indexOf('out') + 3,
-      ss: source.indexOf(`export { explicit`)
+      ss: source.indexOf(`export { explicit`),
+      tp: false
     });
     assert.deepStrictEqual(exports[5], {
       t: 2,
@@ -1575,7 +1535,8 @@ function x() {
       fi: 3,
       s: source.indexOf('namespace'),
       e: source.indexOf('namespace') + 9,
-      ss: source.indexOf(`export * as namespace`)
+      ss: source.indexOf(`export * as namespace`),
+      tp: false
     });
     assert.deepStrictEqual(exports[6], {
       t: 3,
@@ -1583,7 +1544,8 @@ function x() {
       fi: 4,
       s: source.lastIndexOf('*'),
       e: source.lastIndexOf('*') + 1,
-      ss: source.indexOf(`export * from`)
+      ss: source.indexOf(`export * from`),
+      tp: false
     });
   });
 

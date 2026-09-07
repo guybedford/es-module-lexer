@@ -1,8 +1,8 @@
 // Emits types/lexer.minimal.d.ts for the minimal build. It re-uses the shared
 // declarations from the full lexer.d.ts and overrides only what the minimal
-// build changes: ExportSpecifier keeps the v2 flat shape, and parse() returns
-// a 2-tuple (no facade / hasModuleSyntax). Generated (rather than hand-kept) so
-// the shared types never drift.
+// build changes: imports and exports keep the v2 flat shape without TypeScript metadata, and parse()
+// returns a 2-tuple (no facade / hasModuleSyntax). Generated rather than
+// hand-kept so the shared types never drift.
 import { writeFileSync } from 'fs';
 
 writeFileSync(process.env.TARGET, `// Type definitions for the es-module-lexer minimal build (es-module-lexer/minimal).
