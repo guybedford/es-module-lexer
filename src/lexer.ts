@@ -470,8 +470,12 @@ export function parse (source: string, name = '@'): readonly [
   // Buffer setup is slower than the loop for short sources.
   if (source.length >= 64 && hasBuffer)
     Buffer.from(wasm.memory.buffer, addr, (len - 1) * 2).write(source, 'utf16le');
-  else
-    (isLE ? copyLE : copyBE)(source, new Uint16Array(wasm.memory.buffer, addr, len));
+  else {
+    const memoryBuffer = wasm.memory.buffer;
+    if (sourceView?.buffer !== memoryBuffer)
+      sourceView = new Uint16Array(memoryBuffer, addr);
+    (isLE ? copyLE : copyBE)(source, sourceView);
+  }
 
   if (!wasm.parse())
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
@@ -488,18 +492,6 @@ export function parse (source: string, name = '@'): readonly [
       n = decodeTemplate(s, e);
       glob = n !== undefined;
     }
-    let at: Array<[string, string]> | null = null;
-    // minimal build has no attribute list; es-module-shims reads the assertion
-    // via source.slice(a, se - 1) instead
-    if (!MINIMAL) {
-      at = [];
-      wasm.rsa();
-      while (wasm.ra()) {
-        const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
-        at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
-      }
-      if (at.length === 0) at = null;
-    }
     if (MINIMAL) {
       imports.push({ n, t, s, e, ss, se, d, a } as unknown as Import);
     }
@@ -511,6 +503,16 @@ export function parse (source: string, name = '@'): readonly [
       imports.push({ type: 'dynamic', specifier: n, glob, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
+      let at: Array<[string, string]> | null = null;
+      if (a !== -1) {
+        at = [];
+        wasm.rsa();
+        while (wasm.ra()) {
+          const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
+          at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
+        }
+        if (at.length === 0) at = null;
+      }
       const phase: ImportPhase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
       imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
     }
@@ -652,6 +654,7 @@ function copyLE (src: string, outBuf16: Uint16Array) {
     outBuf16[i] = src.charCodeAt(i++);
 }
 
+let sourceView: Uint16Array | undefined;
 let wasm: {
   __heap_base: {value: number} | number & {value: undefined};
   memory: WebAssembly.Memory;
@@ -725,7 +728,10 @@ const getWasmBytes = () => (
  */
 export const init = WebAssembly.compile(getWasmBytes())
 .then(WebAssembly.instantiate)
-.then(({ exports }) => { wasm = exports as typeof wasm; });
+.then(({ exports }) => {
+  sourceView = undefined;
+  wasm = exports as typeof wasm;
+});
 
 const initSync = () => {
   if (wasm) {

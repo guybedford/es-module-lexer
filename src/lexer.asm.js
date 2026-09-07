@@ -77,18 +77,6 @@ export function parse (_source, _name = '@') {
       n = decodeTemplate(s, e);
       glob = n !== undefined;
     }
-    let at = null;
-    // minimal build drops the parsed attribute list; es-module-shims reads the
-    // assertion via source.slice(a, se - 1) instead
-    if (!MINIMAL) {
-      at = [];
-      asm.rsa();
-      while (asm.ra()) {
-        const aks = asm.aks(), ake = asm.ake(), avs = asm.avs(), ave = asm.ave();
-        at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
-      }
-      at = at.length > 0 ? at : null;
-    }
     if (MINIMAL) {
       imports.push({ t, n, s, e, ss, se, d, a });
     }
@@ -100,6 +88,16 @@ export function parse (_source, _name = '@') {
       imports.push({ type: 'dynamic', specifier: n, glob, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
+      let at = null;
+      if (a !== -1) {
+        at = [];
+        asm.rsa();
+        while (asm.ra()) {
+          const aks = asm.aks(), ake = asm.ake(), avs = asm.avs(), ave = asm.ave();
+          at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
+        }
+        at = at.length > 0 ? at : null;
+      }
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
       imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
     }

@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { spawnSync } = require('child_process');
 const { readFile } = require('fs/promises');
 const { init, parse } = require('./_lexer.cjs');
 
@@ -202,6 +203,24 @@ suite('Lexer', () => {
     // No attributes
     assert.strictEqual(impts[5].at, null);
     assert.strictEqual(source.slice(impts[5].s, impts[5].e), 'module6');
+  });
+
+  test(`Import attributes stay attached across non-static records`, () => {
+    if (min) return;
+    const [impts] = parse(`
+      import first from 'first' with { type: 'json' }
+      import('dynamic', { with: { type: 'json' } })
+      import.meta.url
+      import noAttrs from 'no-attrs'
+      import second from 'second' with { type: 'css' }
+    `);
+    assert.deepStrictEqual(impts.map(impt => impt.at), [
+      [['type', 'json']],
+      null,
+      null,
+      null,
+      [['type', 'css']],
+    ]);
   });
 
   test(`Import attributes with quoted keys and escape sequences`, () => {
@@ -2895,15 +2914,46 @@ export { d as a, p as b, z as c, r as d, q }`;
       const { parse } = await import(min ? '../dist/lexer.minimal.js?preinit-err' : '../dist/lexer.js?preinit-err');
       assert.throws(() => parse('import{', 'my-file.js'), /^Error: Parse error my-file\.js:\d+:\d+$/);
     });
+
+    test('pre-init parse releases synchronous Wasm memory after init', () => {
+      const modulePath = min ? './dist/lexer.minimal.js?preinit-memory' : './dist/lexer.js?preinit-memory';
+      const result = spawnSync(process.execPath, [
+        '--expose-gc',
+        '--input-type=module',
+        '--eval',
+        `
+          const lexer = await import(${JSON.stringify(modulePath)});
+          lexer.parse("import 'a'");
+          await lexer.init;
+          for (let i = 0; i < 5; i++) globalThis.gc();
+          const beforeRefresh = process.memoryUsage().external;
+          lexer.parse("import 'a'");
+          for (let i = 0; i < 5; i++) globalThis.gc();
+          const retainedBytes = beforeRefresh - process.memoryUsage().external;
+          if (retainedBytes > 8 * 1024 * 1024)
+            throw new Error(\`Retained \${retainedBytes} bytes\`);
+        `,
+      ], { encoding: 'utf8' });
+      assert.strictEqual(result.status, 0, result.stderr);
+    });
   }
 
-  test('Large source', () => {
+  test('Source views survive buffer growth', () => {
+    const smallSource = `import 'small'`;
+    assert.strictEqual(parse(smallSource)[0][0].n, 'small');
+    for (const length of [63, 64, 65]) {
+      const boundarySource = `import 'boundary'`.padEnd(length);
+      assert.strictEqual(parse(boundarySource)[0][0].n, 'boundary');
+    }
+
     const source = `import 'a';\nconst x = "${'a'.repeat(5 * 1024 * 1024)}";\nexport { x }`;
     const [imports, exports] = parse(source);
     assert.strictEqual(imports.length, 1);
     assert.strictEqual(imports[0].n, 'a');
     assert.strictEqual(exports.length, 1);
     assert.strictEqual(exports[0].n, 'x');
+
+    assert.strictEqual(parse(smallSource)[0][0].n, 'small');
   });
 
   test('Entry point exports parse and init only', async () => {
