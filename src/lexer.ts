@@ -138,6 +138,11 @@ export interface DynamicImport extends ImportBase {
    * // Returns "./locales/*.js"
    */
   readonly specifier: string | undefined;
+  /**
+   * True when `specifier` is a template glob rather than a literal string,
+   * since `import('a*b')` and `import(\`a${x}b\`)` both report `a*b`.
+   */
+  readonly glob: boolean;
   readonly phase: ImportPhase;
   /**
    * Start of the dynamic import expression argument.
@@ -170,6 +175,10 @@ export interface DynamicImport extends ImportBase {
  */
 export interface ImportMetaRef extends ImportBase {
   readonly type: 'import-meta';
+  /** Always `null`, so dependency loops need not narrow on `type`. */
+  readonly specifier: null;
+  /** Always `false`: an `import.meta` reference is never type-only. */
+  readonly typeOnly: false;
 }
 
 export type Import = StaticImport | DynamicImport | ImportMetaRef;
@@ -472,11 +481,13 @@ export function parse (source: string, name = '@'): readonly [
     const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 15;
     const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     const stringFlags = wasm.ip();
-    let n;
+    let n, glob = false;
     if (stringFlags & ImportStringFlags.Safe)
       n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s, (stringFlags & ImportStringFlags.TemplateRawCR) !== 0);
-    else if (!MINIMAL && d !== -1 && source[s] === '`')
+    else if (!MINIMAL && d !== -1 && source[s] === '`') {
       n = decodeTemplate(s, e);
+      glob = n !== undefined;
+    }
     let at: Array<[string, string]> | null = null;
     // minimal build has no attribute list; es-module-shims reads the assertion
     // via source.slice(a, se - 1) instead
@@ -493,11 +504,11 @@ export function parse (source: string, name = '@'): readonly [
       imports.push({ n, t, s, e, ss, se, d, a } as unknown as Import);
     }
     else if (t === 3/*ImportMeta*/) {
-      imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
+      imports.push({ type: 'import-meta', specifier: null, typeOnly: false, start: s, end: e, importStart: ss, importEnd: se });
     }
     else if (d !== -1) {
       const phase: ImportPhase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
+      imports.push({ type: 'dynamic', specifier: n, glob, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
       const phase: ImportPhase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;

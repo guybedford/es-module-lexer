@@ -70,11 +70,13 @@ export function parse (_source, _name = '@') {
     const s = asm.is(), e = asm.ie(), importType = asm.it(), t = importType & 15;
     const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
     const stringFlags = asm.ip();
-    let n;
+    let n, glob = false;
     if (stringFlags & 1/*SafeString*/)
       n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1, (stringFlags & 2/*TemplateRawCR*/) !== 0);
-    else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
+    else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/) {
       n = decodeTemplate(s, e);
+      glob = n !== undefined;
+    }
     let at = null;
     // minimal build drops the parsed attribute list; es-module-shims reads the
     // assertion via source.slice(a, se - 1) instead
@@ -91,11 +93,11 @@ export function parse (_source, _name = '@') {
       imports.push({ t, n, s, e, ss, se, d, a });
     }
     else if (t === 3/*ImportMeta*/) {
-      imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
+      imports.push({ type: 'import-meta', specifier: null, typeOnly: false, start: s, end: e, importStart: ss, importEnd: se });
     }
     else if (d !== -1) {
       const phase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
+      imports.push({ type: 'dynamic', specifier: n, glob, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;

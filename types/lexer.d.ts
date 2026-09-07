@@ -116,6 +116,11 @@ export interface DynamicImport extends ImportBase {
      * // Returns "./locales/*.js"
      */
     readonly specifier: string | undefined;
+    /**
+     * True when `specifier` is a template glob rather than a literal string,
+     * since `import('a*b')` and `import(\`a${x}b\`)` both report `a*b`.
+     */
+    readonly glob: boolean;
     readonly phase: ImportPhase;
     /**
      * Start of the dynamic import expression argument.
@@ -147,6 +152,10 @@ export interface DynamicImport extends ImportBase {
  */
 export interface ImportMetaRef extends ImportBase {
     readonly type: 'import-meta';
+    /** Always `null`, so dependency loops need not narrow on `type`. */
+    readonly specifier: null;
+    /** Always `false`: an `import.meta` reference is never type-only. */
+    readonly typeOnly: false;
 }
 export type Import = StaticImport | DynamicImport | ImportMetaRef;
 export interface DirectExport {

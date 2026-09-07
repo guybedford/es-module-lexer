@@ -65,6 +65,7 @@ suite('Full build API', () => {
     assert.deepStrictEqual(imports, [{
       type: 'dynamic',
       specifier: './x.js',
+      glob: false,
       phase: null,
       start: source.indexOf(`'./x.js'`),
       end: source.indexOf(`'./x.js'`) + 8,
@@ -82,6 +83,12 @@ suite('Full build API', () => {
     const [imports] = parse(source);
     assert.strictEqual(imports[0].type, 'dynamic');
     assert.strictEqual(imports[0].specifier, './locales/*.js');
+    assert.strictEqual(imports[0].glob, true);
+    // a literal star is not a glob, and neither is a substitution-free template
+    for (const literal of ['import("a*b")', 'import(`a*b`)', 'import(`a${x}` + b)']) {
+      const [[record]] = parse(literal);
+      assert.strictEqual(record.glob, false, literal);
+    }
   });
 
   test('import.meta', () => {
@@ -89,6 +96,8 @@ suite('Full build API', () => {
     const [imports] = parse(source);
     assert.deepStrictEqual(imports, [{
       type: 'import-meta',
+      specifier: null,
+      typeOnly: false,
       start: source.indexOf('import.meta'),
       end: source.indexOf('import.meta') + 11,
       importStart: source.indexOf('import.meta'),

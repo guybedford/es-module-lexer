@@ -246,7 +246,13 @@ kind-specific fields: the terse v2 field names and numeric type tags are
 replaced by the descriptive names above, reexports no longer expose
 placeholder local-name properties, and bare star reexports now appear in the
 exports array with their origins available through `importName` and
-`imports[importIndex]` without rescanning source statements.
+`imports[importIndex]` without rescanning source statements. A dynamic
+import whose argument is a template literal now reports a glob `specifier`
+(`./locales/*.js`) where v2 reported `undefined`, so a v2 `if (specifier)`
+check now admits globs; test `glob` to tell them apart (a literal
+`import('a*b')` and a template `\`a${x}b\`` both report `a*b`).
+`import.meta` records carry `specifier: null` and `typeOnly: false` so
+dependency loops need not narrow on `type` first.
 
 ### TypeScript
 
@@ -350,6 +356,8 @@ and does not affect the glob.
 The static parts are the raw specifier source: escape sequences are not
 cooked, and a literal `*` in the specifier is emitted as-is, so a consumer
 treating the glob `specifier` as a pattern has to apply its own escaping.
+Glob records report `glob: true`; a literal specifier that happens to contain
+`*` reports `glob: false`.
 
 ### Star Re-exports
 
