@@ -66,9 +66,12 @@ export function parse (_source, _name = '@') {
   while (asm.ri()) {
     const s = asm.is(), e = asm.ie(), importType = asm.it(), t = importType & 15;
     const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
+    const stringFlags = asm.ip();
     let n;
-    if (asm.ip())
-      n = readString(d === -1 ? s : s + 1, source.charCodeAt(d === -1 ? s - 1 : s));
+    if (stringFlags === 1/*SafeString*/)
+      n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1);
+    else if (stringFlags === 3/*SafeString|TemplateRawCR*/)
+      n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1, true);
     else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
       n = decodeTemplate(s, e);
     let at = null;
@@ -146,7 +149,7 @@ export function parse (_source, _name = '@') {
   function decodeIfQuoted (pos, end) {
     const ch = source.charCodeAt(pos);
     if (ch === 34 || ch === 39)
-      return readString(pos + 1, ch);
+      return readString(pos + 1, end - 1);
     return source.slice(pos, end);
   }
 }
@@ -177,28 +180,101 @@ export function parse (_source, _name = '@') {
  * THE SOFTWARE.
  */
 let acornPos;
-function readString (start, quote) {
-  acornPos = start;
-  let out = '', chunkStart = acornPos;
+const templateLineEndings = /\r\n?/g;
+/**
+ * @param {number} start Start of the string contents.
+ * @param {number} end End of the string contents.
+ * @param {boolean} normalizeLineEndings Whether to normalize raw template line endings.
+ * @returns {string}
+ */
+function readString (start, end, normalizeLineEndings = false) {
+  const literal = source.slice(start, end);
+  let escape = literal.indexOf('\\');
+  if (escape === -1)
+    return normalizeLineEndings ? literal.replace(templateLineEndings, '\n') : literal;
+
+  let chunk = literal.slice(0, escape);
+  let decoded = normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk;
   for (;;) {
-    if (acornPos >= source.length) syntaxError();
-    const ch = source.charCodeAt(acornPos);
-    if (ch === quote) break;
-    if (ch === 92) { // '\'
-      out += source.slice(chunkStart, acornPos);
-      out += readEscapedChar();
-      chunkStart = acornPos;
+    let index = escape + 1;
+    if (index >= literal.length) {
+      acornPos = start + index;
+      syntaxError();
     }
-    else if (ch === 0x2028 || ch === 0x2029) {
-      ++acornPos;
+
+    const char = literal.charCodeAt(index++);
+    switch (char) {
+      case 13:
+        if (literal.charCodeAt(index) === 10) index++;
+        break;
+      case 10:
+      case 0x2028:
+      case 0x2029:
+        break;
+      case 114: decoded += '\r'; break;
+      case 110: decoded += '\n'; break;
+      case 116: decoded += '\t'; break;
+      case 98: decoded += '\b'; break;
+      case 102: decoded += '\f'; break;
+      case 118: decoded += '\u000b'; break;
+      case 120:
+        decoded += String.fromCharCode(readHex(start + index, 2));
+        index += 2;
+        break;
+      case 117: {
+        let codePoint;
+        if (literal.charCodeAt(index) === 123) {
+          const close = literal.indexOf('}', ++index);
+          if (close === -1) {
+            acornPos = start + index;
+            syntaxError();
+          }
+          codePoint = readHex(start + index, close - index);
+          index = close + 1;
+        }
+        else {
+          codePoint = readHex(start + index, 4);
+          index += 4;
+        }
+        if (codePoint > 0x10ffff) {
+          acornPos = start + index;
+          syntaxError();
+        }
+        if (codePoint <= 0xffff) {
+          decoded += String.fromCharCode(codePoint);
+        }
+        else {
+          codePoint -= 0x10000;
+          decoded += String.fromCharCode((codePoint >> 10) + 0xd800, (codePoint & 1023) + 0xdc00);
+        }
+        break;
+      }
+      case 48: {
+        const next = literal.charCodeAt(index);
+        if (next >= 48 && next <= 57) {
+          acornPos = start + index;
+          syntaxError();
+        }
+        decoded += '\0';
+        break;
+      }
+      default:
+        if (char >= 49 && char <= 57) {
+          acornPos = start + index - 1;
+          syntaxError();
+        }
+        decoded += String.fromCharCode(char);
     }
-    else {
-      if (isBr(ch) && quote !== 96/*`*/) syntaxError();
-      ++acornPos;
+
+    const nextEscape = literal.indexOf('\\', index);
+    if (nextEscape === -1) {
+      chunk = literal.slice(index);
+      return decoded + (normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk);
     }
+    chunk = literal.slice(index, nextEscape);
+    decoded += normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk;
+    escape = nextEscape;
   }
-  out += source.slice(chunkStart, acornPos++);
-  return out;
 }
 
 // Glob for a lone interpolated-template specifier starting at `s`. The parser
@@ -240,91 +316,32 @@ function decodeTemplate (s, e) {
   return out + source.slice(chunkStart, index);
 }
 
-// Used to read escaped characters
+/**
+ * @param {number} start Start of the hexadecimal digits.
+ * @param {number} length Number of hexadecimal digits.
+ * @returns {number}
+ */
+function readHex (start, length) {
+  if (length < 1 || start + length > source.length) {
+    acornPos = start;
+    syntaxError();
+  }
 
-function readEscapedChar () {
-  let ch = source.charCodeAt(++acornPos);
-  ++acornPos;
-  switch (ch) {
-    case 110: return '\n'; // 'n' -> '\n'
-    case 114: return '\r'; // 'r' -> '\r'
-    case 120: return String.fromCharCode(readHexChar(2)); // 'x'
-    case 117: return readCodePointToString(); // 'u'
-    case 116: return '\t'; // 't' -> '\t'
-    case 98: return '\b'; // 'b' -> '\b'
-    case 118: return '\u000b'; // 'v' -> '\u000b'
-    case 102: return '\f'; // 'f' -> '\f'
-    case 13: if (source.charCodeAt(acornPos) === 10) ++acornPos; // '\r\n'
-    case 10: // ' \n'
-      return '';
-    case 56:
-    case 57:
+  let value = 0;
+  const end = start + length;
+  for (let index = start; index < end; index++) {
+    const char = source.charCodeAt(index);
+    const lower = char | 32;
+    const digit = char >= 48 && char <= 57
+      ? char - 48
+      : lower >= 97 && lower <= 102 ? lower - 87 : -1;
+    if (digit === -1) {
+      acornPos = index;
       syntaxError();
-    default:
-      if (ch >= 48 && ch <= 55) {
-        let octalStr = source.substr(acornPos - 1, 3).match(/^[0-7]+/)[0];
-        let octal = parseInt(octalStr, 8);
-        if (octal > 255) {
-          octalStr = octalStr.slice(0, -1);
-          octal = parseInt(octalStr, 8);
-        }
-        acornPos += octalStr.length - 1;
-        ch = source.charCodeAt(acornPos);
-        if (octalStr !== '0' || ch === 56 || ch === 57)
-          syntaxError();
-        return String.fromCharCode(octal);
-      }
-      if (isBr(ch)) {
-        // Unicode new line characters after \ get removed from output in both
-        // template literals and strings
-        return '';
-      }
-      return String.fromCharCode(ch);
+    }
+    value = value * 16 + digit;
   }
-}
-
-// Used to read character escape sequences ('\x', '\u', '\U').
-
-function readHexChar (len) {
-  const start = acornPos;
-  let total = 0;
-  for (let i = 0; i < len; ++i, ++acornPos) {
-    let code = source.charCodeAt(acornPos), val;
-    if (code >= 97) val = code - 97 + 10; // a
-    else if (code >= 65) val = code - 65 + 10; // A
-    else if (code >= 48 && code <= 57) val = code - 48; // 0-9
-    else break;
-    if (val >= 16) break;
-    total = total * 16 + val;
-  }
-  // len < 1 covers empty and unterminated \u{} escapes
-  if (len < 1 || acornPos - start !== len) syntaxError();
-  return total;
-}
-
-// Read a string value, interpreting backslash-escapes.
-
-function readCodePointToString () {
-  const ch = source.charCodeAt(acornPos);
-  let code;
-  if (ch === 123) { // '{'
-    ++acornPos;
-    const len = source.indexOf('}', acornPos) - acornPos;
-    if (len < 1) syntaxError();
-    code = readHexChar(len);
-    ++acornPos;
-    if (code > 0x10FFFF) syntaxError();
-  } else {
-    code = readHexChar(4);
-  }
-  // UTF-16 Decoding
-  if (code <= 0xFFFF) return String.fromCharCode(code);
-  code -= 0x10000;
-  return String.fromCharCode((code >> 10) + 0xD800, (code & 1023) + 0xDC00);
-}
-
-function isBr (c) {
-  return c === 13/*\r*/ || c === 10/*\n*/;
+  return value;
 }
 
 function syntaxError () {

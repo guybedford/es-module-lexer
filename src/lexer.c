@@ -26,6 +26,7 @@
 #define TEMPLATE_SIMD_THRESHOLD 16
 static uint32_t template_scan_count;
 #endif
+static bool template_raw_cr;
 
 // Keep the keyword tails in one object so the fastcomp memory image is
 // contiguous and build/gen-asm-in.mjs can extract it without spanning gaps.
@@ -840,6 +841,8 @@ void tryParseImportStatement () {
       // safe specifier exactly like a quoted one. An interpolated template
       // leaves noSubstitutionTemplate() false and falls through to the open-
       // token machinery, which records the import as unsafe (n stays unset).
+      if (template_raw_cr)
+        import_write_head->string_flags |= TemplateRawCR;
     }
     else {
       pos--;
@@ -853,14 +856,14 @@ void tryParseImportStatement () {
       ch = commentWhitespace(true);
       import_write_head->end = endPos;
       import_write_head->attr_index = pos;
-      import_write_head->safe = true;
+      import_write_head->string_flags |= SafeString;
       pos--;
     }
     else if (ch == ')') {
       openTokenDepth--;
       import_write_head->end = endPos;
       import_write_head->statement_end = pos + 1;
-      import_write_head->safe = true;
+      import_write_head->string_flags |= SafeString;
 #ifdef LEX_TS
       classifyDynamicImportMember(import_write_head);
 #endif
@@ -2626,6 +2629,24 @@ static char16_t* simdTemplateScan (char16_t* p) {
   }
 }
 
+LEXER_SIMD_TARGET __attribute__((noinline))
+static char16_t* simdNoSubstitutionTemplateScan (char16_t* p) {
+  const v128_t dollar = wasm_i16x8_splat('$');
+  const v128_t backtick = wasm_i16x8_splat('`');
+  // The range check replaces the null-sentinel equality, so CR tracking adds no SIMD instruction.
+  const v128_t control_limit = wasm_i16x8_splat('\r' + 1);
+  const v128_t slash = wasm_i16x8_splat('\\');
+  for (;;) {
+    v128_t chunk = wasm_v128_load(p);
+    uint32_t mask = wasm_i8x16_bitmask(wasm_v128_or(
+        wasm_v128_or(wasm_i16x8_eq(chunk, dollar), wasm_i16x8_eq(chunk, backtick)),
+        wasm_v128_or(wasm_i16x8_eq(chunk, slash), wasm_u16x8_lt(chunk, control_limit))));
+    if (mask)
+      return p + __builtin_ctz(mask) / 2;
+    p += 8;
+  }
+}
+
 #endif
 
 static inline __attribute__((always_inline)) void templateStringScalar () {
@@ -2730,6 +2751,7 @@ void templateString () {
 // to the main loop's template handling.
 static inline __attribute__((always_inline)) bool noSubstitutionTemplateScalar () {
   char16_t* startPos = pos;
+  template_raw_cr = false;
   while (pos++ < end) {
     char16_t ch = *pos;
     if (ch == '`')
@@ -2738,6 +2760,8 @@ static inline __attribute__((always_inline)) bool noSubstitutionTemplateScalar (
       pos++;
       continue;
     }
+    if (ch == '\r')
+      template_raw_cr = true;
     if (ch == '$' && *(pos + 1) == '{')
       break;
   }
@@ -2747,6 +2771,7 @@ static inline __attribute__((always_inline)) bool noSubstitutionTemplateScalar (
 
 #ifdef LEXER_SIMD
 bool noSubstitutionTemplate () {
+  template_raw_cr = false;
   if (template_scan_count < TEMPLATE_SIMD_THRESHOLD) {
     template_scan_count++;
     return noSubstitutionTemplateScalar();
@@ -2756,10 +2781,10 @@ bool noSubstitutionTemplate () {
     char16_t next_ch = *(p + 1);
     if (next_ch == '`')
       p++;
-    else if (next_ch != '\\' && *(p + 2) == '`')
+    else if (next_ch != '\\' && next_ch != '\r' && *(p + 2) == '`')
       p += 2;
     else
-      p = simdTemplateScan(p + 1);
+      p = simdNoSubstitutionTemplateScan(p + 1);
     char16_t ch = *p;
     if (ch == '`') {
       pos = p;
@@ -2769,6 +2794,10 @@ bool noSubstitutionTemplate () {
       p++;
       if (p > end)
         return false;
+      continue;
+    }
+    if (ch == '\r') {
+      template_raw_cr = true;
       continue;
     }
     if (ch == '$') {

@@ -24,6 +24,11 @@ enum ImportType {
   StaticReexportStar = 8,
 };
 
+enum ImportStringFlags {
+  SafeString = 1,
+  TemplateRawCR = 2,
+};
+
 #ifndef LEXER_MIN
 enum ExportType {
   Direct = 1,
@@ -76,7 +81,7 @@ struct Import {
   const char16_t* statement_end;
   const char16_t* attr_index;
   const char16_t* dynamic;
-  bool safe;
+  uint8_t string_flags;
 #ifdef LEX_TS
   bool type_only;
   bool type_value_certain;
@@ -279,7 +284,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->end = end;
   import->attr_index = 0;
   import->dynamic = dynamic;
-  import->safe = dynamic == STANDARD_IMPORT;
+  import->string_flags = dynamic == STANDARD_IMPORT ? SafeString : 0;
 #ifdef LEX_TS
   import->type_only = false;
   import->type_value_certain = false;
@@ -368,9 +373,9 @@ uint32_t id () {
     return -2;
   return import_read_head->dynamic - source;
 }
-// getImportSafeString
+// getImportStringFlags
 uint32_t ip () {
-  return import_read_head->safe;
+  return import_read_head->string_flags;
 }
 
 #ifndef LEXER_MIN

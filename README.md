@@ -480,11 +480,11 @@ sequences.
 
 ## CSP asm.js Build
 
-The default versions of the library use Wasm and (safe) eval usage for performance and a minimal footprint.
+The default builds use Wasm without generating code from strings. They work when JavaScript eval is disabled,
+including Node.js with `--disallow-code-generation-from-strings`, if the environment permits WebAssembly compilation.
 
-Neither of these represent security escalation possibilities since there are no execution string injection vectors, but that can still violate existing CSP policies for applications.
-
-For versions that work with CSP eval disabled, use the `es-module-lexer/js` and `es-module-lexer/minimal/js` builds:
+For CSP policies that also disable WebAssembly compilation, use the `es-module-lexer/js` and
+`es-module-lexer/minimal/js` builds:
 
 ```js
 import { parse } from 'es-module-lexer/js';

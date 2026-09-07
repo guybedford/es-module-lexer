@@ -259,7 +259,12 @@ run = 'node build/combine-asm.mjs'
 
 [[task]]
 name = 'test'
-deps = ['test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm', 'test:types', 'test:ts:wasm', 'test:ts:asm']
+deps = [
+  'test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm',
+  'test:types', 'test:ts:wasm', 'test:ts:asm',
+  'test:no-eval', 'test:no-eval:cjs',
+  'test:no-eval:minimal', 'test:no-eval:minimal:cjs'
+]
 
 [[task]]
 # Differential fuzz against Node type stripping; random seed each run, printed
@@ -286,6 +291,29 @@ name = 'test:wasm'
 deps = ['dist/lexer.js']
 env = { WASM = '1' }
 run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
+name = 'test:no-eval'
+deps = ['dist/lexer.js']
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
+
+[[task]]
+name = 'test:no-eval:cjs'
+deps = ['dist/lexer.cjs']
+env = { CJS = '1' }
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
+
+[[task]]
+name = 'test:no-eval:minimal'
+deps = ['dist/lexer.minimal.js']
+env = { MINIMAL = '1' }
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
+
+[[task]]
+name = 'test:no-eval:minimal:cjs'
+deps = ['dist/lexer.minimal.cjs']
+env = { CJS = '1', MINIMAL = '1' }
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
 
 [[task]]
 name = 'test:minimal:asm'

@@ -50,6 +50,11 @@ export enum ImportType {
   StaticReexportStar = 8,
 }
 
+const enum ImportStringFlags {
+  Safe = 1,
+  TemplateRawCR = 2,
+}
+
 /**
  * Import phase modifier: `import source` / `import.source(...)` report
  * `'source'`, `import defer` / `import.defer(...)` report `'defer'`, all
@@ -329,14 +334,113 @@ export interface ParseError extends Error {
 }
 
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+const templateLineEndings = /\r\n?/g;
 
 /**
- * Direct eval inherits strict mode and uses the matching V8 compilation-cache key.
- * @param literal Quoted JavaScript string literal.
+ * @param literal Contents of a validated JavaScript string literal.
+ * @param normalizeLineEndings Whether to normalize raw template line endings.
  */
-function decodeStringLiteral (literal: string): string {
-  'use strict'
-  return eval(literal)
+function decodeStringLiteral (literal: string, normalizeLineEndings: boolean): string {
+  let escape = literal.indexOf('\\');
+  if (escape === -1)
+    return normalizeLineEndings ? literal.replace(templateLineEndings, '\n') : literal;
+
+  let chunk = literal.slice(0, escape);
+  let decoded = normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk;
+  for (;;) {
+    let index = escape + 1;
+    if (index >= literal.length)
+      throw new SyntaxError();
+
+    const char = literal.charCodeAt(index++);
+    switch (char) {
+      case 13:
+        if (literal.charCodeAt(index) === 10) index++;
+        break;
+      case 10:
+      case 0x2028:
+      case 0x2029:
+        break;
+      case 114: decoded += '\r'; break;
+      case 110: decoded += '\n'; break;
+      case 116: decoded += '\t'; break;
+      case 98: decoded += '\b'; break;
+      case 102: decoded += '\f'; break;
+      case 118: decoded += '\u000b'; break;
+      case 120:
+        decoded += String.fromCharCode(readHex(literal, index, 2));
+        index += 2;
+        break;
+      case 117: {
+        let codePoint;
+        if (literal.charCodeAt(index) === 123) {
+          const close = literal.indexOf('}', ++index);
+          if (close === -1)
+            throw new SyntaxError();
+          codePoint = readHex(literal, index, close - index);
+          index = close + 1;
+        }
+        else {
+          codePoint = readHex(literal, index, 4);
+          index += 4;
+        }
+        if (codePoint > 0x10ffff)
+          throw new SyntaxError();
+        if (codePoint <= 0xffff) {
+          decoded += String.fromCharCode(codePoint);
+        }
+        else {
+          codePoint -= 0x10000;
+          decoded += String.fromCharCode((codePoint >> 10) + 0xd800, (codePoint & 1023) + 0xdc00);
+        }
+        break;
+      }
+      case 48: {
+        const next = literal.charCodeAt(index);
+        if (next >= 48 && next <= 57)
+          throw new SyntaxError();
+        decoded += '\0';
+        break;
+      }
+      default:
+        if (char >= 49 && char <= 57)
+          throw new SyntaxError();
+        decoded += String.fromCharCode(char);
+    }
+
+    const nextEscape = literal.indexOf('\\', index);
+    if (nextEscape === -1) {
+      chunk = literal.slice(index);
+      return decoded + (normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk);
+    }
+    chunk = literal.slice(index, nextEscape);
+    decoded += normalizeLineEndings ? chunk.replace(templateLineEndings, '\n') : chunk;
+    escape = nextEscape;
+  }
+}
+
+/**
+ * @param source Source containing hexadecimal digits.
+ * @param start Start of the hexadecimal digits.
+ * @param length Number of hexadecimal digits.
+ */
+function readHex (source: string, start: number, length: number): number {
+  if (length < 1 || start + length > source.length)
+    throw new SyntaxError();
+
+  let value = 0;
+  const end = start + length;
+  for (let index = start; index < end; index++) {
+    const char = source.charCodeAt(index);
+    const lower = char | 32;
+    const digit = char >= 48 && char <= 57
+      ? char - 48
+      : lower >= 97 && lower <= 102 ? lower - 87 : -1;
+    if (digit === -1)
+      throw new SyntaxError();
+    value = value * 16 + digit;
+  }
+  return value;
 }
 
 /**
@@ -381,9 +485,12 @@ export function parse (source: string, name = '@'): readonly [
   while (wasm.ri()) {
     const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 15;
     const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
+    const stringFlags = wasm.ip();
     let n;
-    if (wasm.ip())
-      n = decode(source.slice(d === -1 ? s - 1 : s, d === -1 ? e + 1 : e), s);
+    if (stringFlags === ImportStringFlags.Safe)
+      n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s);
+    else if (stringFlags === (ImportStringFlags.Safe | ImportStringFlags.TemplateRawCR))
+      n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s, true);
     else if (!MINIMAL && d !== -1 && source[s] === '`')
       n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
@@ -394,7 +501,7 @@ export function parse (source: string, name = '@'): readonly [
       wasm.rsa();
       while (wasm.ra()) {
         const aks = wasm.aks(), ake = wasm.ake(), avs = wasm.avs(), ave = wasm.ave();
-        at.push([decodeIfQuoted(source.slice(aks, ake), aks), decodeIfQuoted(source.slice(avs, ave), avs)]);
+        at.push([decodeIfQuoted(aks, ake), decodeIfQuoted(avs, ave)]);
       }
       if (at.length === 0) at = null;
     }
@@ -418,8 +525,8 @@ export function parse (source: string, name = '@'): readonly [
   while (exportPtr !== 0) {
     if (MINIMAL) {
       const s = wasm.es(), e = wasm.ee(), ls = wasm.els(), le = wasm.ele();
-      const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le), ls);
-      const n = decodeIfQuoted(source.slice(s, e), s);
+      const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
+      const n = decodeIfQuoted(s, e);
       exports.push({ s, e, ls, le, n, ln } as unknown as Export);
       exportPtr = wasm.re();
       continue;
@@ -441,15 +548,15 @@ export function parse (source: string, name = '@'): readonly [
       exports.push({ type: 'reexport-all', from: (imports[fi] as StaticImport).specifier, importIndex: fi, start: s, end: e, exportStart: ss, typeOnly: tp });
     }
     else {
-      const n = decodeIfQuoted(source.slice(s, e), s);
+      const n = decodeIfQuoted(s, e);
       if (t === ExportType.Direct) {
-        const ln = ls < 0 ? undefined : decodeIfQuoted(source.slice(ls, le), ls);
+        const ln = ls < 0 ? undefined : decodeIfQuoted(ls, le);
         exports.push({ type: 'direct', name: n, localName: ln, start: s, end: e, localStart: ls, localEnd: le, exportStart: ss, typeOnly: tp });
       }
       else {
         const nameType = importNameType & 3;
         const im = nameType === 0
-          ? decodeIfQuoted(source.slice(ls, le), ls)
+          ? decodeIfQuoted(ls, le)
           : nameType === 1 ? 'default' : null;
         exports.push({
           type: 'reexport',
@@ -469,20 +576,26 @@ export function parse (source: string, name = '@'): readonly [
     exportPtr = wasm.re();
   }
 
-  function decode (str: string, idx: number): string {
+  /**
+   * @param start Start of the string contents.
+   * @param end End of the string contents.
+   * @param idx Index to report for invalid escapes.
+   * @param normalizeLineEndings Whether to normalize raw template line endings.
+   */
+  function decode (start: number, end: number, idx: number, normalizeLineEndings = false): string {
     try {
-      return decodeStringLiteral(str)
+      return decodeStringLiteral(source.slice(start, end), normalizeLineEndings)
     }
     catch (e) {
       throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, idx).split('\n').length}:${idx - source.lastIndexOf('\n', idx - 1)}`), { idx });
     }
   }
 
-  function decodeIfQuoted (str: string, idx: number): string {
-    const firstChar = str[0];
-    if (firstChar === '"' || firstChar === "'")
-      return decode(str, idx);
-    return str;
+  function decodeIfQuoted (start: number, end: number): string {
+    const firstChar = source.charCodeAt(start);
+    if (firstChar === 34 || firstChar === 39)
+      return decode(start + 1, end - 1, start);
+    return source.slice(start, end);
   }
 
   // Glob for a lone interpolated-template specifier starting at `s`. The parser
@@ -572,7 +685,7 @@ let wasm: {
   id(): number;
   /** getImportEnd */
   ie(): number;
-  /** getImportSafeString */
+  /** getImportStringFlags */
   ip(): number;
   /** getImportStart */
   is(): number;
