@@ -2902,14 +2902,13 @@ export { d as a, p as b, z as c, r as d, q }`;
     assert.strictEqual(exports[0].n, 'x');
   });
 
-  test('Every entry point exports parse and init', async () => {
-    for (const dist of ['lexer.js', 'lexer.asm.js', 'lexer.minimal.js', 'lexer.minimal.asm.js']) {
-      const m = await import('../dist/' + dist);
-      assert.strictEqual(typeof m.parse, 'function', dist);
-      assert.strictEqual(typeof m.init.then, 'function', dist);
-      await m.init;
-      assert.strictEqual(m.parse('export const a = 1')[1].length, 1, dist);
-    }
+  test('Entry point exports parse and init only', async () => {
+    const m = await import(process.env.ASM
+      ? (min ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js')
+      : (min ? '../dist/lexer.minimal.js' : '../dist/lexer.js'));
+    assert.deepStrictEqual(Object.keys(m).sort(), ['init', 'parse']);
+    await m.init;
+    assert.strictEqual(m.parse('export const a = 1')[1].length, 1);
   });
 
   test('Open token stack bounds', () => {

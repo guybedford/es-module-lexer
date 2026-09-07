@@ -123,8 +123,7 @@ source.slice(imports[0].ss, imports[0].se);
 // "ss" = statement start
 // "se" = statement end
 
-// Import type is provided by the numeric `t` value (see the ImportType
-// type; 8 is the `export * from 'mod'` module request)
+// Import type is provided by the numeric `t` value (see the ImportType type)
 // Returns true
 imports[0].t === 1;
 
@@ -169,8 +168,6 @@ following differences from v2:
 * `export { a as b } from 'c'` reports `ln: 'a'` with `ls` / `le` spanning
   it, where v2 gave `undefined` / `-1`; namespace reexports and `export *`
   still report `ln: undefined`.
-* The `export * from 'mod'` module request reports `t === 8` rather than
-  `1`.
 * `ImportType` is a type-only `const enum` with no runtime export.
 * Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
   no export classification or `export *` records.
