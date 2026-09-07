@@ -27,7 +27,7 @@ const words = {{WORDS}};
 
 let source, name;
 // The asm.js module needs no compilation step; kept for the shared wasm build API.
-export const init = Promise.resolve();
+export const init = () => Promise.resolve();
 
 export function parse (_source, _name = '@') {
   source = _source;

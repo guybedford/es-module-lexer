@@ -11,7 +11,7 @@ const init = (async () => {
   }
   else {
     const m = await import('../dist/lexer.js');
-    await m.init;
+    await m.init();
     parse = m.parse;
   }
 })();

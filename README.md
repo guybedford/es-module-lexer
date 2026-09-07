@@ -58,7 +58,7 @@ With the full build:
 ```js
 import { init, parse } from 'es-module-lexer';
 
-await init;
+await init();
 
 const source = `import { a } from './dep.js';\nexport var p = 5;`;
 const [imports, exports] = parse(source);
@@ -73,7 +73,7 @@ Or with the minimal (v2-like) build:
 ```js
 import { init, parse } from 'es-module-lexer/minimal';
 
-await init;
+await init();
 
 const source = `import { a } from './dep.js';\nexport var p = 5;`;
 const [imports, exports] = parse(source);
@@ -83,8 +83,9 @@ source.slice(imports[0].ss, imports[0].se); // "import { a } from './dep.js'"
 exports[0].n; // "p"
 ```
 
-While awaiting `init` is always recommended since browser main threads restrict synchronous WebAssembly compilation,
+While awaiting `init()` is always recommended since browser main threads restrict synchronous WebAssembly compilation,
 in Node.js and other environments it may be optional, since `parse` will rely on synchronous compilation otherwise.
+Calling `parse` before a pending `init()` has resolved will also fall back to synchronous compilation, so avoid mixing the two.
 
 ## Minimal Build
 
@@ -180,7 +181,7 @@ For example:
 ```js
 import { init, parse } from 'es-module-lexer';
 
-await init;
+await init();
 
 const source = `
   import { name } from 'mod';

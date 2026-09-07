@@ -28,7 +28,7 @@ function checkFull (parse, label) {
 Promise.resolve()
   .then(function () { checkMin(parseMinAsm, 'minimal asm.js'); })
   .then(function () { checkFull(parseFullAsm, 'full asm.js'); })
-  .then(function () { return init; })
+  .then(function () { return init(); })
   .then(function () { checkMin(parseMinWasm, 'minimal wasm'); })
   .then(function () { document.title = 'PASS'; })
   .catch(function (err) { document.title = 'FAIL: ' + err.message; });
