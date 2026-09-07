@@ -35,9 +35,9 @@
   "author": "Guy Bedford",
   "license": "MIT",
   "devDependencies": {
-    "@babel/cli": "^8.0.4",
-    "@babel/core": "^8.0.1",
-    "@babel/plugin-transform-modules-commonjs": "^8.0.1",
+    "@babel/cli": "^7.29.7",
+    "@babel/core": "^7.29.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.29.7",
     "@swc/cli": "^0.8.1",
     "@swc/core": "^1.16.2",
     "@types/node": "^26.4.1",
