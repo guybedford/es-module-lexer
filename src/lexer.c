@@ -1198,6 +1198,14 @@ bool skipTsBalanced () {
 // Scans declaration heritage or a module name through its body and skips the
 // body opaquely. Entry: pos AT ch. Exit: pos AT the char after the body.
 static void skipTsDeclarationBody (char16_t ch) {
+  // `module 'name'` has no body unless a `{` follows.
+  if (isQuote(ch)) {
+    stringLiteral(ch);
+    pos++;
+    if (commentWhitespace(true) == '{')
+      skipTsBalanced();
+    return;
+  }
   while (pos < end && ch != '{' && ch != ';') {
     if (ch == '<' || ch == '(' || ch == '[') {
       if (!skipTsBalanced())
@@ -1531,7 +1539,8 @@ void tsAmbientExportDeclaration () {
   pos--;
 }
 
-// pos AT the keyword following `declare`.
+// pos AT the keyword following `declare`. The separator check keeps a class
+// field named after a keyword (`declare type: T`) a field.
 static bool isTsAmbientDeclarationKeyword (char16_t ch) {
   switch (ch) {
     case 'a': return memcmp(pos, ABSTRACT, 8 * 2) == 0 && isTsKeywordSeparator(*(pos + 8));
@@ -1575,12 +1584,17 @@ bool tryTsAmbientDeclaration () {
       skipTsDeclarationBody(ch);
     }
     else {
-      if (isTsIdentifierStart(ch))
+      bool named = isTsIdentifierStart(ch);
+      if (named)
         readToWsOrPunctuator(ch);
-      skipTsErasedTail(true, false);
+      skipTsErasedTail(!named, false);
     }
   }
   else {
+    if (ch == 'm') {
+      pos += 6;
+      ch = commentWhitespace(true);
+    }
     skipTsDeclarationBody(ch);
   }
   pos--;
@@ -1892,14 +1906,23 @@ bool tryParseExportStatement () {
         bool localName = false;
         switch (ch) {
 #ifdef LEX_TS
-          case 'i':
-            // `export default interface Foo {}`: a type-only default export.
-            if (tryTsTypeDeclaration(true)) {
-              addExport(startPos, startPos + 7, NULL, NULL);
-              export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
+          case 'i': {
+            // `export default interface Foo {}`: a type-only default export
+            // with the interface name as its local name.
+            Export* prev = export_write_head;
+            if (tryTsTypeDeclaration(false)) {
+              if (export_write_head != prev) {
+                export_write_head->start = startPos;
+                export_write_head->end = startPos + 7;
+              }
+              else {
+                addExport(startPos, startPos + 7, NULL, NULL);
+                export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
+              }
               return true;
             }
             break;
+          }
 #endif
           // export default async? function*? name? (){}
           case 'a':
