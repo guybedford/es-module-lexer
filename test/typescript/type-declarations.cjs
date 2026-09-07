@@ -595,6 +595,7 @@ export const y = 1;`;
     const [imports, exports] = parse(`export default interface Foo { x: import('m').T }\nexport const y = 1;`);
     assert.deepStrictEqual(imports.map(i => i.n), []);
     assert.deepStrictEqual(exports.map(e => e.n), ['default', 'y']);
+    assert.deepStrictEqual(exports.map(e => e.ln), ['Foo', 'y']);
     assert.deepStrictEqual(exports.map(e => e.tp), [true, false]);
   });
 
@@ -613,12 +614,24 @@ export const y = 1;`;
       `declare module 'm' { export const x: import('n').T; export default x; }`,
       `declare global { interface Window { x: import('m').T } }`,
       `declare type T = import('m').T;`,
-      `declare interface I { x: import('m').T }`
+      `declare interface I { x: import('m').T }`,
+      `declare let a`,
+      `declare var v`,
+      `declare const x = 1`,
+      `declare function f(): void`,
+      `declare module 'm'`,
+      `declare module 'm'\n{ export const x: import('n').T }`
     ]) {
       const [imports, exports] = parse(source + `\nimport 'runtime';\nexport const y = 1;`);
       assert.deepStrictEqual(imports.map(i => i.n), ['runtime'], source);
       assert.deepStrictEqual(exports.map(e => e.n), ['y'], source);
     }
+  });
+
+  test('shorthand export declare module ends at the line break', () => {
+    const [imports, exports] = parse(`export declare module 'm'\nimport 'runtime';`);
+    assert.deepStrictEqual(imports.map(i => i.n), ['runtime']);
+    assert.deepStrictEqual(exports.map(e => e.n), []);
   });
 
   test('declare as a plain identifier stays runtime', () => {

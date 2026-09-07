@@ -223,6 +223,8 @@ function bareAmbientDeclaration () {
   return pick([
     () => `declare${sameLine}const${gap}fuzzAmbient: import('${ERASED_SPECIFIER}').Value;`,
     () => `declare${sameLine}let${gap}fuzzAmbient: number, fuzzOther: import('${ERASED_SPECIFIER}').Value;`,
+    () => `declare${sameLine}let${gap}fuzzAmbient`,
+    () => `declare${sameLine}module${gap}'fuzz-shorthand'`,
     () => `declare${sameLine}function${gap}fuzzAmbient(value: import('${ERASED_SPECIFIER}').Value): void;`,
     () => `declare${sameLine}class${gap}FuzzAmbient extends Base { value: import('${ERASED_SPECIFIER}').Value }`,
     () => `declare${sameLine}abstract${gap}class${gap}FuzzAmbient { value: import('${ERASED_SPECIFIER}').Value }`,
