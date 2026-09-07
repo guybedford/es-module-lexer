@@ -26,6 +26,9 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 const words = {{WORDS}};
 
 let source, name;
+// The asm.js module needs no compilation step; kept for the shared wasm build API.
+export const init = Promise.resolve();
+
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
@@ -85,14 +88,14 @@ export function parse (_source, _name = '@') {
       at = at.length > 0 ? at : null;
     }
     if (MINIMAL) {
-      imports.push({ t, n, s, e, ss, se, d, a, at });
+      imports.push({ t, n, s, e, ss, se, d, a });
     }
     else if (t === 3/*ImportMeta*/) {
       imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
     }
     else if (d !== -1) {
       const phase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
+      imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: null, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
