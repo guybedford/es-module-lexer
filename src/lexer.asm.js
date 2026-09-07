@@ -26,6 +26,9 @@ const copy = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1 ? function (sr
 const words = {{WORDS}};
 
 let source, name;
+// The asm.js module needs no compilation step; kept for the shared wasm build API.
+export const init = Promise.resolve();
+
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;

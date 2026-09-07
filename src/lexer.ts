@@ -733,7 +733,7 @@ export const init = WebAssembly.compile(getWasmBytes())
 .then(WebAssembly.instantiate)
 .then(({ exports }) => { wasm = exports as typeof wasm; });
 
-export const initSync = () => {
+const initSync = () => {
   if (wasm) {
     return;
   }
