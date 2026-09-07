@@ -215,6 +215,36 @@ function ambientDeclaration () {
   ])();
 }
 
+// A bare `declare` is only the modifier when the declaration keyword follows
+// on the same line (TypeScript's rule; `declare` is otherwise an identifier).
+function bareAmbientDeclaration () {
+  const gap = requiredWs();
+  const sameLine = pick([' ', '\t', '  ', ' /*c*/ ']);
+  return pick([
+    () => `declare${sameLine}const${gap}fuzzAmbient: import('${ERASED_SPECIFIER}').Value;`,
+    () => `declare${sameLine}let${gap}fuzzAmbient: number, fuzzOther: import('${ERASED_SPECIFIER}').Value;`,
+    () => `declare${sameLine}function${gap}fuzzAmbient(value: import('${ERASED_SPECIFIER}').Value): void;`,
+    () => `declare${sameLine}class${gap}FuzzAmbient extends Base { value: import('${ERASED_SPECIFIER}').Value }`,
+    () => `declare${sameLine}abstract${gap}class${gap}FuzzAmbient { value: import('${ERASED_SPECIFIER}').Value }`,
+    () => `declare${sameLine}enum${gap}FuzzAmbient { Value = 1 }`,
+    () => `declare${sameLine}namespace${gap}FuzzAmbient { type Value = import('${ERASED_SPECIFIER}').Value }`,
+    () => `declare${sameLine}module${gap}'fuzz-module' { export const value: import('${ERASED_SPECIFIER}').Value; }`,
+    () => `declare${sameLine}global { interface FuzzAmbient { value: import('${ERASED_SPECIFIER}').Value } }`,
+    () => `declare${sameLine}type${gap}FuzzAmbient = import('${ERASED_SPECIFIER}').Value;`,
+    () => `declare${sameLine}interface${gap}FuzzAmbient { value: import('${ERASED_SPECIFIER}').Value }`,
+  ])();
+}
+
+// The `type` / `as` specifier permutations TypeScript disambiguates. `type as
+// as X` and `type as as as` (type-only `as` renamed, per tsc) are left out: the
+// stripping oracle keeps them as value exports, disagreeing with tsc.
+function typeAsSpecifier () {
+  const specifier = pick(['type', 'type as', 'type as as', 'type as X', 'type X']);
+  return maybe()
+    ? `import { ${specifier} } from ${pick(SPEC)};`
+    : `export { ${specifier} } from ${pick(SPEC)};`;
+}
+
 function lineBreakAfterTypeAlias () {
   return `export type __fuzz_type_alias = Foo${pick(['\n', '\n/*c*/'])}` +
     `[import('${RUNTIME_SPECIFIER}')];`;
@@ -262,6 +292,9 @@ const FORMS = {
   'export-declare-binding-list': ambientBindingList,
   'export-declare-body': ambientDeclaration,
   'export-abstract-class': () => `export${requiredWs()}abstract${requiredWs()}class FuzzAbstract {};`,
+  'export-default-interface': () => `export default interface FuzzDefault${typeParams()}${heritage()} ${interfaceBody()}`,
+  'bare-declare': bareAmbientDeclaration,
+  'type-as-specifier': typeAsSpecifier,
   'line-break-after-type-alias': lineBreakAfterTypeAlias,
   'const-annot': () => `export const ${pick(NAME)}${maybe() ? ': ' + typeExpr(1) : ''} = ${maybe() ? 'import(' + pick(SPEC) + ')' : '1'};`,
   'dynamic-import': () => `const x = import(${pick(SPEC)});`,

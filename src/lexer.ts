@@ -487,10 +487,8 @@ export function parse (source: string, name = '@'): readonly [
     const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
     const stringFlags = wasm.ip();
     let n;
-    if (stringFlags === ImportStringFlags.Safe)
-      n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s);
-    else if (stringFlags === (ImportStringFlags.Safe | ImportStringFlags.TemplateRawCR))
-      n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s, true);
+    if (stringFlags & ImportStringFlags.Safe)
+      n = decode(d === -1 ? s : s + 1, d === -1 ? e : e - 1, s, (stringFlags & ImportStringFlags.TemplateRawCR) !== 0);
     else if (!MINIMAL && d !== -1 && source[s] === '`')
       n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;

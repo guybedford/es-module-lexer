@@ -79,6 +79,7 @@ static const char16_t KEYWORDS[] = {
   'o', 'n', 's', 't',
   'o', 'd', 'u', 'l', 'e',
   'e', 'q', 'u', 'i', 'r', 'e',
+  'l', 'o', 'b', 'a', 'l',
 #endif
 };
 
@@ -131,6 +132,7 @@ static const char16_t KEYWORDS[] = {
 #define ONST (AMESPACE + 8)
 #define ODULE (ONST + 4)
 #define EQUIRE (ODULE + 5)
+#define LOBAL (EQUIRE + 6)
 #endif
 
 #ifdef LEX_TS
@@ -402,6 +404,14 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       // commits when it is really `type <name> =`. The `y` pre-check keeps
       // `this` / `throw` / `try` / `typeof` off that path.
       if (*(pos + 1) == 'y' && keywordStart(pos) && tryTsTypeDeclaration(true)) {
+        lastTokenPos = (char16_t*)STATEMENT_END;
+        return true;
+      }
+      goto skipTokenRun;
+    case 'd':
+      // Bare `declare ...` (no `export`): the ambient declaration is erased
+      // whole so an `import('m')` type inside it records no runtime edge.
+      if (*(pos + 1) == 'e' && keywordStart(pos) && tryTsAmbientDeclaration()) {
         lastTokenPos = (char16_t*)STATEMENT_END;
         return true;
       }
@@ -1043,7 +1053,8 @@ static inline __attribute__((always_inline)) bool tryTsTypeModifier (char16_t* c
     char16_t* asPos = pos;
     pos += 2;
     char16_t afterAs = commentWhitespace(true);
-    typeIsName = true;
+    // A terminated `type as` is the type-only specifier `as`.
+    typeIsName = afterAs != ',' && afterAs != '}';
     if (afterAs == 'a' && *(pos + 1) == 's' && isBrOrWsOrPunctuatorNotDot(*(pos + 2))) {
       // `type as as X` renames the type `as`; a terminated `type as as` is
       // still the value `type` renamed `as`.
@@ -1350,7 +1361,7 @@ void skipTsErasedTail (bool operandPending, bool commaTerminates) {
       }
       continue;
     }
-    if (isTsIdentifierStart(ch)) {
+    if (isTsIdentifierStart(ch) || ch >= '0' && ch <= '9') {
       // A prefix type keyword (`keyof Foo`, `typeof x`, `new () => T`, ...)
       // still needs an operand, so a following line break must not end the
       // alias; any other identifier completes the current operand.
@@ -1518,6 +1529,62 @@ void tsAmbientExportDeclaration () {
   else
     skipTsErasedTail(functionDeclaration, false);
   pos--;
+}
+
+// pos AT the keyword following `declare`.
+static bool isTsAmbientDeclarationKeyword (char16_t ch) {
+  switch (ch) {
+    case 'a': return memcmp(pos, ABSTRACT, 8 * 2) == 0 && isTsKeywordSeparator(*(pos + 8));
+    case 'c': return (memcmp(pos + 1, LASS, 4 * 2) == 0 || memcmp(pos + 1, ONST, 4 * 2) == 0) && isTsKeywordSeparator(*(pos + 5));
+    case 'e': return memcmp(pos + 1, NUM, 3 * 2) == 0 && isTsKeywordSeparator(*(pos + 4));
+    case 'f': return memcmp(pos + 1, UNCTION, 7 * 2) == 0 && isTsKeywordSeparator(*(pos + 8));
+    case 'g': return memcmp(pos + 1, LOBAL, 5 * 2) == 0 && isTsKeywordSeparator(*(pos + 6));
+    case 'i': return isTsInterfaceKeyword(pos);
+    case 'l': return *(pos + 1) == 'e' && *(pos + 2) == 't' && isTsKeywordSeparator(*(pos + 3));
+    case 'm': return memcmp(pos + 1, ODULE, 5 * 2) == 0 && isTsKeywordSeparator(*(pos + 6));
+    case 'n': return memcmp(pos + 1, AMESPACE, 8 * 2) == 0 && isTsKeywordSeparator(*(pos + 9));
+    case 't': return isTsTypeKeyword(pos);
+    case 'v': return *(pos + 1) == 'a' && *(pos + 2) == 'r' && isTsKeywordSeparator(*(pos + 3));
+    default: return false;
+  }
+}
+
+// pos AT a `declare` candidate at statement position. `declare` is also a
+// plain identifier, so it only counts when a declaration keyword follows on the
+// same line. The ambient declaration is erased whole and records nothing; only
+// `export declare` (tsAmbientExportDeclaration) reports names.
+bool tryTsAmbientDeclaration () {
+  if (memcmp(pos + 1, ECLARE, 6 * 2) != 0 || !isTsKeywordSeparator(*(pos + 7)))
+    return false;
+  char16_t* savePos = pos;
+  pos += 7;
+  char16_t ch = commentWhitespace(false);
+  if (!isTsAmbientDeclarationKeyword(ch)) {
+    pos = savePos;
+    return false;
+  }
+  if ((ch == 't' || ch == 'i') && tryTsTypeDeclaration(true))
+    return true;
+  // A binding list or function signature runs to the statement end, with the
+  // keyword (and function name) consumed first so a line break after them
+  // cannot end the erased region. Body declarations end at their closing brace.
+  if (ch == 'l' || ch == 'v' || ch == 'f' || ch == 'c' && *(pos + 1) == 'o') {
+    pos += ch == 'f' ? 8 : ch == 'c' ? 5 : 3;
+    ch = commentWhitespace(true);
+    if (ch == 'e' && memcmp(pos + 1, NUM, 3 * 2) == 0 && isTsKeywordSeparator(*(pos + 4))) {
+      skipTsDeclarationBody(ch);
+    }
+    else {
+      if (isTsIdentifierStart(ch))
+        readToWsOrPunctuator(ch);
+      skipTsErasedTail(true, false);
+    }
+  }
+  else {
+    skipTsDeclarationBody(ch);
+  }
+  pos--;
+  return true;
 }
 #endif
 
@@ -1826,8 +1893,12 @@ bool tryParseExportStatement () {
         switch (ch) {
 #ifdef LEX_TS
           case 'i':
-            if (tryTsTypeDeclaration(true))
+            // `export default interface Foo {}`: a type-only default export.
+            if (tryTsTypeDeclaration(true)) {
+              addExport(startPos, startPos + 7, NULL, NULL);
+              export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
               return true;
+            }
             break;
 #endif
           // export default async? function*? name? (){}
@@ -2807,7 +2878,7 @@ bool noSubstitutionTemplate () {
     }
     if (p > end)   // the terminating sentinel
       return false;
-    // embedded null: keep looking
+    // embedded null or other control char: keep looking
   }
 }
 #else

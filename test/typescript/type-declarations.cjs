@@ -591,9 +591,45 @@ export const y = 1;`;
     }
   });
 
+  test('export default interface is a type-only default export', () => {
+    const [imports, exports] = parse(`export default interface Foo { x: import('m').T }\nexport const y = 1;`);
+    assert.deepStrictEqual(imports.map(i => i.n), []);
+    assert.deepStrictEqual(exports.map(e => e.n), ['default', 'y']);
+    assert.deepStrictEqual(exports.map(e => e.tp), [true, false]);
+  });
+
+  test('bare declare statements are erased without recording anything', () => {
+    for (const source of [
+      `declare const x: import('m').T;`,
+      `declare let a: number, b: import('m').T`,
+      `declare var v: typeof import('m')`,
+      `declare function f(): import('m').T;`,
+      `declare function g<T>(a: T): import('m').T`,
+      `declare class C extends B { m(): import('m').T }`,
+      `declare abstract class C2 {}`,
+      `declare enum E { A }`,
+      `declare const enum E2 { A }`,
+      `declare namespace N { type T = import('m').T }`,
+      `declare module 'm' { export const x: import('n').T; export default x; }`,
+      `declare global { interface Window { x: import('m').T } }`,
+      `declare type T = import('m').T;`,
+      `declare interface I { x: import('m').T }`
+    ]) {
+      const [imports, exports] = parse(source + `\nimport 'runtime';\nexport const y = 1;`);
+      assert.deepStrictEqual(imports.map(i => i.n), ['runtime'], source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['y'], source);
+    }
+  });
+
+  test('declare as a plain identifier stays runtime', () => {
+    const source = `declare(import('a'));\ndeclare = import('b');\nconst declare = 1;\ndeclare\nconst z = import('c');\nexport { declare };`;
+    const [imports, exports] = parse(source);
+    assert.deepStrictEqual(imports.map(i => i.n), ['a', 'b', 'c']);
+    assert.deepStrictEqual(exports.map(e => e.n), ['declare']);
+  });
+
   test('special declaration exports are erased without entering the export list', () => {
     for (const source of [
-      `export default interface Foo { x: import('m').T }`,
       `export type \\u0058 = import('m').T;`,
       `export interface \\u{58} { x: import('m').T }`,
       `type \\u0058 = import('m').T;`

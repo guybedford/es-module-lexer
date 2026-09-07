@@ -116,6 +116,27 @@ suite('TS type-only exports', () => {
     }
   });
 
+  test('a terminated export { type as } is the type-only export named as', () => {
+    for (const [source, names] of [
+      [`export { type as };`, ['as']],
+      [`export { type as, x };`, ['as', 'x']],
+      [`export { x, type as };`, ['x', 'as']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+      assert.deepStrictEqual(exports.map(e => e.tp), names.map(n => n === 'as'), source);
+    }
+    const [, reexports] = parse(`export { type as } from 'm';`);
+    assert.strictEqual(reexports[0].n, 'as');
+    assert.strictEqual(reexports[0].t, 2);
+    assert.strictEqual(reexports[0].f, 'm');
+    assert.strictEqual(reexports[0].tp, true);
+    const [, bound] = parse(`import { type as } from 'm';\nexport { type as };`);
+    assert.strictEqual(bound[0].t, 2);
+    assert.strictEqual(bound[0].f, 'm');
+    assert.strictEqual(bound[0].tp, true);
+  });
+
   test('type used as an import name remains a runtime binding', () => {
     for (const source of [
       `import { type } from 'm';\nexport { type };`,

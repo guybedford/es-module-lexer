@@ -58,7 +58,7 @@ export function parse (_source, _name = '@') {
       asm = undefined;
       return parse(_source, _name);
     }
-    acornPos = asm.e();
+    errorPos = asm.e();
     syntaxError();
   }
 
@@ -68,10 +68,8 @@ export function parse (_source, _name = '@') {
     const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
     const stringFlags = asm.ip();
     let n;
-    if (stringFlags === 1/*SafeString*/)
-      n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1);
-    else if (stringFlags === 3/*SafeString|TemplateRawCR*/)
-      n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1, true);
+    if (stringFlags & 1/*SafeString*/)
+      n = readString(d === -1 ? s : s + 1, d === -1 ? e : e - 1, (stringFlags & 2/*TemplateRawCR*/) !== 0);
     else if (!MINIMAL && d !== -1 && source.charCodeAt(s) === 96/*`*/)
       n = decodeTemplate(s, e);
     let at = null;
@@ -154,32 +152,7 @@ export function parse (_source, _name = '@') {
   }
 }
 
-/*
- * Ported from Acorn
- *
- * MIT License
-
- * Copyright (C) 2012-2020 by various contributors (see AUTHORS)
-
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
-
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
-
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-let acornPos;
+let errorPos;
 const templateLineEndings = /\r\n?/g;
 /**
  * @param {number} start Start of the string contents.
@@ -198,7 +171,7 @@ function readString (start, end, normalizeLineEndings = false) {
   for (;;) {
     let index = escape + 1;
     if (index >= literal.length) {
-      acornPos = start + index;
+      errorPos = start + index;
       syntaxError();
     }
 
@@ -226,7 +199,7 @@ function readString (start, end, normalizeLineEndings = false) {
         if (literal.charCodeAt(index) === 123) {
           const close = literal.indexOf('}', ++index);
           if (close === -1) {
-            acornPos = start + index;
+            errorPos = start + index;
             syntaxError();
           }
           codePoint = readHex(start + index, close - index);
@@ -237,7 +210,7 @@ function readString (start, end, normalizeLineEndings = false) {
           index += 4;
         }
         if (codePoint > 0x10ffff) {
-          acornPos = start + index;
+          errorPos = start + index;
           syntaxError();
         }
         if (codePoint <= 0xffff) {
@@ -252,7 +225,7 @@ function readString (start, end, normalizeLineEndings = false) {
       case 48: {
         const next = literal.charCodeAt(index);
         if (next >= 48 && next <= 57) {
-          acornPos = start + index;
+          errorPos = start + index;
           syntaxError();
         }
         decoded += '\0';
@@ -260,7 +233,7 @@ function readString (start, end, normalizeLineEndings = false) {
       }
       default:
         if (char >= 49 && char <= 57) {
-          acornPos = start + index - 1;
+          errorPos = start + index - 1;
           syntaxError();
         }
         decoded += String.fromCharCode(char);
@@ -323,7 +296,7 @@ function decodeTemplate (s, e) {
  */
 function readHex (start, length) {
   if (length < 1 || start + length > source.length) {
-    acornPos = start;
+    errorPos = start;
     syntaxError();
   }
 
@@ -336,7 +309,7 @@ function readHex (start, length) {
       ? char - 48
       : lower >= 97 && lower <= 102 ? lower - 87 : -1;
     if (digit === -1) {
-      acornPos = index;
+      errorPos = index;
       syntaxError();
     }
     value = value * 16 + digit;
@@ -345,7 +318,7 @@ function readHex (start, length) {
 }
 
 function syntaxError () {
-  throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, acornPos).split('\n').length}:${acornPos - source.lastIndexOf('\n', acornPos - 1)}`), { idx: acornPos });
+  throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, errorPos).split('\n').length}:${errorPos - source.lastIndexOf('\n', errorPos - 1)}`), { idx: errorPos });
 }
 
 // function asmInit () { ... } from lib/lexer.asm.js is concatenated at the end here

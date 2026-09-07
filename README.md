@@ -109,6 +109,9 @@ interface DynamicImport {
   importEnd: number;
   attributes: [string, string][] | null;
   attributesStart: number;
+  // best-effort: true when the result is used in a way only a TypeScript
+  // type position can be (see TypeScript caveats)
+  probablyTypeOnly: boolean;
 }
 
 interface ImportMetaRef {
@@ -264,9 +267,9 @@ imports[1].typeOnly; // false
 
 Both the Wasm and asm.js / CSP builds (`es-module-lexer/js`) lex TypeScript. The minimal build (`es-module-lexer/minimal`) lexes JavaScript only and omits `typeOnly`.
 
-`type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import.
+`type` and `interface` declarations are skipped whether exported or not, so an `import(...)` type buried in an alias right-hand side or an interface body (`type T = import('x').Y`, `interface I { load(): import('x').Y }`) is not reported as a runtime import. Ambient `declare` statements (`declare const x: import('x').T;`, `declare module 'm' { ... }`, `declare global { ... }`) are erased the same way.
 
-Default-exported interfaces and declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, a line-leading token that can only continue a type (`|`, `&`, `?`, `:`, `.`, `=>`, `extends`) keeps the erased region open, so multi-line conditional and union types stay erased.
+`export default interface Foo {}` is reported as a type-only `default` export. Declarations with escaped names are erased but not reported as exports. At a line break after a complete alias right-hand side, a line-leading token that can only continue a type (`|`, `&`, `?`, `:`, `.`, `=>`, `extends`) keeps the erased region open, so multi-line conditional and union types stay erased.
 
 #### Caveats
 

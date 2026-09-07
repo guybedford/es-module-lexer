@@ -11,6 +11,7 @@ suite('No string code generation', () => {
       : await import(minimal ? '../../dist/lexer.minimal.js' : '../../dist/lexer.js');
     await lexer.init;
     parse = lexer.parse;
+    assert.throws(() => eval('1'), EvalError);
   });
 
   test('decodes module strings', () => {
