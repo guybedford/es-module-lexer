@@ -14,20 +14,24 @@ function assertExportIs(source, actual, expected) {
   } else {
     assert.strictEqual(source.substring(actual.s, actual.e), expected.n, `export.s, export.e: ${source.substring(actual.s, actual.e)} != ${expected.n}`);
   }
-  // full-build reexports report the imported name as im / ims / ime, which
-  // the minimal build reports as ln / ls / le
-  const reexport = actual.t === 2;
-  const ln = reexport ? actual.im ?? undefined : actual.ln, ls = reexport ? actual.ims : actual.ls, le = reexport ? actual.ime : actual.le;
-  if (expected.ln === undefined) {
-    assert.strictEqual(ls, -1, `export.ls: ${ls} != -1`);
-    assert.strictEqual(le, -1, `export.le: ${le} != -1`);
-  } else if (source[ls] === '"' || source[ls] === "'") {
-    assert.strictEqual(source[ls], source[le - 1], `export.ls, export.le: ${source[ls]} != ${source[le - 1]}`);
+  if (!min && actual.t === 2) {
+    assert.strictEqual('ln' in actual, false);
+    assert.strictEqual('ls' in actual, false);
+    assert.strictEqual('le' in actual, false);
   } else {
-    assert.strictEqual(source.substring(ls, le), expected.ln, `export.ls, export.le: ${source.substring(ls, le)} != ${expected.ln}`);
+    if (!min)
+      assert.strictEqual(actual.t, 1);
+    if (expected.ln === undefined) {
+      assert.strictEqual(actual.ls, -1, `export.ls: ${actual.ls} != -1`);
+      assert.strictEqual(actual.le, -1, `export.le: ${actual.le} != -1`);
+    } else if (source[actual.ls] === '"' || source[actual.ls] === "'") {
+      assert.strictEqual(source[actual.ls], source[actual.le - 1], `export.ls, export.le: ${source[actual.ls]} != ${source[actual.le - 1]}`);
+    } else {
+      assert.strictEqual(source.substring(actual.ls, actual.le), expected.ln, `export.ls, export.le: ${source.substring(actual.ls, actual.le)} != ${expected.ln}`);
+    }
   }
   assert.strictEqual(actual.n, expected.n, `export.n: ${actual.n} != ${expected.n}`);
-  assert.strictEqual(ln, expected.ln, `export.ln: ${ln} != ${expected.ln}`);
+  assert.strictEqual(actual.ln, expected.ln, `export.ln: ${actual.ln} != ${expected.ln}`);
 }
 
 /**
@@ -1165,7 +1169,7 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(ss, se), 'export { hello as default } from "test-dep"');
 
     assert.strictEqual(exports.length, 1);
-    assertExportIs(source, exports[0], { n: 'default', ln: 'hello' });
+    assertExportIs(source, exports[0], { n: 'default', ln: undefined });
   });
 
   test('import.meta', () => {
@@ -1452,7 +1456,7 @@ function x() {
       assertExportIs(source, exports[1], { n: 'fallback', ln: 'fallback' });
       assertExportIs(source, exports[2], { n: 'alias', ln: 'named' });
       assertExportIs(source, exports[3], { n: 'renamed', ln: 'direct' });
-      assertExportIs(source, exports[4], { n: 'out', ln: 'explicit' });
+      assertExportIs(source, exports[4], { n: 'out', ln: undefined });
       assertExportIs(source, exports[5], { n: 'namespace', ln: undefined });
       return;
     }
@@ -2257,13 +2261,13 @@ function x() {
       const [imports, exports] = parse(source);
       assert.strictEqual(imports.length, 4);
       assert.strictEqual(exports.length, 7);
-      assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
-      assertExportIs(source, exports[1], { n: 'x1', ln: 'x1' });
-      assertExportIs(source, exports[2], { n: 'x2', ln: 'x2' });
-      assertExportIs(source, exports[3], { n: 'foo', ln: 'foo' });
-      assertExportIs(source, exports[4], { n: 'bar', ln: 'x2' });
-      assertExportIs(source, exports[5], { n: 'zoo', ln: 'zoo' });
-      assertExportIs(source, exports[6], { n: 'LionCombobox', ln: 'LionCombobox' });
+      assertExportIs(source, exports[0], { n: 'x', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'x1', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'x2', ln: undefined });
+      assertExportIs(source, exports[3], { n: 'foo', ln: undefined });
+      assertExportIs(source, exports[4], { n: 'bar', ln: undefined });
+      assertExportIs(source, exports[5], { n: 'zoo', ln: undefined });
+      assertExportIs(source, exports[6], { n: 'LionCombobox', ln: undefined });
     });
 
     test('non-identifier-string as variable (doubleQuote)', () => {
@@ -2281,15 +2285,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: 'foo0', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'foo1', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'foo2', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: 'foo3', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: 'foo4', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: 'foo5', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: 'foo6', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'foo7', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: 'foo8', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'foo2', ln: undefined });
+      assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
+      assertExportIs(source, exports[4], { n: 'foo4', ln: undefined });
+      assertExportIs(source, exports[5], { n: 'foo5', ln: undefined });
+      assertExportIs(source, exports[6], { n: 'foo6', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'foo7', ln: undefined });
+      assertExportIs(source, exports[8], { n: 'foo8', ln: undefined });
     });
 
     test('non-identifier-string as variable (singleQuote)', () => {
@@ -2307,15 +2311,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: 'foo0', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'foo1', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'foo2', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: 'foo3', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: 'foo4', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: 'foo5', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: 'foo6', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'foo7', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: 'foo8', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'foo2', ln: undefined });
+      assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
+      assertExportIs(source, exports[4], { n: 'foo4', ln: undefined });
+      assertExportIs(source, exports[5], { n: 'foo5', ln: undefined });
+      assertExportIs(source, exports[6], { n: 'foo6', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'foo7', ln: undefined });
+      assertExportIs(source, exports[8], { n: 'foo8', ln: undefined });
     });
 
     test('with-backslash-keywords as variable (doubleQuote)', () => {
@@ -2328,10 +2332,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: 'foo0', ln: String.raw` slash\ ` });
-      assertExportIs(source, exports[1], { n: 'foo1', ln: ' quote" ' });
-      assertExportIs(source, exports[2], { n: 'foo2', ln: String.raw` quote\" ` });
-      assertExportIs(source, exports[3], { n: 'foo3', ln: String.raw` quote' ` });
+      assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'foo2', ln: undefined });
+      assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
     });
 
     test('with-backslash-keywords as variable (singleQuote)', () => {
@@ -2344,10 +2348,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: 'foo0', ln: String.raw` slash\ ` });
-      assertExportIs(source, exports[1], { n: 'foo1', ln: String.raw` quote' ` });
-      assertExportIs(source, exports[2], { n: 'foo2', ln: String.raw` quote\' ` });
-      assertExportIs(source, exports[3], { n: 'foo3', ln: String.raw` quote' ` });
+      assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'foo2', ln: undefined });
+      assertExportIs(source, exports[3], { n: 'foo3', ln: undefined });
     });
 
     test('with-emoji as', () => {
@@ -2358,8 +2362,8 @@ function x() {
       assert.strictEqual(imports.length, 2);
 
       assert.strictEqual(exports.length, 2);
-      assertExportIs(source, exports[0], { n: 'foo0', ln: 'hm🤔' });
-      assertExportIs(source, exports[1], { n: 'foo1', ln: ' 🚀rocket space ' });
+      assertExportIs(source, exports[0], { n: 'foo0', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo1', ln: undefined });
     });
 
     test('non-identifier-string (doubleQuote)', () => {
@@ -2377,15 +2381,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('non-identifier-string (singleQuote)', () => {
@@ -2403,15 +2407,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('with-backslash-keywords (doubleQuote)', () => {
@@ -2424,10 +2428,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: String.raw` slash\ ` });
-      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: String.raw` quote" ` });
-      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: String.raw` quote\" ` });
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: String.raw` quote' ` });
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined });
+      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: undefined });
+      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: undefined });
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
     test('with-backslash-keywords (singleQuote)', () => {
@@ -2440,10 +2444,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: String.raw` slash\ ` });
-      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: String.raw` quote' ` });
-      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: String.raw` quote\' ` });
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: String.raw` quote' ` });
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined });
+      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: undefined });
+      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: undefined });
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
     test('variable as non-identifier-string (doubleQuote)', () => {
@@ -2461,15 +2465,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: 'foo0' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'foo1' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'foo2' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: 'foo3' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: 'foo4' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: 'foo5' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: 'foo6' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'foo7' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: 'foo8' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('variable as non-identifier-string (singleQuote)', () => {
@@ -2487,15 +2491,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: 'foo0' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'foo1' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'foo2' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: 'foo3' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: 'foo4' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: 'foo5' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: 'foo6' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'foo7' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: 'foo8' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('variable as with-backslash-keywords (doubleQuote)', () => {
@@ -2508,10 +2512,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: 'foo0' });
-      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: 'foo1' });
-      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: 'foo2' });
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: 'foo3' });
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined });
+      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: undefined });
+      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: undefined });
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
     test('variable as with-backslash-keywords (singleQuote)', () => {
@@ -2524,10 +2528,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: 'foo0' });
-      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: 'foo1' });
-      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: 'foo2' });
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: 'foo3' });
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined });
+      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: undefined });
+      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: undefined });
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
     test('non-identifier-string as non-identifier-string (doubleQuote)', () => {
@@ -2545,15 +2549,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('non-identifier-string as non-identifier-string (singleQuote)', () => {
@@ -2571,15 +2575,15 @@ function x() {
       assert.strictEqual(imports.length, 9);
 
       assert.strictEqual(exports.length, 9);
-      assertExportIs(source, exports[0], { n: '~123', ln: '~123' });
-      assertExportIs(source, exports[1], { n: 'ab cd', ln: 'ab cd' });
-      assertExportIs(source, exports[2], { n: 'not identifier', ln: 'not identifier' });
-      assertExportIs(source, exports[3], { n: '-notidentifier', ln: '-notidentifier' });
-      assertExportIs(source, exports[4], { n: '%notidentifier', ln: '%notidentifier' });
-      assertExportIs(source, exports[5], { n: '@notidentifier', ln: '@notidentifier' });
-      assertExportIs(source, exports[6], { n: ' notidentifier', ln: ' notidentifier' });
-      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: 'notidentifier ' });
-      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: ' notidentifier ' });
+      assertExportIs(source, exports[0], { n: '~123', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'ab cd', ln: undefined });
+      assertExportIs(source, exports[2], { n: 'not identifier', ln: undefined });
+      assertExportIs(source, exports[3], { n: '-notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: '%notidentifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[6], { n: ' notidentifier', ln: undefined });
+      assertExportIs(source, exports[7], { n: 'notidentifier ', ln: undefined });
+      assertExportIs(source, exports[8], { n: ' notidentifier ', ln: undefined });
     });
 
     test('with-backslash-keywords as with-backslash-keywords (doubleQuote)', () => {
@@ -2592,10 +2596,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: String.raw` slash\ `, a: true});
-      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: ' quote"', a: true});
-      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: String.raw` quote\" `, a: true});
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: String.raw` quote' `, a: true});
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined, a: true});
+      assertExportIs(source, exports[1], { n: String.raw` quote" `, ln: undefined, a: true});
+      assertExportIs(source, exports[2], { n: String.raw` quote\" `, ln: undefined, a: true});
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined, a: true});
     });
 
     test('with-backslash-keywords as with-backslash-keywords (singleQuote)', () => {
@@ -2608,10 +2612,10 @@ function x() {
       assert.strictEqual(imports.length, 4);
 
       assert.strictEqual(exports.length, 4);
-      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: String.raw` slash\ ` });
-      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: String.raw` quote'` });
-      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: String.raw` quote\' ` });
-      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: String.raw` quote' ` });
+      assertExportIs(source, exports[0], { n: String.raw` slash\ `, ln: undefined });
+      assertExportIs(source, exports[1], { n: String.raw` quote' `, ln: undefined });
+      assertExportIs(source, exports[2], { n: String.raw` quote\' `, ln: undefined });
+      assertExportIs(source, exports[3], { n: String.raw` quote' `, ln: undefined });
     });
 
     test('curly-brace (doubleQuote)', () => {
@@ -2626,12 +2630,12 @@ function x() {
       assert.strictEqual(imports.length, 6);
 
       assert.strictEqual(exports.length, 6);
-      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: ' right-curlybrace} ' });
-      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: ' {left-curlybrace ' });
-      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: ' {curlybrackets} ' });
-      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: ' right-curlybrace} ' });
-      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: ' {left-curlybrace ' });
-      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: ' {curlybrackets} ' });
+      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: undefined });
+      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
     test('* as curly-brace (doubleQuote)', () => {
@@ -2646,12 +2650,12 @@ function x() {
       assert.strictEqual(imports.length, 6);
 
       assert.strictEqual(exports.length, 6);
-      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: 'foo' });
-      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: 'foo' });
-      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: 'foo' });
-      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: 'foo' });
-      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: 'foo' });
-      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: 'foo' });
+      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: undefined });
+      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
     test('curly-brace as curly-brace (doubleQuote)', () => {
@@ -2666,12 +2670,12 @@ function x() {
       assert.strictEqual(imports.length, 6);
 
       assert.strictEqual(exports.length, 6);
-      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: ' right-curlybrace} ' });
-      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: ' {left-curlybrace ' });
-      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: ' {curlybrackets} ' });
-      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: ' right-curlybrace} ' });
-      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: ' {left-curlybrace ' });
-      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: ' {curlybrackets} ' });
+      assertExportIs(source, exports[0], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[1], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[2], { n: ' {curlybrackets} ', ln: undefined });
+      assertExportIs(source, exports[3], { n: ' right-curlybrace} ', ln: undefined });
+      assertExportIs(source, exports[4], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[5], { n: ' {curlybrackets} ', ln: undefined });
     });
 
     test('complex & edge cases', () => {
@@ -2689,13 +2693,13 @@ function x() {
       assert.strictEqual(imports.length, 3);
 
       assert.strictEqual(exports.length, 7);
-      assertExportIs(source, exports[0], { n: 'foo', ln: 'foo' });
-      assertExportIs(source, exports[1], { n: 'foo2', ln: 'foo1' });
-      assertExportIs(source, exports[2], { n: ' {left-curlybrace ', ln: ' {left-curlybrace ' });
-      assertExportIs(source, exports[3], { n: '@notidentifier', ln: ' {curly-brackets}' });
-      assertExportIs(source, exports[4], { n: 'identifier', ln: '?' });
-      assertExportIs(source, exports[5], { n: "z'", ln: String.raw`p as 'z' from 'asdf'` });
-      assertExportIs(source, exports[6], { n: "p as 'z' from 'asdf'", ln: String.raw`z'` });
+      assertExportIs(source, exports[0], { n: 'foo', ln: undefined });
+      assertExportIs(source, exports[1], { n: 'foo2', ln: undefined });
+      assertExportIs(source, exports[2], { n: ' {left-curlybrace ', ln: undefined });
+      assertExportIs(source, exports[3], { n: '@notidentifier', ln: undefined });
+      assertExportIs(source, exports[4], { n: 'identifier', ln: undefined });
+      assertExportIs(source, exports[5], { n: "z'", ln: undefined });
+      assertExportIs(source, exports[6], { n: "p as 'z' from 'asdf'", ln: undefined });
     });
   });
 
