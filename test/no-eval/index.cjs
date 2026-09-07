@@ -9,7 +9,7 @@ suite('No string code generation', () => {
     const lexer = commonjs
       ? require(minimal ? '../../dist/lexer.minimal.cjs' : '../../dist/lexer.cjs')
       : await import(minimal ? '../../dist/lexer.minimal.js' : '../../dist/lexer.js');
-    await lexer.init;
+    await lexer.init();
     parse = lexer.parse;
     assert.throws(() => eval('1'), EvalError);
   });

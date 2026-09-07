@@ -452,7 +452,7 @@ export function parse (source: string, name = '@'): readonly [
   hasModuleSyntax: boolean
 ] {
   if (!wasm)
-    // synchronous compile is restricted on browser main threads — await init
+    // synchronous compile is restricted on browser main threads — await init()
     // there before calling parse
     initSync();
 
@@ -723,15 +723,18 @@ const getWasmBytes = () => (
     : Uint8Array.from(atob(binary), x => x.charCodeAt(0))
 )('WASM_BINARY');
 
+let initPromise: Promise<void> | undefined;
+
 /**
- * Wait for init to resolve before calling `parse`.
+ * Asynchronously compile the lexer. Await the returned promise before
+ * calling `parse`. Idempotent: repeated calls share the same promise.
  */
-export const init = WebAssembly.compile(getWasmBytes())
-.then(WebAssembly.instantiate)
-.then(({ exports }) => {
-  sourceView = undefined;
-  wasm = exports as typeof wasm;
-});
+export const init = (): Promise<void> => initPromise || (initPromise = wasm
+  ? Promise.resolve()
+  : WebAssembly.compile(getWasmBytes())
+    .then(WebAssembly.instantiate)
+    // parse may already have compiled synchronously while this was pending
+    .then(({ exports }) => { if (!wasm) wasm = exports as typeof wasm; }));
 
 const initSync = () => {
   if (wasm) {

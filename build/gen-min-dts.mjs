@@ -80,7 +80,8 @@ export declare function parse(source: string, name?: string): readonly [
 ];
 
 /**
- * Wait for init to resolve before calling \`parse\`.
+ * Asynchronously compile the lexer. Await the returned promise before
+ * calling \`parse\`. Idempotent: repeated calls share the same promise.
  */
-export declare const init: Promise<void>;
+export declare const init: () => Promise<void>;
 `);

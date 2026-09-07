@@ -11,7 +11,7 @@ async function loadLexer() {
   }
   else {
     const lexer = await import(minimal ? '../dist/lexer.minimal.js' : '../dist/lexer.js');
-    await lexer.init;
+    await lexer.init();
     lexerParse = lexer.parse;
   }
 }

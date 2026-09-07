@@ -58,7 +58,7 @@ With the full build:
 ```js
 import { init, parse } from 'es-module-lexer';
 
-await init;
+await init();
 
 const source = `import { a } from './dep.js';\nexport var p = 5;`;
 const [imports, exports] = parse(source);
@@ -73,7 +73,7 @@ Or with the minimal (v2-like) build:
 ```js
 import { init, parse } from 'es-module-lexer/minimal';
 
-await init;
+await init();
 
 const source = `import { a } from './dep.js';\nexport var p = 5;`;
 const [imports, exports] = parse(source);
@@ -83,8 +83,9 @@ source.slice(imports[0].ss, imports[0].se); // "import { a } from './dep.js'"
 exports[0].n; // "p"
 ```
 
-While awaiting `init` is always recommended since browser main threads restrict synchronous WebAssembly compilation,
+While awaiting `init()` is always recommended since browser main threads restrict synchronous WebAssembly compilation,
 in Node.js and other environments it may be optional, since `parse` will rely on synchronous compilation otherwise.
+Calling `parse` before a pending `init()` has resolved will also fall back to synchronous compilation, so avoid mixing the two.
 
 ## Minimal Build
 
@@ -152,15 +153,16 @@ source.slice(exports[0].ls, exports[0].le);
 ### Upgrading from v2
 
 The minimal build is a new entry point holding the v2-shaped API, with the
-following differences from v2:
+following small differences from v2:
 
+* `init` is a function returning a promise rather than a promise itself:
+  `await init` becomes `await init()`. Calls are idempotent and share one
+  compilation.
 * `parse` returns `[imports, exports]` only; `facade` / `hasModuleSyntax`
   are dropped.
 * `at` is dropped from import records; read attributes via
   `source.slice(a, se - 1)`.
 * `ImportType` is a type-only union of the numeric literals (`StaticImportType = 1`, `DynamicImportType = 2`, ...) with no runtime export.
-* Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
-  no export classification or `export *` records.
 
 Interpolated template specifiers are not globbed in the minimal build (`n` is
 `undefined` for them), and escape sequences in specifiers are decoded into
@@ -180,7 +182,7 @@ For example:
 ```js
 import { init, parse } from 'es-module-lexer';
 
-await init;
+await init();
 
 const source = `
   import { name } from 'mod';
@@ -241,7 +243,8 @@ exports[0].importIndex === 0;
 imports[0].specifier === 'dep';
 ```
 
-When migrating a full-build consumer from v2, switch on `type` before reading
+When migrating a full-build consumer from v2, `await init` becomes
+`await init()` as in the minimal build, then switch on `type` before reading
 kind-specific fields: the terse v2 field names and numeric type tags are
 replaced by the descriptive names above, reexports no longer expose
 placeholder local-name properties, and bare star reexports now appear in the

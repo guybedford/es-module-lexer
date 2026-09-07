@@ -30,7 +30,7 @@ const ENGINE = process.env.FUZZ_ENGINE === 'asm'
   ? '../dist/lexer.asm.js'
   : '../dist/lexer.js';
 const mod = await import(new URL(ENGINE, import.meta.url).href);
-if (mod.init) await mod.init;
+if (mod.init) await mod.init();
 const parse = mod.parse;
 
 const ONLY_FORM = process.env.FORM;

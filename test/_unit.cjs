@@ -2961,7 +2961,12 @@ export { d as a, p as b, z as c, r as d, q }`;
       ? (min ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js')
       : (min ? '../dist/lexer.minimal.js' : '../dist/lexer.js'));
     assert.deepStrictEqual(Object.keys(m).sort(), ['init', 'parse']);
-    await m.init;
+    assert.strictEqual(typeof m.init, 'function');
+    const p = m.init();
+    assert(p instanceof Promise);
+    // the wasm builds memoize the compile; the asm.js shim just resolves
+    if (process.env.WASM) assert.strictEqual(m.init(), p);
+    await p;
     assert.strictEqual(m.parse('export const a = 1')[1].length, 1);
   });
 
