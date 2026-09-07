@@ -578,3 +578,16 @@ void nextCharSurrogate (char16_t ch);
 char16_t readChar ();
 
 void syntaxError ();
+
+#define OPEN_TOKEN_STACK_SIZE 1024
+#define DYNAMIC_IMPORT_STACK_SIZE 512
+
+static inline __attribute__((always_inline)) bool pushOpenToken (enum OpenTokenState token, char16_t* tokenPos) {
+  if (openTokenDepth == OPEN_TOKEN_STACK_SIZE) {
+    syntaxError();
+    return false;
+  }
+  openTokenStack[openTokenDepth].token = token;
+  openTokenStack[openTokenDepth++].pos = tokenPos;
+  return true;
+}

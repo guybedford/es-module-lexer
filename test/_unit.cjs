@@ -2904,4 +2904,41 @@ export { d as a, p as b, z as c, r as d, q }`;
     assert.strictEqual(exports.length, 1);
     assert.strictEqual(exports[0].n, 'x');
   });
+
+  test('Open token stack bounds', () => {
+    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+      parse(open.repeat(1024) + close.repeat(1024));
+      assert.throws(() => parse(open.repeat(1025) + close.repeat(1025)), { idx: 1024 });
+    }
+    // each template level holds a Template and a TemplateBrace entry; the 513th
+    // level's backtick is entry 1025
+    parse('`${'.repeat(512) + '1' + '}`'.repeat(512));
+    assert.throws(() => parse('`${'.repeat(513) + '1' + '}`'.repeat(513)), { idx: 513 * 3 - 3 });
+  });
+
+  test('Dynamic import stack bounds', () => {
+    const nest = n => 'import('.repeat(n) + "'a'" + ')'.repeat(n);
+    const [imports] = parse(nest(512));
+    assert.strictEqual(imports.length, 512);
+    assert.throws(() => parse(nest(513)), { idx: 7 * 513 - 1 });
+  });
+
+  test('Embedded null characters do not terminate scanning', () => {
+    const source = `import 'a';\nconst s = "\0" + '\0';\n/* \0 */ // \0\nconst t = \`\0\${1}\0\`;\nimport 'b';\nimport('c');`;
+    const [imports] = parse(source);
+    assert.deepStrictEqual(imports.map(i => i.n), ['a', 'b', 'c']);
+  });
+
+  test('Source terminator survives the copy and parse', async () => {
+    if (process.env.ASM) return;
+    const { instance } = await WebAssembly.instantiate(await readFile(min ? 'lib/lexer.min.wasm' : 'lib/lexer.wasm'));
+    const wasm = instance.exports;
+    const source = `import 'a'; export const b = 1;`;
+    const addr = wasm.sa(source.length);
+    const mem = new Uint16Array(wasm.memory.buffer, addr, source.length + 1);
+    for (let i = 0; i < source.length; i++) mem[i] = source.charCodeAt(i);
+    assert.strictEqual(mem[source.length], 0);
+    assert.strictEqual(wasm.parse(), 1);
+    assert.strictEqual(mem[source.length], 0);
+  });
 });

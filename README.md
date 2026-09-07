@@ -501,6 +501,10 @@ The full build requires Node.js 18+ and engines with [WebAssembly SIMD support](
 
 The minimal build (`es-module-lexer/minimal`) carries no SIMD requirement, running in all browsers with baseline [ES modules support](https://caniuse.com/es6-module-dynamic-import) (Chrome 63+, Firefox 67+, Safari 11.1+ — the [es-module-shims](https://github.com/guybedford/es-module-shims) support matrix), with the asm.js builds covering those without WebAssembly.
 
+Nesting is bounded: more than 1024 open brackets or template substitutions, or
+more than 512 nested dynamic import calls, throws a parse error at the
+overflowing token.
+
 ### Grammar Support
 
 * Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
