@@ -418,12 +418,12 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       goto skipTokenRun;
 #endif
     case '(':
-      openTokenStack[openTokenDepth].token = AnyParen;
-      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      if (!pushOpenToken(AnyParen, lastTokenPos))
+        return false;
       break;
     case '[':
-      openTokenStack[openTokenDepth].token = AnyBracket;
-      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      if (!pushOpenToken(AnyBracket, lastTokenPos))
+        return false;
       break;
 #ifdef LEX_TS
     case '<':
@@ -500,8 +500,8 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         import_count--;
 #endif
       }
-      openTokenStack[openTokenDepth].token = nextBraceIsClass ? ClassBrace : AnyBrace;
-      openTokenStack[openTokenDepth++].pos = lastTokenPos;
+      if (!pushOpenToken(nextBraceIsClass ? ClassBrace : AnyBrace, lastTokenPos))
+        return false;
       nextBraceIsClass = false;
       break;
     case '}':
@@ -579,8 +579,8 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
           dynamicImportStack[dynamicImportStackDepth - 1]->start == pos)
         dynamicImportStack[dynamicImportStackDepth - 1]->specifier_template_depth = openTokenDepth + 1;
 #endif
-      openTokenStack[openTokenDepth].pos = lastTokenPos;
-      openTokenStack[openTokenDepth++].token = Template;
+      if (!pushOpenToken(Template, lastTokenPos))
+        return false;
       templateString();
       break;
     default:
@@ -599,8 +599,8 @@ bool parse () {
   // stack allocations
   // these are done here to avoid data section \0\0\0 repetition bloat
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
-  OpenToken openTokenStack_[1024];
-  Import* dynamicImportStack_[512];
+  OpenToken openTokenStack_[OPEN_TOKEN_STACK_SIZE];
+  Import* dynamicImportStack_[DYNAMIC_IMPORT_STACK_SIZE];
 
   facade = true;
 #ifndef LEXER_MIN
@@ -820,10 +820,14 @@ void tryParseImportStatement () {
 
   // dynamic import
   if (ch == '(') {
-    openTokenStack[openTokenDepth].token = ImportParen;
-    openTokenStack[openTokenDepth++].pos = pos;
+    if (!pushOpenToken(ImportParen, pos))
+      return;
     if (*lastTokenPos == '.')
       return;
+    if (dynamicImportStackDepth == DYNAMIC_IMPORT_STACK_SIZE) {
+      syntaxError();
+      return;
+    }
     // dynamic import indicated by positive d
     char16_t* dynamicPos = pos;
     // try parse a string, to record a safe dynamic import string
@@ -2748,8 +2752,7 @@ static inline __attribute__((always_inline)) void templateStringScalar () {
     char16_t ch = *pos;
     if (ch == '$' && *(pos + 1) == '{') {
       pos++;
-      openTokenStack[openTokenDepth].token = TemplateBrace;
-      openTokenStack[openTokenDepth++].pos = pos;
+      pushOpenToken(TemplateBrace, pos);
       return;
     }
     if (ch == '`') {
@@ -2796,8 +2799,7 @@ void templateString () {
       if (*(p + 1) != '{')
         continue;
       pos = p + 1;
-      openTokenStack[openTokenDepth].token = TemplateBrace;
-      openTokenStack[openTokenDepth++].pos = pos;
+      pushOpenToken(TemplateBrace, pos);
       return;
     }
     if (ch == '`') {
