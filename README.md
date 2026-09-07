@@ -482,10 +482,23 @@ exports[1].n;
 exports[1].ln;
 ```
 
-When migrating a minimal-build consumer from v2: the always-null `at` field
-is dropped, reexports report their imported name in `ln` (previously
-`undefined`), and `ImportType` is a type-only `const enum` with no runtime
-export.
+### Upgrading from v2
+
+The minimal build is a new entry point holding the v2-shaped API, with the
+following differences from v2:
+
+* `parse` returns `[imports, exports]` only; `facade` / `hasModuleSyntax`
+  are dropped.
+* `at` is dropped from import records; read attributes via
+  `source.slice(a, se - 1)`.
+* `export { a as b } from 'c'` reports `ln: 'a'` with `ls` / `le` spanning
+  it, where v2 gave `undefined` / `-1`; namespace reexports and `export *`
+  still report `ln: undefined`.
+* The `export * from 'mod'` module request reports `t === 8` rather than
+  `1`.
+* `ImportType` is a type-only `const enum` with no runtime export.
+* Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
+  no export classification or `export *` records.
 
 Interpolated template specifiers are not globbed in the minimal build (`n` is
 `undefined` for them), and escape sequences in specifiers are decoded into
