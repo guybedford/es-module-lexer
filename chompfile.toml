@@ -17,8 +17,8 @@ deps = [
 
 [[task]]
 name = 'bench'
-serial = true
-deps = ['bench:js', 'bench:wasm', 'bench:minimal:js', 'bench:minimal:wasm']
+deps = ['dist/lexer.js', 'dist/lexer.asm.js', 'dist/lexer.minimal.js', 'dist/lexer.minimal.asm.js']
+run = 'node --expose-gc bench/index.js'
 
 [[task]]
 name = 'bench:js'

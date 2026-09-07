@@ -6,32 +6,46 @@ A JS/TS module syntax lexer used in [es-module-shims](https://github.com/guybedf
 
 Outputs the list and locations of exports and import specifiers, including dynamic import and import meta expressions.
 
-Supports new syntax features including import attributes, deferred evaluation, and source phase imports, as well as [lexing type-only TypeScript imports and exports](#typescript) in the full build.
+Supports modern syntax features including import attributes, deferred evaluation, and source phase imports, as well as [lexing type-only TypeScript imports and exports](#typescript) in the full build.
 
-A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~7KiB Brotli-compressed for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 1ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
-_Comprehensively handles the JS language grammar while remaining small and fast. - ~5ms per MB of JS cold and ~3ms per MB of JS warm, [see benchmarks](#benchmarks) for more info._
+_Comprehensively handles the JS language grammar while remaining small and fast. - ~5ms per MB of JS cold and ~3ms per MB of JS warm._
 
 > [Built with](https://github.com/guybedford/es-module-lexer/blob/main/chompfile.toml) [Chomp](https://chompbuild.com/)
 
 ## Package Exports
 
-| Export | Build | Footprint (Brotli) |
-| --- | --- | --- |
-| `es-module-lexer` | [Full build](#full-build), Wasm, JS & [TypeScript](#typescript) | 11.8KiB |
-| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build), JS & [TypeScript](#typescript) | 10.8KiB |
-| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm, JS only | 6.8KiB |
-| `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build), JS only | 6.5KiB |
+| Export | Build | Footprint | Parsing Speed (cold) | Parsing Speed (warm) |
+| --- | --- | ---: | ---: | ---: |
+| `es-module-lexer` | [Full build](#full-build), Wasm, JS & [TypeScript](#typescript) | 14.8KiB | 4.7ms/MB | 3.2ms/MB |
+| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build), JS & [TypeScript](#typescript) | 13.1KiB | 14.9ms/MB | 6.3ms/MB |
+| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm, JS only | 7.3KiB | 4.5ms/MB | 3.1ms/MB |
+| `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build), JS only | 6.5KiB | 10.8ms/MB | 5.7ms/MB |
 
-See [Environment Support](#environment-support) for the engine requirements of each build.
+* Footprint is the Brotli-compressed size.
+* Parse times are per MB of source, measured on the 3.1 MB `test/samples` set on a standard desktop machine (Node.js 26; warm averages 25 parses), via `chomp bench`.
 
-## Full Build
+### Environment Support
 
-The full build lexes both JavaScript and erasable [type-only TypeScript](#typescript) syntax, reporting type-only imports and exports with a `typeOnly` flag.
+The full build requires Node.js 18+ and engines with [WebAssembly SIMD support](https://webassembly.org/features/) (Chrome 91+, Firefox 89+, Safari 16.4+).
 
-### Usage
+The minimal build (`es-module-lexer/minimal`) carries no SIMD requirement, running in all browsers with baseline [ES modules support](https://caniuse.com/es6-module-dynamic-import) (Chrome 63+, Firefox 67+, Safari 11.1+ — the [es-module-shims](https://github.com/guybedford/es-module-shims) support matrix), with the asm.js builds covering those without WebAssembly.
+
+### CSP asm.js Build
+
+The Wasm builds generate no code from strings, so they work with JavaScript eval disabled, including Node.js with `--disallow-code-generation-from-strings`, as long as the environment permits WebAssembly compilation.
+
+For environments or CSP policies that disable WebAssembly compilation (`script-src` without `wasm-unsafe-eval`), use the `es-module-lexer/js` and
+`es-module-lexer/minimal/js` builds:
+
+```js
+import { parse } from 'es-module-lexer/js';
+```
+
+## Usage
 
 ```
 npm install es-module-lexer
@@ -39,135 +53,137 @@ npm install es-module-lexer
 
 See [src/lexer.ts](src/lexer.ts) for the type definitions.
 
-For use in CommonJS:
-
-```js
-const { init, parse } = require('es-module-lexer');
-
-(async () => {
-  // in browsers, await init first for the WebAssembly boot
-  await init;
-
-  const source = 'export var p = 5';
-  const [imports, exports] = parse(source);
-
-  // Returns "p"
-  source.slice(exports[0].start, exports[0].end);
-})();
-```
-
-`parse` initializes the WebAssembly automatically on first use, compiling it
-synchronously if the `init` promise has not been awaited. Browser main threads
-restrict synchronous WebAssembly compilation, so awaiting `init` remains
-required there, while in Node.js and other environments it is optional.
-
-An ES module version is also available:
+With the full build:
 
 ```js
 import { init, parse } from 'es-module-lexer';
+
+await init;
+
+const source = `import { a } from './dep.js';\nexport var p = 5;`;
+const [imports, exports] = parse(source);
+
+imports[0].specifier; // "./dep.js"
+source.slice(imports[0].importStart, imports[0].importEnd); // "import { a } from './dep.js'"
+exports[0].name; // "p"
 ```
 
-The full build reports each import and export as a tagged union discriminated
-by `type` (see [src/lexer.ts](src/lexer.ts) for the authoritative
-declarations):
+Or with the minimal (v2-like) build:
 
-```ts
-type Import = StaticImport | DynamicImport | ImportMetaRef;
+```js
+import { init, parse } from 'es-module-lexer/minimal';
 
-interface StaticImport {
-  // 'reexport-star' is the module request of `export * from 'mod'`
-  type: 'static' | 'reexport-star';
-  // decoded specifier with escape sequences processed (invalid escape
-  // sequences are a parse error)
-  specifier: string;
-  phase: 'source' | 'defer' | null;
-  // module specifier range
-  start: number;
-  end: number;
-  // import statement range (importEnd excludes a trailing semicolon)
-  importStart: number;
-  importEnd: number;
-  // parsed attribute [key, value] pairs and the `with { ... }` start,
-  // or null / -1 for no attributes
-  attributes: [string, string][] | null;
-  attributesStart: number;
-  // true for a TypeScript type-only import
-  typeOnly: boolean;
-}
+await init;
 
-interface DynamicImport {
-  type: 'dynamic';
-  // decoded specifier when statically analyzable; a lone template literal
-  // argument reports a glob with each ${...} collapsed to "*"; else undefined
-  specifier: string | undefined;
-  phase: 'source' | 'defer' | null;
-  // argument range and the `(` position
-  start: number;
-  end: number;
-  dynamicStart: number;
-  importStart: number;
-  importEnd: number;
-  attributes: [string, string][] | null;
-  attributesStart: number;
-  // best-effort: true when the result is used in a way only a TypeScript
-  // type position can be (see TypeScript caveats)
-  probablyTypeOnly: boolean;
-}
+const source = `import { a } from './dep.js';\nexport var p = 5;`;
+const [imports, exports] = parse(source);
 
-interface ImportMetaRef {
-  type: 'import-meta';
-  // the `import.meta` expression range
-  start: number;
-  end: number;
-  importStart: number;
-  importEnd: number;
-}
-
-type Export = DirectExport | Reexport | ReexportAll;
-
-interface DirectExport {
-  type: 'direct';
-  name: string;
-  // undefined for anonymous default exports
-  localName: string | undefined;
-  // exported name and local name ranges (local -1 when absent)
-  start: number;
-  end: number;
-  localStart: number;
-  localEnd: number;
-  // only the start of the export statement is tracked
-  exportStart: number;
-  // true for a TypeScript type-only export
-  typeOnly: boolean;
-}
-
-interface Reexport {
-  type: 'reexport';
-  name: string;
-  // imported name, null for namespace and source phase reexports
-  importName: string | null;
-  importNameStart: number;
-  importNameEnd: number;
-  // module specifier and index of the originating entry in imports
-  from: string;
-  importIndex: number;
-  start: number;
-  end: number;
-  exportStart: number;
-  typeOnly: boolean;
-}
-
-interface ReexportAll {
-  type: 'reexport-all';
-  from: string;
-  importIndex: number;
-  // the `*` range
-  start: number;
-  end: number;
-  exportStart: number;
-  typeOnly: boolean;
-}
+imports[0].n; // "./dep.js"
+source.slice(imports[0].ss, imports[0].se); // "import { a } from './dep.js'"
+exports[0].n; // "p"
 ```
+
+While awaiting `init` is always recommended since browser main threads restrict synchronous WebAssembly compilation,
+in Node.js and other environments it may be optional, since `parse` will rely on synchronous compilation otherwise.
+
+## Minimal Build
+
+> See [types/lexer.minimal.d.ts](types/lexer.minimal.d.ts) for the full interface definitions.
+
+For size-sensitive embedders, the `es-module-lexer/minimal` build drops
+certain features to reduce the binary size. This is used for example by
+[es-module-shims](https://github.com/guybedford/es-module-shims).
+
+The minimal build keeps the terse v2-style record shapes rather than the full
+build's discriminated unions.
+
+```js
+import { parse } from 'es-module-lexer/minimal';
+
+const source = `
+  import { name } from 'mod';
+  import json from './json.json' with { type: 'json' };
+  export var p = 5;
+  import ('asdf');
+  import.meta.url;
+  export { x as y } from 'external';
+`;
+
+const [imports, exports] = parse(source);
+
+// Returns "mod"
+imports[0].n
+// Returns "mod"
+source.slice(imports[0].s, imports[0].e);
+// "s" = start
+// "e" = end
+
+// Returns "import { name } from 'mod'"
+source.slice(imports[0].ss, imports[0].se);
+// "ss" = statement start
+// "se" = statement end
+
+// Import type is provided by the numeric `t` value (see the ImportType type)
+// Returns true
+imports[0].t === 1;
+
+// Returns "{ type: 'json' }"
+source.slice(imports[1].a, imports[1].se);
+// "a" = attribute start, -1 for no import attributes
+
+// Dynamic imports have "d" as the start of the expression argument,
+// with -1 for static imports and -2 for import.meta
+// Returns "asdf" (only for string literal dynamic imports)
+imports[2].n
+// Returns "('asdf')"
+source.slice(imports[2].d, imports[2].se);
+
+// import.meta is indicated by d === -2
+// Returns true
+imports[3].d === -2;
+
+// Exports keep the v2 flat { n, ln, s, e, ls, le } shape with no export
+// classification, origins, statement starts, or `export *` records
+// Returns "p"
+source.slice(exports[0].s, exports[0].e);
+// Returns "p"
+source.slice(exports[0].ls, exports[0].le);
+
+// For reexports, "ln" / "ls" / "le" report the imported name
+// Returns "y"
+exports[1].n;
+// Returns "x"
+exports[1].ln;
+```
+
+### Upgrading from v2
+
+The minimal build is a new entry point holding the v2-shaped API, with the
+following differences from v2:
+
+* `parse` returns `[imports, exports]` only; `facade` / `hasModuleSyntax`
+  are dropped.
+* `at` is dropped from import records; read attributes via
+  `source.slice(a, se - 1)`.
+* `export { a as b } from 'c'` reports `ln: 'a'` with `ls` / `le` spanning
+  it, where v2 gave `undefined` / `-1`; namespace reexports and `export *`
+  still report `ln: undefined`.
+* `ImportType` is a type-only union of the numeric literals (`StaticImportType = 1`, `DynamicImportType = 2`, ...) with no runtime export.
+* Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
+  no export classification or `export *` records.
+
+Interpolated template specifiers are not globbed in the minimal build (`n` is
+`undefined` for them), and escape sequences in specifiers are decoded into
+`n` just as in the full build, including the parse error on invalid escape
+sequences.
+
+## Full Build
+
+> See [types/lexer.d.ts](types/lexer.d.ts) for the full interface definitions.
+
+The full build lexes both JavaScript and erasable [type-only TypeScript](#typescript) syntax, reporting type-only imports and exports with a `typeOnly` flag.
+
+The full build reports each import and export as a tagged union discriminated by `type`.
 
 For example:
 
@@ -288,11 +304,11 @@ Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, lega
 
 ### Import Attributes
 
-The `attributesStart` field provides the index of the start of the `{`
+The `attributesStart` (`a` in the minimal build) field provides the index of the start of the `{`
 attributes bracket, or -1 for no attributes.
 
-The list of attribute key and value pairs is provided on the `attributes`
-field:
+In the full build, the list of attribute key and value pairs of a static import is provided on the `attributes`
+field (dynamic import records report `attributes: null`, with `attributesStart` locating the options argument):
 
 ```js
 const [imports] = parse(`
@@ -329,7 +345,7 @@ imports[0].attributes;
 
 ### Escape Sequences
 
-Escape sequences in specifier strings are decoded into the `specifier` field.
+Escape sequences in specifier strings are decoded into the `specifier` field (`n` in the minimal build).
 A specifier that does not decode as a JS string (an invalid escape sequence)
 throws a parse error, just like the source would in a JS engine.
 
@@ -348,7 +364,7 @@ treating the glob `specifier` as a pattern has to apply its own escaping.
 ### Star Re-exports
 
 `export * from 'module'` is both a dependency on `module` and a re-export of
-its names. It is reported on both sides:
+its names. The minimal build reports it as an import only (`t === 8`), while the full build reports it on both sides:
 
 ```js
 const source = `export * from './core'`;
@@ -407,105 +423,7 @@ const [,,, hasModuleSyntax] = parse(`
 hasModuleSyntax === false;
 ```
 
-## Minimal Build
-
-For size-sensitive embedders, the `es-module-lexer/minimal` build drops
-certain features to reduce the binary size. This is used for example by
-[es-module-shims](https://github.com/guybedford/es-module-shims):
-
-```js
-import { parse } from 'es-module-lexer/minimal';
-```
-
-The minimal build keeps the terse v2 record shapes rather than the full
-build's discriminated unions, and `parse` returns a two-element
-`[imports, exports]` tuple only (the facade and `hasModuleSyntax` booleans
-are dropped):
-
-```js
-import { parse } from 'es-module-lexer/minimal';
-
-const source = `
-  import { name } from 'mod';
-  import json from './json.json' with { type: 'json' };
-  export var p = 5;
-  import ('asdf');
-  import.meta.url;
-`;
-
-const [imports, exports] = parse(source);
-
-// Returns "mod"
-imports[0].n
-// Returns "mod"
-source.slice(imports[0].s, imports[0].e);
-// "s" = start
-// "e" = end
-
-// Returns "import { name } from 'mod'"
-source.slice(imports[0].ss, imports[0].se);
-// "ss" = statement start
-// "se" = statement end
-
-// Import type is provided by the numeric `t` value
-// (see the ImportType enum; 8 is the `export * from 'mod'` module request)
-// Returns true
-imports[0].t === 1;
-
-// Returns "{ type: 'json' }"
-source.slice(imports[1].a, imports[1].se);
-// "a" = attribute start, -1 for no import attributes
-// (the parsed attribute list `at` is always null in the minimal build)
-
-// Dynamic imports have "d" as the start of the expression argument,
-// with -1 for static imports and -2 for import.meta
-// Returns "asdf" (only for string literal dynamic imports)
-imports[2].n
-// Returns "('asdf')"
-source.slice(imports[2].d, imports[2].se);
-
-// import.meta is indicated by d === -2
-// Returns true
-imports[3].d === -2;
-
-// Exports keep the v2 flat { n, ln, s, e, ls, le } shape with no export
-// classification, origins, statement starts, or `export *` records
-// Returns "p"
-source.slice(exports[0].s, exports[0].e);
-// Returns "p"
-source.slice(exports[0].ls, exports[0].le);
-```
-
-Interpolated template specifiers are not globbed in the minimal build (`n` is
-`undefined` for them), and escape sequences in specifiers are decoded into
-`n` just as in the full build, including the parse error on invalid escape
-sequences.
-
-## CSP asm.js Build
-
-The default builds use Wasm without generating code from strings. They work when JavaScript eval is disabled,
-including Node.js with `--disallow-code-generation-from-strings`, if the environment permits WebAssembly compilation.
-
-For CSP policies that also disable WebAssembly compilation, use the `es-module-lexer/js` and
-`es-module-lexer/minimal/js` builds:
-
-```js
-import { parse } from 'es-module-lexer/js';
-```
-
-Instead of WebAssembly, these use an asm.js build which is almost as fast as the Wasm version ([see benchmarks below](#benchmarks)).
-
-### Environment Support
-
-The full build requires Node.js 18+ and engines with [WebAssembly SIMD support](https://webassembly.org/features/) (Chrome 91+, Firefox 89+, Safari 16.4+).
-
-The minimal build (`es-module-lexer/minimal`) carries no SIMD requirement, running in all browsers with baseline [ES modules support](https://caniuse.com/es6-module-dynamic-import) (Chrome 63+, Firefox 67+, Safari 11.1+ — the [es-module-shims](https://github.com/guybedford/es-module-shims) support matrix), with the asm.js builds covering those without WebAssembly.
-
-Nesting is bounded: more than 1024 open brackets or template substitutions, or
-more than 512 nested dynamic import calls, throws a parse error at the
-overflowing token.
-
-### Grammar Support
+## Grammar Support
 
 * Token state parses all line comments, block comments, strings, template strings, blocks, parens and punctuators.
 * Division operator / regex token ambiguity is handled via backtracking checks against punctuator prefixes, including closing brace or paren backtracking.
@@ -519,111 +437,26 @@ Because it lexes rather than fully parses, the analysis is not a validation pass
 
 Multiple exports per declaration (`export var a = 'asdf', q = z`) and renamed destructured exports (`export var { a: b } = asdf`) are detected correctly; earlier versions missed `q` and `b` in these forms.
 
-### Benchmarks
+Nesting is bounded: more than 1024 open brackets or template substitutions, or more than 512 nested dynamic import calls, throws a parse error at the overflowing token.
 
-Benchmarks can be run with `npm run bench`.
-
-Current results on a standard desktop machine:
-
-#### Wasm Build
-
-```
-Module load time
-> 5ms
-Cold Run, All Samples
-test/samples/*.js (3057 KiB)
-> 14ms
-
-Warm Runs (average of 25 runs)
-test/samples/angular.js (719 KiB)
-> 1ms
-test/samples/angular.min.js (188 KiB)
-> 1ms
-test/samples/d3.js (491 KiB)
-> 2ms
-test/samples/d3.min.js (274 KiB)
-> 1ms
-test/samples/magic-string.js (34 KiB)
-> 0ms
-test/samples/magic-string.min.js (20 KiB)
-> 0ms
-test/samples/rollup.js (902 KiB)
-> 2.08ms
-test/samples/rollup.min.js (429 KiB)
-> 2ms
-
-Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3057 KiB)
-> 8.92ms
-```
-
-### JS Build (asm.js)
-
-```
-Module load time
-> 2ms
-Cold Run, All Samples
-test/samples/*.js (3057 KiB)
-> 35ms
-
-Warm Runs (average of 25 runs)
-test/samples/angular.js (719 KiB)
-> 2ms
-test/samples/angular.min.js (188 KiB)
-> 1ms
-test/samples/d3.js (491 KiB)
-> 3ms
-test/samples/d3.min.js (274 KiB)
-> 2ms
-test/samples/magic-string.js (34 KiB)
-> 0ms
-test/samples/magic-string.min.js (20 KiB)
-> 0ms
-test/samples/rollup.js (902 KiB)
-> 5.04ms
-test/samples/rollup.min.js (429 KiB)
-> 3ms
-
-Warm Runs, All Samples (average of 25 runs)
-test/samples/*.js (3057 KiB)
-> 16.04ms
-```
-
-### Building
+## Building
 
 This project uses [Chomp](https://chompbuild.com) for building.
 
-With Chomp installed, download the WASI SDK 12.0 from https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-12.
-
-- [Linux](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz)
-- [Windows (MinGW)](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-mingw.tar.gz)
-- [macOS](https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-macos.tar.gz)
-
-Locate the WASI-SDK as a sibling folder, or customize the path via the `WASI_PATH` environment variable.
-
-Emscripten emsdk is also assumed to be a sibling folder or via the `EMSDK_PATH` environment variable.
+With Chomp installed, two Emscripten SDKs are expected as sibling folders (or via the `EMSDK_PATH` and `EMSDK_FASTCOMP_PATH` environment variables): the upstream `emsdk` for the Wasm builds and a second checkout as `emsdk-fastcomp` for the asm.js builds; the build installs and activates the required versions (6.0.0 and 1.40.1-fastcomp) itself.
 
 Example setup:
 
 ```
-git clone https://github.com:guybedford/es-module-lexer
+git clone https://github.com/guybedford/es-module-lexer
 git clone https://github.com/emscripten-core/emsdk
-cd emsdk
-git checkout 1.40.1-fastcomp
-./emsdk install 1.40.1-fastcomp
-cd ..
-wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz
-gunzip wasi-sdk-12.0-linux.tar.gz
-tar -xf wasi-sdk-12.0-linux.tar
-mv wasi-sdk-12.0-linux.tar wasi-sdk-12.0
+git clone https://github.com/emscripten-core/emsdk emsdk-fastcomp
 cargo install chompbuild
 cd es-module-lexer
 chomp test
 ```
 
-For the `asm.js` build, git clone `emsdk` from  is assumed to be a sibling folder as well.
-
-### License
+## License
 
 MIT
 
