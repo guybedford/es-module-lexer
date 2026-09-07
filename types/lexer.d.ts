@@ -1,48 +1,25 @@
+/** A static import using any syntax variation: `import .. from 'module'`. */
+export type StaticImportType = 1;
+/** A dynamic import expression `import(specifier)` or `import(specifier, opts)`. */
+export type DynamicImportType = 2;
+/** An `import.meta` expression. */
+export type ImportMetaType = 3;
+/** A source phase import: `import source x from 'module'`. */
+export type StaticSourcePhaseType = 4;
+/** A dynamic source phase import: `import.source('module')`. */
+export type DynamicSourcePhaseType = 5;
+/** A defer phase import: `import defer * as x from 'module'`. */
+export type StaticDeferPhaseType = 6;
+/** A dynamic defer phase import: `import.defer('module')`. */
+export type DynamicDeferPhaseType = 7;
+/** The module request of an `export * from 'module'` statement (full build only). */
+export type StaticReexportStarType = 8;
 /**
  * Numeric import type reported by the minimal build (`ImportSpecifier.t`).
  * The full build reports string `type` / `phase` discriminants instead.
- * Type-only: no runtime enum object is exported.
+ * Type-only: there is no runtime value to import.
  */
-export declare const enum ImportType {
-    /**
-     * A normal static using any syntax variations
-     *   import .. from 'module'
-     */
-    Static = 1,
-    /**
-     * A dynamic import expression `import(specifier)`
-     * or `import(specifier, opts)`
-     */
-    Dynamic = 2,
-    /**
-     * An import.meta expression
-     */
-    ImportMeta = 3,
-    /**
-     * A source phase import
-     *   import source x from 'module'
-     */
-    StaticSourcePhase = 4,
-    /**
-     * A dynamic source phase import
-     *   import.source('module')
-     */
-    DynamicSourcePhase = 5,
-    /**
-     * A defer phase import
-     *   import defer * as x from 'module'
-     */
-    StaticDeferPhase = 6,
-    /**
-     * A dynamic defer phase import
-     *   import.defer('module')
-     */
-    DynamicDeferPhase = 7,
-    /**
-     * The module specifier of an `export * from 'module'` statement.
-     */
-    StaticReexportStar = 8
-}
+export type ImportType = StaticImportType | DynamicImportType | ImportMetaType | StaticSourcePhaseType | DynamicSourcePhaseType | StaticDeferPhaseType | DynamicDeferPhaseType | StaticReexportStarType;
 /**
  * Import phase modifier: `import source` / `import.source(...)` report
  * `'source'`, `import defer` / `import.defer(...)` report `'defer'`, all
@@ -145,11 +122,12 @@ export interface DynamicImport extends ImportBase {
      */
     readonly dynamicStart: number;
     /**
-     * Parsed import attributes as an array of [key, value] tuples, or `null`.
+     * Always `null`: the options argument of a dynamic import is not parsed.
+     * `attributesStart` locates it in the source.
      */
-    readonly attributes: ReadonlyArray<readonly [string, string]> | null;
+    readonly attributes: null;
     /**
-     * Start of the import attributes option, or -1 if none.
+     * Start of the dynamic import options argument, or -1 if none.
      */
     readonly attributesStart: number;
     /**

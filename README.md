@@ -8,7 +8,7 @@ Outputs the list and locations of exports and import specifiers, including dynam
 
 Supports modern syntax features including import attributes, deferred evaluation, and source phase imports, as well as [lexing type-only TypeScript imports and exports](#typescript) in the full build.
 
-A very small single JS file (~7KiB gzipped for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
+A very small single JS file (~7KiB Brotli-compressed for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 1ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
 
@@ -20,9 +20,9 @@ _Comprehensively handles the JS language grammar while remaining small and fast.
 
 | Export | Build | Footprint | Parsing Speed (cold) | Parsing Speed (warm) |
 | --- | --- | ---: | ---: | ---: |
-| `es-module-lexer` | [Full build](#full-build), Wasm, JS & [TypeScript](#typescript) | 11.8KiB | 4.7ms/MB | 3.2ms/MB |
-| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build), JS & [TypeScript](#typescript) | 10.8KiB | 14.9ms/MB | 6.3ms/MB |
-| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm, JS only | 6.8KiB | 4.5ms/MB | 3.1ms/MB |
+| `es-module-lexer` | [Full build](#full-build), Wasm, JS & [TypeScript](#typescript) | 14.8KiB | 4.7ms/MB | 3.2ms/MB |
+| `es-module-lexer/js` | [Full build](#full-build), [CSP asm.js](#csp-asmjs-build), JS & [TypeScript](#typescript) | 13.1KiB | 14.9ms/MB | 6.3ms/MB |
+| `es-module-lexer/minimal` | [Minimal build](#minimal-build) (v2-like API), Wasm, JS only | 7.3KiB | 4.5ms/MB | 3.1ms/MB |
 | `es-module-lexer/minimal/js` | [Minimal build](#minimal-build) (v2-like API), [CSP asm.js](#csp-asmjs-build), JS only | 6.5KiB | 10.8ms/MB | 5.7ms/MB |
 
 * Footprint is the Brotli-compressed size.
@@ -168,7 +168,7 @@ following differences from v2:
 * `export { a as b } from 'c'` reports `ln: 'a'` with `ls` / `le` spanning
   it, where v2 gave `undefined` / `-1`; namespace reexports and `export *`
   still report `ln: undefined`.
-* `ImportType` is a type-only `const enum` with no runtime export.
+* `ImportType` is a type-only union of the numeric literals (`StaticImportType = 1`, `DynamicImportType = 2`, ...) with no runtime export.
 * Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
   no export classification or `export *` records.
 
@@ -307,8 +307,8 @@ Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, lega
 The `attributesStart` (`a` in the minimal build) field provides the index of the start of the `{`
 attributes bracket, or -1 for no attributes.
 
-In the full build, the list of attribute key and value pairs is provided on the `attributes`
-field:
+In the full build, the list of attribute key and value pairs of a static import is provided on the `attributes`
+field (dynamic import records report `attributes: null`, with `attributesStart` locating the options argument):
 
 ```js
 const [imports] = parse(`

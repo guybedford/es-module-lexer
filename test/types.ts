@@ -2,7 +2,8 @@ import type {
   Import,
   Export,
 } from '../types/lexer.js';
-import { parse, ImportType } from '../types/lexer.js';
+import { parse } from '../types/lexer.js';
+import type { ImportType, DynamicImportType } from '../types/lexer.js';
 import { parse as minimalParse } from '../types/lexer.minimal.js';
 import type {
   ImportSpecifier as MinimalImportSpecifier,
@@ -65,7 +66,10 @@ switch (exported.type) {
 declare const minimalImportSpecifier: MinimalImportSpecifier;
 minimalImportSpecifier.n;
 minimalImportSpecifier.t satisfies ImportType;
-minimalImportSpecifier.t === ImportType.StaticReexportStar;
+if (minimalImportSpecifier.t === 2)
+  minimalImportSpecifier.t satisfies DynamicImportType;
+// @ts-expect-error 9 is not an import type.
+minimalImportSpecifier.t satisfies 9;
 // @ts-expect-error Minimal import records keep the v2 shape.
 minimalImportSpecifier.specifier;
 // @ts-expect-error Minimal import records have no attribute list.
