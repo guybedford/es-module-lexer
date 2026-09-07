@@ -28,8 +28,8 @@ switch (imported.type) {
     break;
   case 'import-meta':
     imported.start;
-    // @ts-expect-error import.meta references have no specifier.
-    imported.specifier;
+    imported.specifier satisfies null;
+    imported.typeOnly satisfies false;
     break;
   default: {
     const exhaustive: never = imported;
