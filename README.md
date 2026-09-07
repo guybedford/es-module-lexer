@@ -163,8 +163,6 @@ following differences from v2:
 * `at` is dropped from import records; read attributes via
   `source.slice(a, se - 1)`.
 * `ImportType` is a type-only union of the numeric literals (`StaticImportType = 1`, `DynamicImportType = 2`, ...) with no runtime export.
-* Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
-  no export classification or `export *` records.
 
 Interpolated template specifiers are not globbed in the minimal build (`n` is
 `undefined` for them), and escape sequences in specifiers are decoded into
