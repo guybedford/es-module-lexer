@@ -334,6 +334,7 @@ export interface ParseError extends Error {
 }
 
 const isLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+const hasBuffer = typeof Buffer !== 'undefined';
 const templateLineEndings = /\r\n?/g;
 
 /**
@@ -473,7 +474,8 @@ export function parse (source: string, name = '@'): readonly [
   const addr = wasm.sa(len - 1);
   // Node's Buffer blits UTF-16 straight into Wasm memory ~10x faster than the
   // charCodeAt fallback, in explicit LE matching Wasm regardless of host.
-  if (typeof Buffer !== 'undefined')
+  // Buffer setup is slower than the loop for short sources.
+  if (source.length >= 64 && hasBuffer)
     Buffer.from(wasm.memory.buffer, addr, (len - 1) * 2).write(source, 'utf16le');
   else
     (isLE ? copyLE : copyBE)(source, new Uint16Array(wasm.memory.buffer, addr, len));
