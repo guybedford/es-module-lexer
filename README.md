@@ -153,7 +153,7 @@ source.slice(exports[0].ls, exports[0].le);
 ### Upgrading from v2
 
 The minimal build is a new entry point holding the v2-shaped API, with the
-following differences from v2:
+following small differences from v2:
 
 * `init` is a function returning a promise rather than a promise itself:
   `await init` becomes `await init()`. Calls are idempotent and share one
