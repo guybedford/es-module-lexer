@@ -52,18 +52,15 @@ export interface ImportSpecifier {
 export interface ExportSpecifier {
   /** Exported name */
   readonly n: string;
-  /**
-   * Local name, or the imported name for a reexport (\`export { a as b }
-   * from 'c'\` reports \`a\`), or undefined
-   */
+  /** Local name, or undefined (reexports have no local binding) */
   readonly ln: string | undefined;
   /** Start of exported name */
   readonly s: number;
   /** End of exported name */
   readonly e: number;
-  /** Start of local / imported name, or -1 */
+  /** Start of local name, or -1 */
   readonly ls: number;
-  /** End of local / imported name, or -1 */
+  /** End of local name, or -1 */
   readonly le: number;
 }
 

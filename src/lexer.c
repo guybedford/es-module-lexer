@@ -2103,6 +2103,9 @@ bool tryParseExportStatement () {
         exprt->import_name_ty = exprt->local_start == NULL ? NamespaceImport : NamedImport;
 #endif
       }
+#else
+      // The clause names are imported names, not local bindings.
+      exprt->local_start = exprt->local_end = NULL;
 #endif
     }
   }

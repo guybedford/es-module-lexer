@@ -106,7 +106,6 @@ const source = `
   export var p = 5;
   import ('asdf');
   import.meta.url;
-  export { x as y } from 'external';
 `;
 
 const [imports, exports] = parse(source);
@@ -148,12 +147,6 @@ imports[3].d === -2;
 source.slice(exports[0].s, exports[0].e);
 // Returns "p"
 source.slice(exports[0].ls, exports[0].le);
-
-// For reexports, "ln" / "ls" / "le" report the imported name
-// Returns "y"
-exports[1].n;
-// Returns "x"
-exports[1].ln;
 ```
 
 ### Upgrading from v2
@@ -165,9 +158,6 @@ following differences from v2:
   are dropped.
 * `at` is dropped from import records; read attributes via
   `source.slice(a, se - 1)`.
-* `export { a as b } from 'c'` reports `ln: 'a'` with `ls` / `le` spanning
-  it, where v2 gave `undefined` / `-1`; namespace reexports and `export *`
-  still report `ln: undefined`.
 * `ImportType` is a type-only union of the numeric literals (`StaticImportType = 1`, `DynamicImportType = 2`, ...) with no runtime export.
 * Template-literal dynamic imports stay `n: undefined`; no TypeScript lexing;
   no export classification or `export *` records.
