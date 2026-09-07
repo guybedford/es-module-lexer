@@ -35,10 +35,8 @@ export interface ImportSpecifier {
   readonly se: number;
   /** Dynamic import expression start, -1 for static, -2 for import.meta */
   readonly d: number;
-  /** Start of import attributes, or -1 */
+  /** Start of import attributes, or -1 (read via source.slice(a, se - 1)) */
   readonly a: number;
-  /** Always null in the minimal build (read via source.slice(a, se - 1)) */
-  readonly at: null;
 }
 
 /**
@@ -50,15 +48,18 @@ export interface ImportSpecifier {
 export interface ExportSpecifier {
   /** Exported name */
   readonly n: string;
-  /** Local name, or undefined */
+  /**
+   * Local name, or the imported name for a reexport (\`export { a as b }
+   * from 'c'\` reports \`a\`), or undefined
+   */
   readonly ln: string | undefined;
   /** Start of exported name */
   readonly s: number;
   /** End of exported name */
   readonly e: number;
-  /** Start of local name, or -1 */
+  /** Start of local / imported name, or -1 */
   readonly ls: number;
-  /** End of local name, or -1 */
+  /** End of local / imported name, or -1 */
   readonly le: number;
 }
 
@@ -66,8 +67,8 @@ export interface ExportSpecifier {
  * Outputs the lexical analysis of the source — minimal build.
  *
  * Returns a 2-tuple of imports and exports. Unlike the full build, the minimal
- * build does not emit the facade / hasModuleSyntax flags, and ImportSpecifier
- * \`at\` is always null (read assertions via \`source.slice(a, se - 1)\`).
+ * build does not emit the facade / hasModuleSyntax flags or a parsed
+ * attribute list (read attributes via \`source.slice(a, se - 1)\`).
  *
  * @param source Source code to parse
  * @param name Optional sourcename

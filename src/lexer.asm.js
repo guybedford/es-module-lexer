@@ -85,7 +85,7 @@ export function parse (_source, _name = '@') {
       at = at.length > 0 ? at : null;
     }
     if (MINIMAL) {
-      imports.push({ t, n, s, e, ss, se, d, a, at });
+      imports.push({ t, n, s, e, ss, se, d, a });
     }
     else if (t === 3/*ImportMeta*/) {
       imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });

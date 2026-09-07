@@ -8,8 +8,9 @@ const MINIMAL = false as boolean;
 /**
  * Numeric import type reported by the minimal build (`ImportSpecifier.t`).
  * The full build reports string `type` / `phase` discriminants instead.
+ * Type-only: no runtime enum object is exported.
  */
-export enum ImportType {
+export declare const enum ImportType {
   /**
    * A normal static using any syntax variations
    *   import .. from 'module'
@@ -494,8 +495,8 @@ export function parse (source: string, name = '@'): readonly [
     else if (!MINIMAL && d !== -1 && source[s] === '`')
       n = decodeTemplate(s, e);
     let at: Array<[string, string]> | null = null;
-    // minimal build drops the parsed attribute list; es-module-shims reads the
-    // assertion via source.slice(a, se - 1) instead
+    // minimal build has no attribute list; es-module-shims reads the assertion
+    // via source.slice(a, se - 1) instead
     if (!MINIMAL) {
       at = [];
       wasm.rsa();
@@ -506,18 +507,18 @@ export function parse (source: string, name = '@'): readonly [
       if (at.length === 0) at = null;
     }
     if (MINIMAL) {
-      imports.push({ n, t, s, e, ss, se, d, a, at } as unknown as Import);
+      imports.push({ n, t, s, e, ss, se, d, a } as unknown as Import);
     }
-    else if (t === ImportType.ImportMeta) {
+    else if (t === 3/*ImportMeta*/) {
       imports.push({ type: 'import-meta', start: s, end: e, importStart: ss, importEnd: se });
     }
     else if (d !== -1) {
-      const phase: ImportPhase = t === ImportType.DynamicSourcePhase ? 'source' : t === ImportType.DynamicDeferPhase ? 'defer' : null;
+      const phase: ImportPhase = t === 5/*DynamicSourcePhase*/ ? 'source' : t === 7/*DynamicDeferPhase*/ ? 'defer' : null;
       imports.push({ type: 'dynamic', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, dynamicStart: d, attributes: at, attributesStart: a, probablyTypeOnly: !!(importType & 16) });
     }
     else {
-      const phase: ImportPhase = t === ImportType.StaticSourcePhase ? 'source' : t === ImportType.StaticDeferPhase ? 'defer' : null;
-      imports.push({ type: t === ImportType.StaticReexportStar ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
+      const phase: ImportPhase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
+      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
     }
   }
   let exportPtr = wasm.re();

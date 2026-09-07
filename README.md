@@ -431,6 +431,7 @@ const source = `
   export var p = 5;
   import ('asdf');
   import.meta.url;
+  export { x as y } from 'external';
 `;
 
 const [imports, exports] = parse(source);
@@ -447,15 +448,14 @@ source.slice(imports[0].ss, imports[0].se);
 // "ss" = statement start
 // "se" = statement end
 
-// Import type is provided by the numeric `t` value
-// (see the ImportType enum; 8 is the `export * from 'mod'` module request)
+// Import type is provided by the numeric `t` value (see the ImportType
+// type; 8 is the `export * from 'mod'` module request)
 // Returns true
 imports[0].t === 1;
 
 // Returns "{ type: 'json' }"
 source.slice(imports[1].a, imports[1].se);
 // "a" = attribute start, -1 for no import attributes
-// (the parsed attribute list `at` is always null in the minimal build)
 
 // Dynamic imports have "d" as the start of the expression argument,
 // with -1 for static imports and -2 for import.meta
@@ -474,7 +474,18 @@ imports[3].d === -2;
 source.slice(exports[0].s, exports[0].e);
 // Returns "p"
 source.slice(exports[0].ls, exports[0].le);
+
+// For reexports, "ln" / "ls" / "le" report the imported name
+// Returns "y"
+exports[1].n;
+// Returns "x"
+exports[1].ln;
 ```
+
+When migrating a minimal-build consumer from v2: the always-null `at` field
+is dropped, reexports report their imported name in `ln` (previously
+`undefined`), and `ImportType` is a type-only `const enum` with no runtime
+export.
 
 Interpolated template specifiers are not globbed in the minimal build (`n` is
 `undefined` for them), and escape sequences in specifiers are decoded into
