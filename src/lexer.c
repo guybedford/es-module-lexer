@@ -143,6 +143,8 @@ static const char16_t KEYWORDS[] = {
 static uint32_t tsExportBindingDepth;
 
 static void resumeTsExportBindingList ();
+static bool isTsExportBindingSeparator ();
+static bool isTsTypeParameterPrefixKeyword ();
 #endif
 
 
@@ -246,7 +248,7 @@ static bool expressionContinuesAfterLineBreak (char16_t ch) {
     return *(pos + 1) != ch;
   if (ch == '!')
     return *(pos + 1) == '=';
-  if (ch == '(' || ch == '[' || ch == '`' || ch == '?' || ch == '.')
+  if (ch == '(' || ch == '[' || ch == '`' || ch == '?' || ch == ':' || ch == '.')
     return true;
   if (ch == '*' || ch == '/' || ch == '%' || ch == '&' || ch == '|' || ch == '^' ||
       ch == '<' || ch == '>' || ch == '=')
@@ -427,8 +429,20 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       break;
 #ifdef LEX_TS
     case '<':
-      if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER)
+      if (tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER) {
+        // No JS operand starts with '<', so this opens a type parameter list,
+        // whose defaults (`<T, U = T>() => ...`) would read as declarators.
+        if (openTokenDepth == 0 && (!isTokenValue(*lastTokenPos) || isTsTypeParameterPrefixKeyword())) {
+          char16_t* anglePos = pos;
+          if (skipTsBalanced())
+            pos--;
+          else
+            pos = anglePos;
+        }
+      }
+      else if (tsExportBindingDepth != 0) {
         tsExportBindingDepth++;
+      }
       break;
     case '>':
       if (tsExportBindingDepth > 1 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER && *(pos - 1) != '=')
@@ -456,8 +470,8 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         }
       }
 #ifdef LEX_TS
-      else if ((tsExportBindingDepth == 1 || tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER) &&
-          openTokenDepth == 0) {
+      else if (openTokenDepth == 0 && (tsExportBindingDepth == 1 ||
+          tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER && isTsExportBindingSeparator())) {
         resumeTsExportBindingList();
       }
 #endif
@@ -1744,7 +1758,7 @@ static void resumeTsExportBindingList () {
     char16_t* bindingStart = pos;
     ch = readBindingTarget(ch);
     if (pos == bindingStart)
-      return;
+      break;
     if (ch == ':') {
       tsExportBindingDepth = 1;
       return;
@@ -1753,12 +1767,60 @@ static void resumeTsExportBindingList () {
       tsExportBindingDepth = TS_EXPORT_BINDING_INITIALIZER;
       return;
     }
-    if (ch != ',') {
-      if (isBr(ch))
-        pos--;
-      return;
-    }
+    if (ch != ',')
+      break;
   }
+  // the list ended on the first char of whatever follows it
+  pos--;
+}
+
+// pos AT a depth-0 ',' of an export binding initializer; a pure peek. The
+// tokenizer cannot tell a type argument list from comparisons, so its commas
+// (`new Map<K, V>()`, `x as Foo<A, B>`) surface here too. A binding separator
+// is followed by declarators all the way to a `=`, `:` or the statement end,
+// which no type argument list tail (`V>()`, `B, C>`) satisfies.
+static bool isTsExportBindingSeparator () {
+  char16_t* savePos = pos;
+  bool separator = false;
+  while (pos++ < end) {
+    char16_t ch = commentWhitespace(true);
+    if (ch == '{' || ch == '[') {
+      if (!skipTsBalanced())
+        break;
+    } else {
+      char16_t* targetStart = pos;
+      readToWsOrPunctuator(ch);
+      if (pos == targetStart)
+        break;
+    }
+    char16_t* targetEnd = pos;
+    ch = commentWhitespace(true);
+    if (ch == ',')
+      continue;
+    if (ch == '=') {
+      separator = *(pos + 1) != '=' && *(pos + 1) != '>';
+    } else if (ch == ':' || ch == '!' && *(pos + 1) == ':' || ch == ';' || pos > end) {
+      separator = true;
+    } else if (!expressionContinuesAfterLineBreak(ch)) {
+      // ASI ends an uninitialized declarator
+      while (targetEnd < pos && !isBr(*targetEnd))
+        targetEnd++;
+      separator = targetEnd < pos;
+    }
+    break;
+  }
+  pos = savePos;
+  return separator;
+}
+
+// `async <T>() => ...` and `function <T>() {}` put a type parameter list after
+// a token that otherwise reads as a value.
+static bool isTsTypeParameterPrefixKeyword () {
+  char16_t* tokenEnd = lastTokenPos;
+  if (*tokenEnd == 'c')
+    return tokenEnd - 4 >= source && memcmp(tokenEnd - 3, SYNC, 4 * 2) == 0 && readPrecedingKeyword1(tokenEnd - 4, 'a');
+  return *tokenEnd == 'n' && tokenEnd - 7 >= source && memcmp(tokenEnd - 6, UNCTION, 7 * 2) == 0 &&
+    readPrecedingKeyword1(tokenEnd - 7, 'f');
 }
 #endif
 
@@ -2024,18 +2086,16 @@ bool tryParseExportStatement () {
         // `export const enum E`: the runtime value name, not a binding list.
         if ((ch == 'e' || ch == 'n') && tryTsValueDeclarationName(ch))
           return false;
-#endif
+        // Annotations and initializers tokenize in the main loop, which hands
+        // each proven separator back to the list.
+        pos--;
+        resumeTsExportBindingList();
+#else
         while (pos <= end) {
           char16_t* bindingStart = pos;
           ch = readBindingTarget(ch);
           if (pos == bindingStart)
             break;
-#ifdef LEX_TS
-          if (ch == ':') {
-            tsExportBindingDepth = 1;
-            return false;
-          }
-#endif
           if (ch == '=')
             ch = skipExpression(true);
           if (ch != ',')
@@ -2044,6 +2104,7 @@ bool tryParseExportStatement () {
           ch = commentWhitespace(true);
         }
         pos--;
+#endif
         return false;
       }
 
