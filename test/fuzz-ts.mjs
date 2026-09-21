@@ -128,8 +128,16 @@ function typeExpr (depth) {
 
 function typeParams () {
   if (!maybe(0.45)) return '';
-  const name = pick(NAME);
-  return `<${name}${maybe() ? ` extends ${typeExpr(1)}` : ''}${maybe() ? ` = ${typeExpr(1)}` : ''}>`;
+  const names = ['T', 'U', 'V'];
+  const count = 1 + Math.floor(rand() * names.length);
+  const params = [];
+  let defaulted = false;
+  for (let index = 0; index < count; index++) {
+    defaulted = defaulted || maybe();
+    params.push(`${names[index]}${maybe() ? ` extends ${typeExpr(1)}` : ''}` +
+      `${defaulted ? ` = ${typeExpr(1)}` : ''}`);
+  }
+  return `<${params.join(', ')}>`;
 }
 
 function heritage () {
@@ -179,9 +187,35 @@ function exportBindingList () {
     if (index === 0 || maybe(0.75))
       source += pick([': ', ':\n', ':/*c*/']) + typeExpr(2);
     if (declaration === 'const' || maybe(0.75))
-      source += pick([' = ', '\n= ', '/*\n*/ = ']) + pick(['1', 'value', "import('runtime')", '[1, 2]']);
+      source += pick([' = ', '\n= ', '/*\n*/ = ']) + pick([
+        '1',
+        'value',
+        "import('runtime')",
+        '[1, 2]',
+        'new Map<string, number>()',
+        'value as Pair<string, number>',
+        'call<T, U>(value)',
+        'call<T, U, V>(value)',
+        'async < 1',
+        'function named<T, U = string>(value: T) { return value }',
+        'class Named<T, U = string> {}',
+        'class <T, U = string> {}'
+      ]);
   }
   return source + ';';
+}
+
+function exportBindingPattern () {
+  const initializer = pick([
+    'new Map<string, number>()',
+    'value as Pair<string, number>',
+    'call<T, U>(value)',
+    'call<T, U, V>(value)'
+  ]);
+  return pick([
+    `export const { alpha = ${initializer}, beta } = value;`,
+    `export const [alpha = ${initializer}, beta] = value;`
+  ]);
 }
 
 function ambientBindingList () {
@@ -291,6 +325,7 @@ const FORMS = {
   'nested-type': () => nestStatement(`type ${pick(NAME)}${typeParams()}${w()}=${w()}${typeExpr(2)}${pick([';', '\n', ''])}`),
   'nested-interface': () => nestStatement(`interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`),
   'export-binding-list': exportBindingList,
+  'export-binding-pattern': exportBindingPattern,
   'export-declare-binding-list': ambientBindingList,
   'export-declare-body': ambientDeclaration,
   'export-abstract-class': () => `export${requiredWs()}abstract${requiredWs()}class FuzzAbstract {};`,

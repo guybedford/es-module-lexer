@@ -141,10 +141,15 @@ static const char16_t KEYWORDS[] = {
 // Zero is inactive; one is a top-level annotation and larger values are its
 // nested generic depth. UINT32_MAX denotes the initializer after an annotation.
 static uint32_t tsExportBindingDepth;
+static char16_t* tsTypeAngleEnd;
+static char16_t* tsTypeParameterKeywordEnd;
 
 static void resumeTsExportBindingList ();
 static bool isTsExportBindingSeparator ();
+static bool isTsBindingPatternSeparator (char16_t close);
 static bool isTsTypeParameterPrefixKeyword ();
+static bool isTsAsyncKeyword ();
+static bool isTsArrowAfterTypeParameters ();
 #endif
 
 
@@ -396,9 +401,21 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
 #endif
       goto skipTokenRun;
     case 'c':
+#ifdef LEX_TS
+      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 &&
+          isBrOrWsOrPunctuatorNotDot(*(pos + 5)))
+        tsTypeParameterKeywordEnd = pos + 5;
+#endif
       if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       goto skipTokenRun;
+#ifdef LEX_TS
+    case 'f':
+      if (*(pos + 1) == 'u' && keywordStart(pos) && memcmp(pos + 2, UNCTION + 1, 6 * 2) == 0 &&
+          isBrOrWsOrPunctuatorNotDot(*(pos + 8)))
+        tsTypeParameterKeywordEnd = pos + 8;
+      goto skipTokenRun;
+#endif
 #ifdef LEX_TS
     case 't':
       // Bare `type Foo = ...` (no `export`): skip the erased RHS so a buried
@@ -429,19 +446,20 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       break;
 #ifdef LEX_TS
     case '<':
-      if (tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER) {
+      if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
+        tsExportBindingDepth++;
+      } else {
         // No JS operand starts with '<', so this opens a type parameter list,
         // whose defaults (`<T, U = T>() => ...`) would read as declarators.
-        if (openTokenDepth == 0 && (!isTokenValue(*lastTokenPos) || isTsTypeParameterPrefixKeyword())) {
+        bool typeParameterPrefix = !isTokenValue(*lastTokenPos) || isTsTypeParameterPrefixKeyword();
+        bool asyncPrefix = !typeParameterPrefix && isTsAsyncKeyword();
+        if (typeParameterPrefix || asyncPrefix) {
           char16_t* anglePos = pos;
-          if (skipTsBalanced())
-            pos--;
-          else
-            pos = anglePos;
+          if (skipTsBalanced() && (!asyncPrefix || isTsArrowAfterTypeParameters()) &&
+              (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
+            tsTypeAngleEnd = pos;
+          pos = anglePos;
         }
-      }
-      else if (tsExportBindingDepth != 0) {
-        tsExportBindingDepth++;
       }
       break;
     case '>':
@@ -471,7 +489,8 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
       }
 #ifdef LEX_TS
       else if (openTokenDepth == 0 && (tsExportBindingDepth == 1 ||
-          tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER && isTsExportBindingSeparator())) {
+          tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER &&
+          (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsExportBindingSeparator())) {
         resumeTsExportBindingList();
       }
 #endif
@@ -626,6 +645,8 @@ bool parse () {
   lastSlashWasDivision = false;
 #ifdef LEX_TS
   tsExportBindingDepth = 0;
+  tsTypeAngleEnd = NULL;
+  tsTypeParameterKeywordEnd = NULL;
 #endif
   parse_error = 0;
   has_error = false;
@@ -1625,8 +1646,9 @@ bool tryTsAmbientDeclaration () {
 // not open) and leaving pos AT it. With `asi` set, a line break following a
 // value also terminates, so the statement after an automatic semicolon is never
 // read as another binding. Entry: pos AT the char before the expression (the
-// '=' of an initializer, or the '[' of a computed key).
-char16_t skipExpression (bool asi) {
+// '=' of an initializer, or the '[' of a computed key). `bindingClose` is the
+// enclosing destructuring closer, or zero outside a binding pattern.
+char16_t skipExpression (bool asi, char16_t bindingClose) {
   // Rides consumeToken (the single tokenizer) so the regex/keyword/import rules
   // match the main loop exactly. Ends at a ',' / ';' / enclosing closer at the
   // entry depth, or - with asi - a line break after a value. Entry: pos AT the
@@ -1640,7 +1662,14 @@ char16_t skipExpression (bool asi) {
     if (isWsNotBr(ch))
       continue;
     if (openTokenDepth == baseDepth) {
-      if (ch == ',' || ch == ';' || ch == ')' || ch == ']' || ch == '}')
+      if (ch == ',') {
+#ifdef LEX_TS
+        if (bindingClose == '\0' ||
+            (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsBindingPatternSeparator(bindingClose))
+#endif
+          return ch;
+      }
+      if (ch == ';' || ch == ')' || ch == ']' || ch == '}')
         return ch;
       if (asi && lastWasValue && isBr(ch))
         return ch;
@@ -1700,7 +1729,7 @@ void readBindingPattern () {
       char16_t* keyStart = pos;
       char16_t* keyEnd = pos;
       if (ch == '[') {
-        skipExpression(false); // computed key: pos AT matching ']'
+        skipExpression(false, close); // computed key: pos AT matching ']'
         pos++;
         ch = commentWhitespace(true);
       } else if (isQuote(ch)) {
@@ -1738,7 +1767,7 @@ void readBindingPattern () {
       ch = readBindingTarget(ch);
     }
     if (ch == '=')
-      ch = skipExpression(false); // default value
+      ch = skipExpression(false, close); // default value
     if (ch == ',') {
       pos++;
       ch = commentWhitespace(true);
@@ -1809,6 +1838,93 @@ static bool isTsExportBindingSeparator () {
     }
     break;
   }
+  if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
+    tsTypeAngleEnd = pos;
+  pos = savePos;
+  return separator;
+}
+
+// pos AT a depth-0 comma in a destructuring default; a pure peek. A pattern
+// separator must begin one complete binding element before the pattern closer.
+static bool isTsBindingPatternSeparator (char16_t close) {
+  char16_t* savePos = pos;
+  bool separator = false;
+  pos++;
+  char16_t ch = commentWhitespace(true);
+element:
+  if (ch == close) {
+    separator = true;
+    goto done;
+  }
+  if (close == ']' && ch == ',') {
+    pos++;
+    ch = commentWhitespace(true);
+    goto element;
+  }
+  if (ch == '.' && *(pos + 1) == '.' && *(pos + 2) == '.') {
+    pos += 3;
+    ch = commentWhitespace(true);
+    goto target;
+  }
+  if (close == '}') {
+    bool shorthand = false;
+    if (ch == '[') {
+      if (!skipTsBalanced())
+        goto done;
+      ch = commentWhitespace(true);
+    } else if (isQuote(ch)) {
+      stringLiteral(ch);
+      pos++;
+      ch = commentWhitespace(true);
+    } else if (ch >= '0' && ch <= '9') {
+      ch = *(++pos);
+      while ((ch >= '0' && ch <= '9') || ch == '.' || ch == '_' ||
+             ch == 'e' || ch == 'E' || ch == 'n' ||
+             ch == 'x' || ch == 'X' || ch == 'b' || ch == 'B' || ch == 'o' || ch == 'O' ||
+             (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') ||
+             ((ch == '+' || ch == '-') && (*(pos - 1) == 'e' || *(pos - 1) == 'E')))
+        ch = *(++pos);
+      ch = commentWhitespace(true);
+    } else {
+      char16_t* keyStart = pos;
+      readToWsOrPunctuator(ch);
+      if (pos == keyStart)
+        goto done;
+      shorthand = true;
+      ch = commentWhitespace(true);
+    }
+    if (ch != ':') {
+      if (shorthand && ch == ',') {
+        pos++;
+        ch = commentWhitespace(true);
+        goto element;
+      }
+      separator = shorthand && (ch == '=' || ch == close);
+      goto done;
+    }
+    pos++;
+    ch = commentWhitespace(true);
+  }
+target:
+  if (ch == '{' || ch == '[') {
+    if (!skipTsBalanced())
+      goto done;
+  } else {
+    char16_t* targetStart = pos;
+    readToWsOrPunctuator(ch);
+    if (pos == targetStart)
+      goto done;
+  }
+  ch = commentWhitespace(true);
+  if (ch == ',') {
+    pos++;
+    ch = commentWhitespace(true);
+    goto element;
+  }
+  separator = ch == '=' || ch == close;
+done:
+  if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
+    tsTypeAngleEnd = pos;
   pos = savePos;
   return separator;
 }
@@ -1816,11 +1932,59 @@ static bool isTsExportBindingSeparator () {
 // `async <T>() => ...` and `function <T>() {}` put a type parameter list after
 // a token that otherwise reads as a value.
 static bool isTsTypeParameterPrefixKeyword () {
+  if (tsTypeParameterKeywordEnd == NULL || tsTypeParameterKeywordEnd > pos)
+    return false;
+  char16_t* anglePos = pos;
+  pos = tsTypeParameterKeywordEnd;
+  char16_t ch = commentWhitespace(true);
+  if (ch == '*') {
+    pos++;
+    ch = commentWhitespace(true);
+  }
+  if (pos != anglePos) {
+    char16_t* nameStart = pos;
+    readToWsOrPunctuator(ch);
+    if (pos == nameStart || commentWhitespace(true) != '<') {
+      pos = anglePos;
+      return false;
+    }
+  }
+  pos = anglePos;
+  return true;
+}
+
+static bool isTsAsyncKeyword () {
   char16_t* tokenEnd = lastTokenPos;
-  if (*tokenEnd == 'c')
-    return tokenEnd - 4 >= source && memcmp(tokenEnd - 3, SYNC, 4 * 2) == 0 && readPrecedingKeyword1(tokenEnd - 4, 'a');
-  return *tokenEnd == 'n' && tokenEnd - 7 >= source && memcmp(tokenEnd - 6, UNCTION, 7 * 2) == 0 &&
-    readPrecedingKeyword1(tokenEnd - 7, 'f');
+  return *tokenEnd == 'c' && tokenEnd - 4 >= source && memcmp(tokenEnd - 3, SYNC, 4 * 2) == 0 &&
+    readPrecedingKeyword1(tokenEnd - 4, 'a');
+}
+
+// pos AT the char after a balanced `<...>` following `async`; a pure peek.
+static bool isTsArrowAfterTypeParameters () {
+  char16_t* savePos = pos;
+  char16_t ch = commentWhitespace(true);
+  if (ch != '(' || !skipTsBalanced()) {
+    pos = savePos;
+    return false;
+  }
+  ch = commentWhitespace(true);
+  if (ch == ':') {
+    while (++pos <= end) {
+      ch = *pos;
+      if (ch == '=' && *(pos + 1) == '>')
+        break;
+      if (ch == '<' || ch == '(' || ch == '[' || ch == '{') {
+        if (!skipTsBalanced())
+          break;
+        pos--;
+      } else {
+        skipTsTrivia(ch, false);
+      }
+    }
+  }
+  bool arrow = *pos == '=' && *(pos + 1) == '>';
+  pos = savePos;
+  return arrow;
 }
 #endif
 
@@ -2097,7 +2261,7 @@ bool tryParseExportStatement () {
           if (pos == bindingStart)
             break;
           if (ch == '=')
-            ch = skipExpression(true);
+            ch = skipExpression(true, '\0');
           if (ch != ',')
             break;
           pos++;

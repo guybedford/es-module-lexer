@@ -479,8 +479,35 @@ export const y = 1;`;
       [`export const f = <T, U = string>(a: T) => a, z = 1;`, ['f', 'z']],
       [`export const f = async <T, U = string>(a: T, b: U): Promise<[T, U]> => [a, b], z = 1;`, ['f', 'z']],
       [`export const f = function <T, U = string>(a: T): Map<T, U> {}, z = 1;`, ['f', 'z']],
+      [`export const f = function foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
+      [`export const f = function* /* c */ foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
       [`export const f = <T extends Foo<A, B>, U = () => void>(a: T) => a < b, z = 1;`, ['f', 'z']],
-      [`export const C = class extends Base<A, B> implements I<C, D> {}, z = 1;`, ['C', 'z']]
+      [`export const C = class extends Base<A, B> implements I<C, D> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class /* c */ Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class <T, U = string> {}, z = 1;`, ['C', 'z']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('type argument commas in destructuring defaults do not split the pattern', () => {
+    for (const [source, names] of [
+      [`export const { a = new Map<string, number>() } = obj;`, ['a']],
+      [`export const { a = x as Foo<B, C>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, C, D>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, 1>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, 'x'>, b } = obj;`, ['a', 'b']],
+      [`export const [a = foo<A, B>(x), b] = arr;`, ['a', 'b']],
+      [`export const [a = foo<A, B, C>(x), b] = arr;`, ['a', 'b']],
+      [`export const { a = 1, 'b': b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, 0: b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, [key]: b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, nested: { b } } = obj;`, ['a', 'b']],
+      [`export const { a = 1, ...rest } = obj;`, ['a', 'rest']],
+      [`export const [a = 1, , b] = arr;`, ['a', 'b']],
+      [`export const { a = x < y, b = 1, c = y > z } = obj;`, ['a', 'b', 'c']]
     ]) {
       const [, exports] = parse(source);
       assert.deepStrictEqual(exports.map(e => e.n), names, source);
@@ -488,9 +515,15 @@ export const y = 1;`;
   });
 
   test('import() types in initializer type arguments are still reported', () => {
-    const [imports, exports] = parse(`export const a = {} as Foo<import('types').A, B>, z = 1;`);
-    assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['types', true]]);
-    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'z']);
+    for (const [source, names] of [
+      [`export const a = {} as Foo<import('types').A, B>, z = 1;`, ['a', 'z']],
+      [`export const f = function foo<T = import('types').A, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
+      [`export const { a = {} as Foo<import('types').A, B>, b } = obj;`, ['a', 'b']]
+    ]) {
+      const [imports, exports] = parse(source);
+      assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['types', true]], source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
   });
 
   test('an uninitialized final binding does not consume the next statement', () => {
@@ -511,6 +544,7 @@ export const c = 1;`
   test('as / satisfies as plain identifiers and comparisons stay runtime', () => {
     for (const [source, names] of [
       [`export const a = as < b, c = 1;`, ['a', 'c']],
+      [`export const a = async < 1, z = y > 2;`, ['a', 'z']],
       [`export const a = x < y, b = 1, c = y > z;`, ['a', 'b', 'c']],
       [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
       [`export const a: T = x < y, b = 1;`, ['a', 'b']]
