@@ -80,6 +80,7 @@ static const char16_t KEYWORDS[] = {
   'o', 'd', 'u', 'l', 'e',
   'e', 'q', 'u', 'i', 'r', 'e',
   'l', 'o', 'b', 'a', 'l',
+  's', 'a', 't', 'i', 's', 'f', 'i', 'e', 's',
 #endif
 };
 
@@ -133,6 +134,7 @@ static const char16_t KEYWORDS[] = {
 #define ODULE (ONST + 4)
 #define EQUIRE (ODULE + 5)
 #define LOBAL (EQUIRE + 6)
+#define SATISFIES (LOBAL + 5)
 #endif
 
 #ifdef LEX_TS
@@ -145,11 +147,14 @@ static char16_t* tsTypeAngleEnd;
 static char16_t* tsTypeParameterKeywordEnd;
 
 static void resumeTsExportBindingList ();
-static bool isTsExportBindingSeparator ();
+static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate);
 static bool isTsBindingPatternSeparator (char16_t close);
 static bool isTsTypeParameterPrefixKeyword ();
+static bool isTsCallableTypePrefixKeyword ();
 static bool isTsAsyncKeyword ();
 static bool isTsArrowAfterTypeParameters ();
+static void scanTsTypeAngle (bool arrowPrefix) __attribute__((noinline));
+static void resolveTsTypeAngleCandidate (char16_t* candidate);
 #endif
 
 
@@ -373,7 +378,8 @@ static void classifyDynamicImportMember (Import* impt) {
 // lastTokenPos. Returns false on a syntax error so the caller can early-exit;
 // always_inline lets that fold into the hot loop without a per-token has_error
 // load (the comment flag, not an early `return`, keeps the fast-path shape).
-static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
+static inline __attribute__((always_inline)) bool consumeToken (
+    char16_t ch, bool tsTypeAngleScan, char16_t** tsTypeAngleCandidate) {
   bool isComment = false;
   switch (ch) {
     case 'e':
@@ -448,17 +454,19 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
         tsExportBindingDepth++;
-      } else {
-        // No JS operand starts with '<', so this opens a type parameter list,
-        // whose defaults (`<T, U = T>() => ...`) would read as declarators.
-        bool typeParameterPrefix = !isTokenValue(*lastTokenPos) || isTsTypeParameterPrefixKeyword();
-        bool asyncPrefix = !typeParameterPrefix && isTsAsyncKeyword();
-        if (typeParameterPrefix || asyncPrefix) {
-          char16_t* anglePos = pos;
-          if (skipTsBalanced() && (!asyncPrefix || isTsArrowAfterTypeParameters()) &&
-              (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
-            tsTypeAngleEnd = pos;
-          pos = anglePos;
+      } else if (tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER || tsTypeAngleScan) {
+        bool consecutiveAngle = *(pos - 1) == '<';
+        if (consecutiveAngle) {
+          // Resolve this only if a comma can affect binding parsing. Ordinary
+          // left shifts otherwise retain the tokenizer fast path.
+          *tsTypeAngleCandidate = pos;
+        } else {
+          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) || isTsTypeParameterPrefixKeyword();
+          bool arrowPrefix = !typeParameterPrefix &&
+            (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
+          if (!typeParameterPrefix && !arrowPrefix)
+            break;
+          scanTsTypeAngle(arrowPrefix);
         }
       }
       break;
@@ -490,15 +498,17 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
 #ifdef LEX_TS
       else if (openTokenDepth == 0 && (tsExportBindingDepth == 1 ||
           tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER &&
-          (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsExportBindingSeparator())) {
+          isTsExportBindingSeparator(tsTypeAngleCandidate))) {
         resumeTsExportBindingList();
       }
 #endif
       break;
     case ';':
 #ifdef LEX_TS
-      if (tsExportBindingDepth != 0 && openTokenDepth == 0)
+      if (tsExportBindingDepth != 0 && openTokenDepth == 0) {
         tsExportBindingDepth = 0;
+        *tsTypeAngleCandidate = NULL;
+      }
 #endif
       break;
     case ')':
@@ -592,6 +602,8 @@ static inline __attribute__((always_inline)) bool consumeToken (char16_t ch) {
         for (char16_t* commentPos = commentStart; commentPos <= pos; commentPos++) {
           if (isBr(*commentPos)) {
             resolveTsExportBindingLineBreak(isBr(*pos) ? pos : pos + 1);
+            if (tsExportBindingDepth == 0)
+              *tsTypeAngleCandidate = NULL;
             break;
           }
         }
@@ -634,6 +646,7 @@ bool parse () {
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
   OpenToken openTokenStack_[OPEN_TOKEN_STACK_SIZE];
   Import* dynamicImportStack_[DYNAMIC_IMPORT_STACK_SIZE];
+  char16_t* tsTypeAngleCandidate = NULL;
 
   facade = true;
 #ifndef LEXER_MIN
@@ -736,13 +749,16 @@ bool parse () {
 
     if (ch == 32 || ch < 14 && ch > 8) {
 #ifdef LEX_TS
-      if (isBr(ch) && tsExportBindingDepth != 0)
+      if (isBr(ch) && tsExportBindingDepth != 0) {
         resolveTsExportBindingLineBreak(pos);
+        if (tsExportBindingDepth == 0)
+          tsTypeAngleCandidate = NULL;
+      }
 #endif
       continue;
     }
 
-    if (!consumeToken(ch))
+    if (!consumeToken(ch, false, &tsTypeAngleCandidate))
       return false;
   }
 
@@ -1656,6 +1672,7 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
   // computed key); that char is the previous token, so a leading '/' is a regex.
   uint32_t baseDepth = openTokenDepth;
   bool lastWasValue = false;
+  char16_t* tsTypeAngleCandidate = NULL;
   lastTokenPos = pos;
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1664,6 +1681,10 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
     if (openTokenDepth == baseDepth) {
       if (ch == ',') {
 #ifdef LEX_TS
+        if (tsTypeAngleCandidate != NULL) {
+          resolveTsTypeAngleCandidate(tsTypeAngleCandidate);
+          tsTypeAngleCandidate = NULL;
+        }
         if (bindingClose == '\0' ||
             (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsBindingPatternSeparator(bindingClose))
 #endif
@@ -1677,7 +1698,7 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
     if (isBr(ch))
       continue;
     char16_t* before = lastTokenPos;
-    consumeToken(ch);
+    consumeToken(ch, bindingClose != '\0', &tsTypeAngleCandidate);
     if (has_error)
       return '\0';
     if (lastTokenPos == before) {
@@ -1808,7 +1829,13 @@ static void resumeTsExportBindingList () {
 // (`new Map<K, V>()`, `x as Foo<A, B>`) surface here too. A binding separator
 // is followed by declarators all the way to a `=`, `:` or the statement end,
 // which no type argument list tail (`V>()`, `B, C>`) satisfies.
-static bool isTsExportBindingSeparator () {
+static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
+  if (*tsTypeAngleCandidate != NULL) {
+    resolveTsTypeAngleCandidate(*tsTypeAngleCandidate);
+    *tsTypeAngleCandidate = NULL;
+  }
+  if (tsTypeAngleEnd != NULL && pos < tsTypeAngleEnd)
+    return false;
   char16_t* savePos = pos;
   bool separator = false;
   while (pos++ < end) {
@@ -1953,6 +1980,15 @@ static bool isTsTypeParameterPrefixKeyword () {
   return true;
 }
 
+static bool isTsCallableTypePrefixKeyword () {
+  if (*lastTokenPos == 'w')
+    return readPrecedingKeywordn(lastTokenPos, NEW, 3);
+  if (*lastTokenPos != 's')
+    return false;
+  return readPrecedingKeyword1(lastTokenPos - 1, 'a') ||
+    readPrecedingKeywordn(lastTokenPos, SATISFIES, 9);
+}
+
 static bool isTsAsyncKeyword () {
   char16_t* tokenEnd = lastTokenPos;
   return *tokenEnd == 'c' && tokenEnd - 4 >= source && memcmp(tokenEnd - 3, SYNC, 4 * 2) == 0 &&
@@ -1985,6 +2021,37 @@ static bool isTsArrowAfterTypeParameters () {
   bool arrow = *pos == '=' && *(pos + 1) == '>';
   pos = savePos;
   return arrow;
+}
+
+static void scanTsTypeAngle (bool arrowPrefix) {
+  char16_t* anglePos = pos;
+  bool previousHasError = has_error;
+  uint32_t previousParseError = parse_error;
+  bool valid = skipTsBalanced();
+  if (valid && arrowPrefix)
+    valid = isTsArrowAfterTypeParameters();
+  if (valid && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
+    tsTypeAngleEnd = pos;
+  has_error = previousHasError;
+  parse_error = previousParseError;
+  pos = anglePos;
+}
+
+// Resolves a consecutive-angle candidate only when the current comma can be a
+// binding separator. The scan is speculative and must not commit lexer errors.
+static void resolveTsTypeAngleCandidate (char16_t* candidate) {
+  if (candidate >= pos)
+    return;
+  char16_t* commaPos = pos;
+  pos = candidate;
+  bool previousHasError = has_error;
+  uint32_t previousParseError = parse_error;
+  if (skipTsBalanced() && isTsArrowAfterTypeParameters() &&
+      (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
+    tsTypeAngleEnd = pos;
+  has_error = previousHasError;
+  parse_error = previousParseError;
+  pos = commaPos;
 }
 #endif
 

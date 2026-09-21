@@ -199,7 +199,12 @@ function exportBindingList () {
         'async < 1',
         'function named<T, U = string>(value: T) { return value }',
         'class Named<T, U = string> {}',
-        'class <T, U = string> {}'
+        'class <T, U = string> {}',
+        'foo<<T, U = string>() => Map<T, U>, X>()',
+        'value as <T, U = string>() => Map<T, U>',
+        'value satisfies <T, U = string>() => Map<T, U>',
+        'value as new <T, U = string>() => Map<T, U>',
+        'value as abstract new <T, U = string>() => Map<T, U>'
       ]);
   }
   return source + ';';
@@ -210,7 +215,10 @@ function exportBindingPattern () {
     'new Map<string, number>()',
     'value as Pair<string, number>',
     'call<T, U>(value)',
-    'call<T, U, V>(value)'
+    'call<T, U, V>(value)',
+    'foo<<T, U = string>() => Map<T, U>, X>()',
+    'value as <T, U = string>() => Map<T, U>',
+    'value as new <T, U = string>() => Map<T, U>'
   ]);
   return pick([
     `export const { alpha = ${initializer}, beta } = value;`,
@@ -326,6 +334,7 @@ const FORMS = {
   'nested-interface': () => nestStatement(`interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`),
   'export-binding-list': exportBindingList,
   'export-binding-pattern': exportBindingPattern,
+  'left-shift-before-regexp': () => `export const __fuzz_shift_value = 1 << 2, __fuzz_regexp = /"/g;`,
   'export-declare-binding-list': ambientBindingList,
   'export-declare-body': ambientDeclaration,
   'export-abstract-class': () => `export${requiredWs()}abstract${requiredWs()}class FuzzAbstract {};`,

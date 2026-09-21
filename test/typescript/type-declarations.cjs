@@ -482,6 +482,11 @@ export const y = 1;`;
       [`export const f = function foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
       [`export const f = function* /* c */ foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
       [`export const f = <T extends Foo<A, B>, U = () => void>(a: T) => a < b, z = 1;`, ['f', 'z']],
+      [`export const a = foo<<T, U = string>() => Map<T, U>, X>(), z = 1;`, ['a', 'z']],
+      [`export const a = x as <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x satisfies <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x as new <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x as abstract new <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
       [`export const C = class extends Base<A, B> implements I<C, D> {}, z = 1;`, ['C', 'z']],
       [`export const C = class Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
       [`export const C = class /* c */ Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
@@ -501,6 +506,8 @@ export const y = 1;`;
       [`export const { a = x as Foo<B, 'x'>, b } = obj;`, ['a', 'b']],
       [`export const [a = foo<A, B>(x), b] = arr;`, ['a', 'b']],
       [`export const [a = foo<A, B, C>(x), b] = arr;`, ['a', 'b']],
+      [`export const { a = foo<<T, U = string>() => Map<T, U>, X>(), b } = obj;`, ['a', 'b']],
+      [`export const [a = x as new <T, U = string>() => Map<T, U>, b] = arr;`, ['a', 'b']],
       [`export const { a = 1, 'b': b } = obj;`, ['a', 'b']],
       [`export const { a = 1, 0: b } = obj;`, ['a', 'b']],
       [`export const { a = 1, [key]: b } = obj;`, ['a', 'b']],
@@ -548,6 +555,17 @@ export const c = 1;`
       [`export const a = x < y, b = 1, c = y > z;`, ['a', 'b', 'c']],
       [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
       [`export const a: T = x < y, b = 1;`, ['a', 'b']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('left shifts do not start a type parameter scan', () => {
+    for (const [source, names] of [
+      [`1 << 2; /"/g;`, []],
+      [`export const value = 1 << 2; /"/g;`, ['value']],
+      [`export const value = 1 << 2, regexp = /"/g;`, ['value', 'regexp']]
     ]) {
       const [, exports] = parse(source);
       assert.deepStrictEqual(exports.map(e => e.n), names, source);
