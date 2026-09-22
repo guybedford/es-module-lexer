@@ -98,29 +98,68 @@ function templateType (depth) {
 }
 
 // A type expression, biased to bury an import() and to exercise the RHS scanner.
+/**
+ * @param {number} depth
+ */
 function typeExpr (depth) {
   if (depth <= 0)
-    return pick(['A', 'string', 'number', `import(${pick(SPEC)}).T`, 'X.Y.Z', '`plain`', stringLiteralType()]);
+    return pick([
+      'A',
+      'X.Y.Z',
+      'any',
+      'unknown',
+      'string',
+      'number',
+      'bigint',
+      'symbol',
+      'boolean',
+      'undefined',
+      'never',
+      'object',
+      'void',
+      'this',
+      'true',
+      'false',
+      'null',
+      '1',
+      '-1',
+      '1n',
+      '`plain`',
+      `import(${pick(SPEC)}).T`,
+      `typeof import(${pick(SPEC)}).value`,
+      `import(${pick(SPEC)}, { with: { type: 'json' } }).default`,
+      stringLiteralType()
+    ]);
   const forms = [
     () => `${typeExpr(depth - 1)}${w()}|${w()}${typeExpr(depth - 1)}`,
     () => `${typeExpr(depth - 1)}${w()}&${w()}${typeExpr(depth - 1)}`,
     () => `keyof${requiredWs()}${typeExpr(depth - 1)}`,
     () => `typeof${requiredWs()}${pick(NAME)}`,
-    () => `readonly${requiredWs()}${typeExpr(depth - 1)}[]`,
+    () => `typeof${requiredWs()}fn<${typeExpr(depth - 1)}, ${typeExpr(depth - 1)}>`,
+    () => `readonly${requiredWs()}(${typeExpr(depth - 1)})[]`,
     () => `unique${requiredWs()}symbol`,
     () => `infer${requiredWs()}${pick(NAME)}`,
-    () => `new${requiredWs()}() => ${typeExpr(depth - 1)}`,
-    () => `abstract${requiredWs()}new () => ${typeExpr(depth - 1)}`,
+    () => `new${requiredWs()}<T, U>() => ${typeExpr(depth - 1)}`,
+    () => `abstract${requiredWs()}new <T, U>() => ${typeExpr(depth - 1)}`,
     () => `{ ${pick(NAME)}: ${typeExpr(depth - 1)}; m(): ${typeExpr(depth - 1)} }`,
+    () => `{ readonly ${pick(NAME)}?: ${typeExpr(depth - 1)}; new <T, U>(): ${typeExpr(depth - 1)} }`,
+    () => `{ <T, U>(value: T): ${typeExpr(depth - 1)} }`,
     () => `{ [${pick(NAME)} in ${typeExpr(depth - 1)}]: ${typeExpr(depth - 1)} }`,
+    () => `{ readonly [K in keyof T as \`get\${Capitalize<string & K>}\`]-?: ${typeExpr(depth - 1)} }`,
     () => `${typeExpr(depth - 1)}[${typeExpr(depth - 1)}]`,
     () => `(${typeExpr(depth - 1)})`,
     () => `${typeExpr(depth - 1)}[]`,
     () => `[${typeExpr(depth - 1)}, ${typeExpr(depth - 1)}]`,
+    () => `[first: ${typeExpr(depth - 1)}, second?: ${typeExpr(depth - 1)}, ...rest: ${typeExpr(depth - 1)}[]]`,
     () => `(${pick(NAME)}: ${typeExpr(depth - 1)}) => ${typeExpr(depth - 1)}`,
+    () => `(value: ${typeExpr(depth - 1)}) => value is ${typeExpr(depth - 1)}`,
+    () => `(value: ${typeExpr(depth - 1)}) => asserts value is ${typeExpr(depth - 1)}`,
     () => `(${w()}) => ${typeExpr(depth - 1)}`,
     () => templateType(depth - 1),
     () => `Array<${typeExpr(depth - 1)}>`,
+    () => `Pair<${typeExpr(depth - 1)}, ${typeExpr(depth - 1)}>`,
+    () => `Namespace.Type<${typeExpr(depth - 1)}, ${typeExpr(depth - 1)}>`,
+    () => `import(${pick(SPEC)}).Type<${typeExpr(depth - 1)}, ${typeExpr(depth - 1)}>`,
     () => `${typeExpr(depth - 1)} extends ${typeExpr(depth - 1)} ? ${typeExpr(depth - 1)} : ${typeExpr(depth - 1)}`,
   ];
   return pick(forms)();
@@ -175,6 +214,50 @@ function nestStatement (statement) {
   ]);
 }
 
+function bindingInitializer () {
+  const nestedType = pick([
+    'Foo<Bar<A, B>, Baz<C, D>>',
+    '{ readonly value?: A; new <T, U>(): Foo<T, U> }',
+    'readonly [first: A, second?: B, ...rest: C[]]',
+    'T extends Promise<infer U> ? U : never',
+    '`pre${A}-${B}post`',
+    `import(${pick(SPEC)}).Foo<A, B>`
+  ]);
+  const prefixedType = pick([
+    `keyof${requiredWs()}B`,
+    `typeof${requiredWs()}input`,
+    `readonly${requiredWs()}B[]`,
+    `unique${requiredWs()}symbol`,
+    `abstract${requiredWs()}new () => B`
+  ]);
+  return pick([
+    '1',
+    'value',
+    "import('runtime')",
+    '[1, 2]',
+    'new Map<string, number>()',
+    `value as ${nestedType}`,
+    `value satisfies ${nestedType}`,
+    `<${nestedType}>value`,
+    `call<A, ${prefixedType}>(value)`,
+    `call<A, ${prefixedType}, V>(value)`,
+    `call<A, ${prefixedType}, ${prefixedType}, V>(value)`,
+    `new Constructor<A, ${prefixedType}>()`,
+    `tag<A, ${prefixedType}>\`value\``,
+    `fn<A, ${prefixedType}>`,
+    'async < 1',
+    'async <const T extends A = A, U = string>(value: T) => value',
+    'function named<const T extends A = A, U = string>(value: T) { return value }',
+    'class Named<in T, out U> {}',
+    'class <T, U = string> {}',
+    'foo<<T, U = string>() => Map<T, U>, X>()',
+    'value as <T, U = string>() => Map<T, U>',
+    'value satisfies <T, U = string>() => Map<T, U>',
+    'value as new <T, U = string>() => Map<T, U>',
+    'value as abstract new <T, U = string>() => Map<T, U>'
+  ]);
+}
+
 function exportBindingList () {
   const declaration = pick(['const', 'let']);
   const names = ['alpha', 'beta', 'gamma', 'delta'];
@@ -187,39 +270,13 @@ function exportBindingList () {
     if (index === 0 || maybe(0.75))
       source += pick([': ', ':\n', ':/*c*/']) + typeExpr(2);
     if (declaration === 'const' || maybe(0.75))
-      source += pick([' = ', '\n= ', '/*\n*/ = ']) + pick([
-        '1',
-        'value',
-        "import('runtime')",
-        '[1, 2]',
-        'new Map<string, number>()',
-        'value as Pair<string, number>',
-        'call<T, U>(value)',
-        'call<T, U, V>(value)',
-        'async < 1',
-        'function named<T, U = string>(value: T) { return value }',
-        'class Named<T, U = string> {}',
-        'class <T, U = string> {}',
-        'foo<<T, U = string>() => Map<T, U>, X>()',
-        'value as <T, U = string>() => Map<T, U>',
-        'value satisfies <T, U = string>() => Map<T, U>',
-        'value as new <T, U = string>() => Map<T, U>',
-        'value as abstract new <T, U = string>() => Map<T, U>'
-      ]);
+      source += pick([' = ', '\n= ', '/*\n*/ = ']) + bindingInitializer();
   }
   return source + ';';
 }
 
 function exportBindingPattern () {
-  const initializer = pick([
-    'new Map<string, number>()',
-    'value as Pair<string, number>',
-    'call<T, U>(value)',
-    'call<T, U, V>(value)',
-    'foo<<T, U = string>() => Map<T, U>, X>()',
-    'value as <T, U = string>() => Map<T, U>',
-    'value as new <T, U = string>() => Map<T, U>'
-  ]);
+  const initializer = bindingInitializer();
   return pick([
     `export const { alpha = ${initializer}, beta } = value;`,
     `export const [alpha = ${initializer}, beta] = value;`
@@ -334,6 +391,14 @@ const FORMS = {
   'nested-interface': () => nestStatement(`interface${requiredWs()}${pick(NAME)}${typeParams()}${heritage()} ${interfaceBody()}`),
   'export-binding-list': exportBindingList,
   'export-binding-pattern': exportBindingPattern,
+  'contextual-binding-asi': () => {
+    const name = pick(['abstract', 'infer', 'keyof', 'readonly', 'unique']);
+    return `export let alpha = 1, ${name}\nexport const beta = 1;`;
+  },
+  'contextual-binding-angle': () => {
+    const name = pick(['abstract', 'infer', 'keyof', 'readonly', 'unique']);
+    return `export let alpha = x < y, ${name}\nfoo > (bar);`;
+  },
   'left-shift-before-regexp': () => `export const __fuzz_shift_value = 1 << 2, __fuzz_regexp = /"/g;`,
   'export-declare-binding-list': ambientBindingList,
   'export-declare-body': ambientDeclaration,

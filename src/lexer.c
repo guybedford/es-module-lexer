@@ -148,6 +148,9 @@ static char16_t* tsTypeParameterKeywordEnd;
 
 static void resumeTsExportBindingList ();
 static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate);
+static bool isTsTypeAnglePrefixContinuation (
+  char16_t* start, char16_t* afterEnd, char16_t* operand, char16_t* comma
+) __attribute__((noinline));
 static bool isTsBindingPatternSeparator (char16_t close);
 static bool isTsTypeParameterPrefixKeyword ();
 static bool isTsCallableTypePrefixKeyword ();
@@ -306,7 +309,8 @@ static void resolveTsExportBindingLineBreak (char16_t* lookahead) {
   pos = lookahead;
   char16_t ch = commentWhitespace(true);
   bool keep = tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER
-    ? !isTokenValue(*lastTokenPos) || ch == ',' || expressionContinuesAfterLineBreak(ch)
+    ? tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd ||
+      !isTokenValue(*lastTokenPos) || ch == ',' || expressionContinuesAfterLineBreak(ch)
     : tsTypeOperandPending() || continuesTsTypeAfterLineBreak(ch);
   if (!keep)
     tsExportBindingDepth = 0;
@@ -1824,6 +1828,63 @@ static void resumeTsExportBindingList () {
   pos--;
 }
 
+// A contextual binding name is a type prefix only when the comma is inside a
+// balanced angle list. `abstract` additionally needs a constructor signature.
+static bool isTsTypeAnglePrefixContinuation (
+    char16_t* start, char16_t* afterEnd, char16_t* operand, char16_t* comma) {
+  if (start == NULL || !isTsTypePrefixKeyword(start, afterEnd))
+    return false;
+  char16_t* savePos = pos;
+  bool previousHasError = has_error;
+  uint32_t previousParseError = parse_error;
+  bool continuation = true;
+  if (*start == 'a') {
+    pos = operand;
+    continuation = memcmp(pos, NEW, 3 * 2) == 0 && isTsKeywordSeparator(*(pos + 3));
+    if (continuation) {
+      pos += 3;
+      char16_t ch = commentWhitespace(true);
+      if (ch == '<' && skipTsBalanced())
+        ch = commentWhitespace(true);
+      continuation = ch == '(' && skipTsBalanced();
+      if (continuation) {
+        ch = commentWhitespace(true);
+        continuation = ch == '=' && *(pos + 1) == '>';
+      }
+    }
+  }
+  if (continuation) {
+    continuation = false;
+    pos = (char16_t*)export_statement_start;
+    while (pos < comma) {
+      char16_t ch = *pos;
+      if (ch == '<') {
+        char16_t* angleStart = pos;
+        if (skipTsBalanced()) {
+          if (comma < pos) {
+            if (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd)
+              tsTypeAngleEnd = pos;
+            continuation = true;
+            break;
+          }
+          continue;
+        }
+        pos = angleStart;
+      } else if (ch == '(' || ch == '[' || ch == '{') {
+        if (skipTsBalanced())
+          continue;
+      } else {
+        skipTsTrivia(ch, false);
+      }
+      pos++;
+    }
+  }
+  has_error = previousHasError;
+  parse_error = previousParseError;
+  pos = savePos;
+  return continuation;
+}
+
 // pos AT a depth-0 ',' of an export binding initializer; a pure peek. The
 // tokenizer cannot tell a type argument list from comparisons, so its commas
 // (`new Map<K, V>()`, `x as Foo<A, B>`) surface here too. A binding separator
@@ -1840,11 +1901,12 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
   bool separator = false;
   while (pos++ < end) {
     char16_t ch = commentWhitespace(true);
+    char16_t* targetStart = NULL;
     if (ch == '{' || ch == '[') {
       if (!skipTsBalanced())
         break;
     } else {
-      char16_t* targetStart = pos;
+      targetStart = pos;
       readToWsOrPunctuator(ch);
       if (pos == targetStart)
         break;
@@ -1861,7 +1923,8 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
       // ASI ends an uninitialized declarator
       while (targetEnd < pos && !isBr(*targetEnd))
         targetEnd++;
-      separator = targetEnd < pos;
+      separator = targetEnd < pos &&
+        !isTsTypeAnglePrefixContinuation(targetStart, targetEnd, pos, savePos);
     }
     break;
   }
@@ -1963,6 +2026,7 @@ static bool isTsTypeParameterPrefixKeyword () {
     return false;
   char16_t* anglePos = pos;
   pos = tsTypeParameterKeywordEnd;
+  tsTypeParameterKeywordEnd = NULL;
   char16_t ch = commentWhitespace(true);
   if (ch == '*') {
     pos++;
@@ -1971,7 +2035,7 @@ static bool isTsTypeParameterPrefixKeyword () {
   if (pos != anglePos) {
     char16_t* nameStart = pos;
     readToWsOrPunctuator(ch);
-    if (pos == nameStart || commentWhitespace(true) != '<') {
+    if (pos == nameStart || commentWhitespace(true) != '<' || pos != anglePos) {
       pos = anglePos;
       return false;
     }

@@ -497,6 +497,68 @@ export const y = 1;`;
     }
   });
 
+  test('official TypeScript type node notations preserve export bindings', () => {
+    const types = [
+      ['TypePredicate', '(input: unknown) => input is string'],
+      ['asserts TypePredicate', '(input: unknown) => asserts input is string'],
+      ['TypeReference', 'Namespace.Foo<A, B>'],
+      ['FunctionType', '<const T extends A = A, U extends B = B>(input: T) => U'],
+      ['ConstructorType', 'abstract new <T extends A = A, U = B>(input: T) => Foo<T, U>'],
+      ['TypeQuery', 'typeof value<A, B>'],
+      ['TypeLiteral', '{ readonly value?: A; new <T, U>(): Foo<T, U>; <T, U>(value: T): U }'],
+      ['ArrayType', 'Foo<A, B>[]'],
+      ['TupleType', '[A, B]'],
+      ['OptionalType', '[A, B?]'],
+      ['RestType', '[A, ...B[]]'],
+      ['UnionType', 'A | B'],
+      ['IntersectionType', 'A & B'],
+      ['ConditionalType', 'T extends A ? B : C'],
+      ['InferType', 'T extends Promise<infer U extends A> ? U : never'],
+      ['ParenthesizedType', '(A | B)'],
+      ['ThisType', 'this'],
+      ['keyof TypeOperator', 'keyof T'],
+      ['readonly TypeOperator', 'readonly A[]'],
+      ['unique TypeOperator', 'unique symbol'],
+      ['IndexedAccessType', 'T["key"]'],
+      ['MappedType', '{ readonly [K in keyof T as `get${Capitalize<string & K>}`]-?: T[K] }'],
+      ['LiteralType', '"x" | 1 | -2 | 3n | true | false | null'],
+      ['NamedTupleMember', 'readonly [first: A, second?: B, ...rest: C[]]'],
+      ['TemplateLiteralType and TemplateLiteralTypeSpan', '`pre${A}-${B}post`'],
+      ['ImportType', 'import("types").Foo<A, B>'],
+      ['typeof ImportType', 'typeof import("types").value'],
+      ['ImportType attributes', 'import("types", { with: { type: "json" } }).default'],
+      ['keyword types', 'any | unknown | string | number | bigint | symbol | boolean | undefined | never | object | void']
+    ];
+    for (const [notation, type] of types) {
+      const source = `export const value: ${type} = input, next = 1;`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(exportRecord => exportRecord.n), ['value', 'next'], notation);
+    }
+  });
+
+  test('TypeScript angle expressions preserve export bindings', () => {
+    for (const source of [
+      'export const value = <Foo<A, B>>input, next = 1;',
+      'export const value = fn<A, B>, next = 1;',
+      'export const value = tag<A, B>`value`, next = 1;',
+      'export const value = new Constructor<A, B>(), next = 1;',
+      'export const value = async <const T extends A = A, U = B>(input: T) => input, next = 1;',
+      'export const value = function named<const T extends A = A, U = B>(input: T) {}, next = 1;',
+      'export const value = class Named<in T, out U> {}, next = 1;',
+      'export const value = input as Foo<Bar<A, B>, Baz<C, D>>, next = 1;',
+      'export const value = input satisfies Foo<Bar<A, B>, Baz<C, D>>, next = 1;',
+      'export const value = new Constructor<A, unique\nsymbol>(), next = 1;',
+      'export const value = fn<A, typeof\ninput>(), next = 1;',
+      'export const value = fn<A, keyof\nB>(), next = 1;',
+      'export const value = fn<A, readonly\nB[]>(), next = 1;',
+      'export const value = fn<A, abstract\nnew () => B>(), next = 1;',
+      'export const value = fn<A, keyof\nB, typeof\ninput, readonly\nC[]>(), next = 1;'
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(exportRecord => exportRecord.n), ['value', 'next'], source);
+    }
+  });
+
   test('type argument commas in destructuring defaults do not split the pattern', () => {
     for (const [source, names] of [
       [`export const { a = new Map<string, number>() } = obj;`, ['a']],
@@ -546,6 +608,20 @@ export const c = 1;`
       assert.deepStrictEqual(imports.map(i => i.n), ['x'], source);
       assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'c'], source);
     }
+  });
+
+  test('contextual type operator names remain exported bindings at ASI', () => {
+    for (const name of ['abstract', 'infer', 'keyof', 'readonly', 'unique']) {
+      const source = `export let a = 1, ${name}
+export const c = 1;`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['a', name, 'c'], source);
+    }
+    const source = `class Named<in T, out U> {}
+export let a = x < y, abstract
+foo > (bar);`;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'abstract']);
   });
 
   test('as / satisfies as plain identifiers and comparisons stay runtime', () => {
