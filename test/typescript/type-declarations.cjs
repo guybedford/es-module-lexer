@@ -412,6 +412,20 @@ export const y = 1;`;
     }
   });
 
+  test('line-leading ternary branches keep the binding list open', () => {
+    for (const source of [
+      `export const alpha = cond
+        ? foo
+        : bar, beta = 1;`,
+      `export const alpha: number = cond
+        ? foo
+        : bar, beta = 1;`
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['alpha', 'beta'], source);
+    }
+  });
+
   test('annotation comments keep binding delimiters on the next line', () => {
     for (const source of [
       `export const alpha: number/*
@@ -421,6 +435,216 @@ export const y = 1;`;
     ]) {
       const [, exports] = parse(source);
       assert.deepStrictEqual(exports.map(e => e.n), ['alpha', 'beta'], source);
+    }
+  });
+
+  test('type argument commas in as / satisfies initializers do not split the binding list', () => {
+    for (const [source, names] of [
+      [`export const a = {} as Foo<B>;`, ['a']],
+      [`export const a = {} as Foo<B, C>;`, ['a']],
+      [`export const a = {} as Foo<B, C, D>;`, ['a']],
+      [`export const a = {} as Foo<B, 1>;`, ['a']],
+      [`export const a = {} as Foo<B, C>, z = 1;`, ['a', 'z']],
+      [`export const a = {} satisfies Foo<B, C>;`, ['a']],
+      [`export const a = {} as const satisfies Record<string, NonNullable<T['x']>['$case']>, z = 1;`, ['a', 'z']],
+      [`export const a = {} as Foo<Bar<B, C>>, z = 1;`, ['a', 'z']],
+      [`export const a = {} as Foo<B, C> satisfies Bar<D, E>, z = 1;`, ['a', 'z']],
+      [`export const a = x as Foo<B, C> || y, z = 1;`, ['a', 'z']],
+      [`export const a = {} as Foo<
+        B,
+        C
+      >, z = 1;`, ['a', 'z']],
+      [`export const a: Foo<B, C> = {} as Foo<B, C>, z = 1;`, ['a', 'z']],
+      [`export const a: Foo<B, C> = {} satisfies Foo<B, C>, z: Foo<D, E> = {} as Foo<D, E>;`, ['a', 'z']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('type argument and parameter commas in initializers do not split the binding list', () => {
+    for (const [source, names] of [
+      [`export const cache = new Map<string, number>();`, ['cache']],
+      [`export const a = foo<A, B>(x), z = 1;`, ['a', 'z']],
+      [`export const a: X = new Map<string, number>(), z = 1;`, ['a', 'z']],
+      [`export let a = foo<A, B, C>(x), y, z;`, ['a', 'y', 'z']],
+      [`export const a = foo<A, { b: B, c: C }, [D, E], 'f', -1, () => void>(x), z = 1;`, ['a', 'z']],
+      [`export const a = new Map<
+        string,
+        number,
+      >(), z = 1;`, ['a', 'z']],
+      [`export const s = useState<string, number>(1)
+        export const q = 1;`, ['s', 'q']],
+      [`export const f = <T, U>(a: T, b: U) => a, z = 1;`, ['f', 'z']],
+      [`export const f = <T, U = string>(a: T) => a, z = 1;`, ['f', 'z']],
+      [`export const f = async <T, U = string>(a: T, b: U): Promise<[T, U]> => [a, b], z = 1;`, ['f', 'z']],
+      [`export const f = function <T, U = string>(a: T): Map<T, U> {}, z = 1;`, ['f', 'z']],
+      [`export const f = function foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
+      [`export const f = function* /* c */ foo<T, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
+      [`export const f = <T extends Foo<A, B>, U = () => void>(a: T) => a < b, z = 1;`, ['f', 'z']],
+      [`export const a = foo<<T, U = string>() => Map<T, U>, X>(), z = 1;`, ['a', 'z']],
+      [`export const a = x as <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x satisfies <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x as new <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const a = x as abstract new <T, U = string>() => Map<T, U>, z = 1;`, ['a', 'z']],
+      [`export const C = class extends Base<A, B> implements I<C, D> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class /* c */ Foo<T, U = string> {}, z = 1;`, ['C', 'z']],
+      [`export const C = class <T, U = string> {}, z = 1;`, ['C', 'z']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('official TypeScript type node notations preserve export bindings', () => {
+    const types = [
+      ['TypePredicate', '(input: unknown) => input is string'],
+      ['asserts TypePredicate', '(input: unknown) => asserts input is string'],
+      ['TypeReference', 'Namespace.Foo<A, B>'],
+      ['FunctionType', '<const T extends A = A, U extends B = B>(input: T) => U'],
+      ['ConstructorType', 'abstract new <T extends A = A, U = B>(input: T) => Foo<T, U>'],
+      ['TypeQuery', 'typeof value<A, B>'],
+      ['TypeLiteral', '{ readonly value?: A; new <T, U>(): Foo<T, U>; <T, U>(value: T): U }'],
+      ['ArrayType', 'Foo<A, B>[]'],
+      ['TupleType', '[A, B]'],
+      ['OptionalType', '[A, B?]'],
+      ['RestType', '[A, ...B[]]'],
+      ['UnionType', 'A | B'],
+      ['IntersectionType', 'A & B'],
+      ['ConditionalType', 'T extends A ? B : C'],
+      ['InferType', 'T extends Promise<infer U extends A> ? U : never'],
+      ['ParenthesizedType', '(A | B)'],
+      ['ThisType', 'this'],
+      ['keyof TypeOperator', 'keyof T'],
+      ['readonly TypeOperator', 'readonly A[]'],
+      ['unique TypeOperator', 'unique symbol'],
+      ['IndexedAccessType', 'T["key"]'],
+      ['MappedType', '{ readonly [K in keyof T as `get${Capitalize<string & K>}`]-?: T[K] }'],
+      ['LiteralType', '"x" | 1 | -2 | 3n | true | false | null'],
+      ['NamedTupleMember', 'readonly [first: A, second?: B, ...rest: C[]]'],
+      ['TemplateLiteralType and TemplateLiteralTypeSpan', '`pre${A}-${B}post`'],
+      ['ImportType', 'import("types").Foo<A, B>'],
+      ['typeof ImportType', 'typeof import("types").value'],
+      ['ImportType attributes', 'import("types", { with: { type: "json" } }).default'],
+      ['keyword types', 'any | unknown | string | number | bigint | symbol | boolean | undefined | never | object | void']
+    ];
+    for (const [notation, type] of types) {
+      const source = `export const value: ${type} = input, next = 1;`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(exportRecord => exportRecord.n), ['value', 'next'], notation);
+    }
+  });
+
+  test('TypeScript angle expressions preserve export bindings', () => {
+    for (const source of [
+      'export const value = <Foo<A, B>>input, next = 1;',
+      'export const value = fn<A, B>, next = 1;',
+      'export const value = tag<A, B>`value`, next = 1;',
+      'export const value = new Constructor<A, B>(), next = 1;',
+      'export const value = async <const T extends A = A, U = B>(input: T) => input, next = 1;',
+      'export const value = function named<const T extends A = A, U = B>(input: T) {}, next = 1;',
+      'export const value = class Named<in T, out U> {}, next = 1;',
+      'export const value = input as Foo<Bar<A, B>, Baz<C, D>>, next = 1;',
+      'export const value = input satisfies Foo<Bar<A, B>, Baz<C, D>>, next = 1;',
+      'export const value = new Constructor<A, unique\nsymbol>(), next = 1;',
+      'export const value = fn<A, typeof\ninput>(), next = 1;',
+      'export const value = fn<A, keyof\nB>(), next = 1;',
+      'export const value = fn<A, readonly\nB[]>(), next = 1;',
+      'export const value = fn<A, abstract\nnew () => B>(), next = 1;',
+      'export const value = fn<A, keyof\nB, typeof\ninput, readonly\nC[]>(), next = 1;'
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(exportRecord => exportRecord.n), ['value', 'next'], source);
+    }
+  });
+
+  test('type argument commas in destructuring defaults do not split the pattern', () => {
+    for (const [source, names] of [
+      [`export const { a = new Map<string, number>() } = obj;`, ['a']],
+      [`export const { a = x as Foo<B, C>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, C, D>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, 1>, b } = obj;`, ['a', 'b']],
+      [`export const { a = x as Foo<B, 'x'>, b } = obj;`, ['a', 'b']],
+      [`export const [a = foo<A, B>(x), b] = arr;`, ['a', 'b']],
+      [`export const [a = foo<A, B, C>(x), b] = arr;`, ['a', 'b']],
+      [`export const { a = foo<<T, U = string>() => Map<T, U>, X>(), b } = obj;`, ['a', 'b']],
+      [`export const [a = x as new <T, U = string>() => Map<T, U>, b] = arr;`, ['a', 'b']],
+      [`export const { a = 1, 'b': b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, 0: b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, [key]: b } = obj;`, ['a', 'b']],
+      [`export const { a = 1, nested: { b } } = obj;`, ['a', 'b']],
+      [`export const { a = 1, ...rest } = obj;`, ['a', 'rest']],
+      [`export const [a = 1, , b] = arr;`, ['a', 'b']],
+      [`export const { a = x < y, b = 1, c = y > z } = obj;`, ['a', 'b', 'c']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('import() types in initializer type arguments are still reported', () => {
+    for (const [source, names] of [
+      [`export const a = {} as Foo<import('types').A, B>, z = 1;`, ['a', 'z']],
+      [`export const f = function foo<T = import('types').A, U = string>(a: T) {}, z = 1;`, ['f', 'z']],
+      [`export const { a = {} as Foo<import('types').A, B>, b } = obj;`, ['a', 'b']]
+    ]) {
+      const [imports, exports] = parse(source);
+      assert.deepStrictEqual(imports.map(i => [i.n, i.tp]), [['types', true]], source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('an uninitialized final binding does not consume the next statement', () => {
+    for (const source of [
+      `export let a: T = 1, b
+import 'x';
+export const c = 1;`,
+      `export let a = 1, b
+import 'x';
+export const c = 1;`
+    ]) {
+      const [imports, exports] = parse(source);
+      assert.deepStrictEqual(imports.map(i => i.n), ['x'], source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'c'], source);
+    }
+  });
+
+  test('contextual type operator names remain exported bindings at ASI', () => {
+    for (const name of ['abstract', 'infer', 'keyof', 'readonly', 'unique']) {
+      const source = `export let a = 1, ${name}
+export const c = 1;`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['a', name, 'c'], source);
+    }
+    const source = `class Named<in T, out U> {}
+export let a = x < y, abstract
+foo > (bar);`;
+    const [, exports] = parse(source);
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'abstract']);
+  });
+
+  test('as / satisfies as plain identifiers and comparisons stay runtime', () => {
+    for (const [source, names] of [
+      [`export const a = as < b, c = 1;`, ['a', 'c']],
+      [`export const a = async < 1, z = y > 2;`, ['a', 'z']],
+      [`export const a = x < y, b = 1, c = y > z;`, ['a', 'b', 'c']],
+      [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
+      [`export const a: T = x < y, b = 1;`, ['a', 'b']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('left shifts do not start a type parameter scan', () => {
+    for (const [source, names] of [
+      [`1 << 2; /"/g;`, []],
+      [`export const value = 1 << 2; /"/g;`, ['value']],
+      [`export const value = 1 << 2, regexp = /"/g;`, ['value', 'regexp']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
     }
   });
 
