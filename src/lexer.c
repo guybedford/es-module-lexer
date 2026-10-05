@@ -465,8 +465,11 @@ static inline __attribute__((always_inline)) bool consumeToken (
           // left shifts otherwise retain the tokenizer fast path.
           *tsTypeAngleCandidate = pos;
         } else {
-          bool postfixUpdate = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos;
-          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixUpdate || isTsTypeParameterPrefixKeyword();
+          // `x++ <`, `x-- <` and the non-null `x! <` end an operand, so the
+          // `<` is a comparison; every other operator precedes a type.
+          bool postfixOperator = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
+            *lastTokenPos == '!' && isTokenValue(*(lastTokenPos - 1));
+          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixOperator || isTsTypeParameterPrefixKeyword();
           bool arrowPrefix = !typeParameterPrefix &&
             (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
           if (!typeParameterPrefix && !arrowPrefix)

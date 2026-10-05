@@ -631,6 +631,10 @@ foo > (bar);`;
       [`export const a = x < y, b = 1, c = y > z;`, ['a', 'b', 'c']],
       [`export const a = x++ < 3, z = y > 2;`, ['a', 'z']],
       [`export const a = x-- < y, z = 1;`, ['a', 'z']],
+      [`export const a = x! < y, b = z > w;`, ['a', 'b']],
+      [`export const a = (x as any)! < y, b = z > w;`, ['a', 'b']],
+      [`export const a = foo<A, B>(x)! < y, b = z > w;`, ['a', 'b']],
+      [`export const a = !<Foo<A, B>>x, z = 1;`, ['a', 'z']],
       [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
       [`export const a: T = x < y, b = 1;`, ['a', 'b']]
     ]) {
