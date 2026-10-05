@@ -144,6 +144,8 @@ static const char16_t KEYWORDS[] = {
 // nested generic depth. UINT32_MAX denotes the initializer after an annotation.
 static uint32_t tsExportBindingDepth;
 static char16_t* tsTypeAngleEnd;
+static char16_t* tsExportInitializerStart;
+static bool tsPostfixNonNull;
 static char16_t* tsTypeParameterKeywordEnd;
 
 static void resumeTsExportBindingList ();
@@ -308,9 +310,12 @@ static void resolveTsExportBindingLineBreak (char16_t* lookahead) {
   char16_t* savePos = pos;
   pos = lookahead;
   char16_t ch = commentWhitespace(true);
+  // The '>' a separator lookahead stopped at closes a type argument list, which
+  // completes a value.
   bool keep = tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER
     ? tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd ||
-      !isTokenValue(*lastTokenPos) || ch == ',' || expressionContinuesAfterLineBreak(ch)
+      !isTokenValue(*lastTokenPos) && !(*lastTokenPos == '>' && lastTokenPos == tsTypeAngleEnd) ||
+      ch == ',' || expressionContinuesAfterLineBreak(ch)
     : tsTypeOperandPending() || continuesTsTypeAfterLineBreak(ch);
   if (!keep)
     tsExportBindingDepth = 0;
@@ -455,6 +460,9 @@ static inline __attribute__((always_inline)) bool consumeToken (
         return false;
       break;
 #ifdef LEX_TS
+    case '!':
+      tsPostfixNonNull = isTokenValue(*lastTokenPos) || *lastTokenPos == '!' && tsPostfixNonNull;
+      break;
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
         tsExportBindingDepth++;
@@ -468,7 +476,7 @@ static inline __attribute__((always_inline)) bool consumeToken (
           // `x++ <`, `x-- <` and the non-null `x! <` end an operand, so the
           // `<` is a comparison; every other operator precedes a type.
           bool postfixOperator = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
-            *lastTokenPos == '!' && isTokenValue(*(lastTokenPos - 1));
+            *lastTokenPos == '!' && tsPostfixNonNull;
           bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixOperator || isTsTypeParameterPrefixKeyword();
           bool arrowPrefix = !typeParameterPrefix &&
             (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
@@ -483,8 +491,10 @@ static inline __attribute__((always_inline)) bool consumeToken (
         tsExportBindingDepth--;
       break;
     case '=':
-      if (tsExportBindingDepth == 1 && openTokenDepth == 0 && *(pos + 1) != '>')
+      if (tsExportBindingDepth == 1 && openTokenDepth == 0 && *(pos + 1) != '>') {
         tsExportBindingDepth = TS_EXPORT_BINDING_INITIALIZER;
+        tsExportInitializerStart = pos;
+      }
       break;
 #endif
     case ']':
@@ -667,6 +677,8 @@ bool parse () {
 #ifdef LEX_TS
   tsExportBindingDepth = 0;
   tsTypeAngleEnd = NULL;
+  tsExportInitializerStart = NULL;
+  tsPostfixNonNull = false;
   tsTypeParameterKeywordEnd = NULL;
 #endif
   parse_error = 0;
@@ -1822,6 +1834,7 @@ static void resumeTsExportBindingList () {
       return;
     }
     if (ch == '=') {
+      tsExportInitializerStart = pos;
       tsExportBindingDepth = TS_EXPORT_BINDING_INITIALIZER;
       return;
     }
@@ -1844,7 +1857,8 @@ static bool isTsTypeAnglePrefixContinuation (
   bool continuation = true;
   if (*start == 'a') {
     pos = operand;
-    continuation = memcmp(pos, NEW, 3 * 2) == 0 && isTsKeywordSeparator(*(pos + 3));
+    continuation = memcmp(pos, NEW, 3 * 2) == 0 &&
+      (isTsKeywordSeparator(*(pos + 3)) || *(pos + 3) == '(' || *(pos + 3) == '<');
     if (continuation) {
       pos += 3;
       char16_t ch = commentWhitespace(true);
@@ -1859,19 +1873,20 @@ static bool isTsTypeAnglePrefixContinuation (
   }
   if (continuation) {
     continuation = false;
-    pos = (char16_t*)export_statement_start;
+    // The tightest list spanning the comma: an earlier comparison's '<' can
+    // pair with a later '>' (`a < b, fn<A, keyof\nB>, c = d > e`), and taking
+    // it would hide every binding up to that '>'.
+    char16_t* angleEnd = NULL;
+    pos = tsExportInitializerStart;
     while (pos < comma) {
       char16_t ch = *pos;
       if (ch == '<') {
         char16_t* angleStart = pos;
         if (skipTsBalanced()) {
-          if (comma < pos) {
-            if (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd)
-              tsTypeAngleEnd = pos;
-            continuation = true;
-            break;
-          }
-          continue;
+          if (pos <= comma)
+            continue;
+          if (angleEnd == NULL || pos < angleEnd)
+            angleEnd = pos;
         }
         pos = angleStart;
       } else if (ch == '(' || ch == '[' || ch == '{') {
@@ -1881,6 +1896,12 @@ static bool isTsTypeAnglePrefixContinuation (
         skipTsTrivia(ch, false);
       }
       pos++;
+    }
+    if (angleEnd != NULL) {
+      angleEnd--;
+      if (tsTypeAngleEnd == NULL || angleEnd > tsTypeAngleEnd)
+        tsTypeAngleEnd = angleEnd;
+      continuation = true;
     }
   }
   has_error = previousHasError;
@@ -1925,11 +1946,13 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
       separator = *(pos + 1) != '=' && *(pos + 1) != '>';
     } else if (ch == ':' || ch == '!' && *(pos + 1) == ':' || ch == ';' || pos > end) {
       separator = true;
-    } else if (!expressionContinuesAfterLineBreak(ch)) {
-      // ASI ends an uninitialized declarator
-      while (targetEnd < pos && !isBr(*targetEnd))
-        targetEnd++;
-      separator = targetEnd < pos &&
+    } else if (ch == '[' || !continuesTsTypeAfterLineBreak(ch) && ch != '>') {
+      // Postfix arrays and indexed access cannot start on a new line after a
+      // complete type. A prefix such as `keyof\n[]` still awaits its operand.
+      char16_t* lineBreak = targetEnd;
+      while (lineBreak < pos && !isBr(*lineBreak))
+        lineBreak++;
+      separator = lineBreak < pos &&
         !isTsTypeAnglePrefixContinuation(targetStart, targetEnd, pos, savePos);
     }
     break;

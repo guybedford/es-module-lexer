@@ -610,6 +610,15 @@ export const c = 1;`
     }
   });
 
+  test('an uninitialized binding before a line break is complete', () => {
+    for (const next of ['(foo)', '`t`', '+1', 'foo']) {
+      const source = `export let a = 1, b
+${next};`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
   test('contextual type operator names remain exported bindings at ASI', () => {
     for (const name of ['abstract', 'infer', 'keyof', 'readonly', 'unique']) {
       const source = `export let a = 1, ${name}
@@ -624,6 +633,20 @@ foo > (bar);`;
     assert.deepStrictEqual(exports.map(e => e.n), ['a', 'abstract']);
   });
 
+  test('a comparison before a generic with a prefix operator at a line break', () => {
+    for (const [source, names] of [
+      [`export const alpha = value < other, beta = fn<A, keyof
+B>, gamma = other > value;`, ['alpha', 'beta', 'gamma']],
+      [`export const alpha = value < other, beta = call<A, abstract
+new () => B>(x), gamma = other > value, delta = 1;`, ['alpha', 'beta', 'gamma', 'delta']],
+      [`export const { alpha = value < other, beta = fn<A, keyof
+B>, gamma = other > value } = obj;`, ['alpha', 'beta', 'gamma']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
   test('as / satisfies as plain identifiers and comparisons stay runtime', () => {
     for (const [source, names] of [
       [`export const a = as < b, c = 1;`, ['a', 'c']],
@@ -635,6 +658,10 @@ foo > (bar);`;
       [`export const a = (x as any)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = foo<A, B>(x)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = !<Foo<A, B>>x, z = 1;`, ['a', 'z']],
+      [`export const a = x!! < y, b = z > w;`, ['a', 'b']],
+      [`export const a = !!<Foo<A, B>>x, z = 1;`, ['a', 'z']],
+      [`export const a = foo<A, B>
+bar, c = 1;`, ['a']],
       [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
       [`export const a: T = x < y, b = 1;`, ['a', 'b']]
     ]) {
@@ -651,6 +678,84 @@ foo > (bar);`;
     ]) {
       const [, exports] = parse(source);
       assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
+  test('non-null assertions can follow trivia and repeat with trivia', () => {
+    for (const operand of [
+      'x !', 'x /*c*/ !', 'x! !', 'x! /*c*/ !', '(x) !', 'fn() !', 'obj.x !', 'arr[0] !'
+    ]) {
+      const source = `export const a = ${operand} < y, b = z > w;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
+  test('type prefix lookahead stays within its initializer', () => {
+    for (const [source, names] of [
+      ['export const a: unknown = fn<A, keyof\nB>(), b = 1;', ['a', 'b']],
+      ['export const a = fn<Foo<A, B>>() + fn<C, keyof\nD>(), b = 1;', ['a', 'b']],
+      ['export const a = x < y ? fn<A, keyof\nB>() : z, b = z > w;', ['a', 'b']],
+      ['export const a = x < y, b = fn<A, keyof\nB>(), c = z > w;', ['a', 'b', 'c']],
+      ['export const a = fn<A, keyof\nB, typeof\nx, readonly\nC[]>(), b = 1;', ['a', 'b']],
+      [`export const a = fn<${'Box<'.repeat(128)}X${'>'.repeat(128)}>() + fn<A, keyof\nB>(), b = 1;`, ['a', 'b']]
+    ]) {
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+    }
+  });
+
+  test('abstract constructor types need no whitespace after new', () => {
+    for (const constructor of ['new()=>B', 'new<T>()=>B', 'new/*c*/()=>B']) {
+      const source = `export const a = fn<A, abstract\n${constructor}>(), b = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
+  test('line-leading arrays after a bare binding end the declaration', () => {
+    for (const source of [
+      'export let a = 1, b\n[0];',
+      'export let a = 1, b\n[];',
+      'export let a = x < y, b\n[0];',
+      'export let a = fn<A, B>(), b\n[0];',
+      'export let a = x < (y + z), b\n[0] > (w);',
+      'export let a = 1, b\n[0]',
+      'export let a = 1, b\n[]',
+      'export let a = 1, b/*\n*/[0];',
+      'export let a = 1, b//comment\n[];',
+      'export let a = 1, keyof\n[];'
+    ]) {
+      const names = source.includes('keyof') ? ['a', 'keyof'] : ['a', 'b'];
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+    }
+  });
+
+  test('array type operands preserve prefix keywords and their token boundary', () => {
+    for (const type of [
+      'B[]', 'B[0]', 'B[][]', 'B[] | A', 'B[0] | A',
+      'keyof\n[]', 'keyof \n[]', 'keyof /*comment*/\n[]',
+      'readonly\n[number]', 'readonly /*\n*/[number]',
+      'keyof /*comment*/\nB', 'readonly /*comment*/\nB[]',
+      'typeof /*comment*/\nx', 'abstract /*comment*/\nnew () => B'
+    ]) {
+      const source = `export const a = fn<A, ${type}>(), b = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
+  test('completed instantiations with type prefixes preserve ASI and value continuations', () => {
+    for (const type of [
+      'keyof\nB', 'keyof /*comment*/\nB',
+      'readonly\nB[]', 'readonly /*comment*/\nB[]',
+      'typeof\nx', 'abstract\nnew () => B'
+    ]) {
+      for (const [next, names] of [
+        ['\nbar, c = 1;', ['a']],
+        ['/*\n*/bar, c = 1;', ['a']],
+        ['\n(w), b = 1;', ['a', 'b']],
+        ['\n[0], b = 1;', ['a', 'b']]
+      ]) {
+        const source = `export const a = fn<A, ${type}>${next}`;
+        assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+      }
     }
   });
 
