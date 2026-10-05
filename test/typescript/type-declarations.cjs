@@ -633,6 +633,20 @@ foo > (bar);`;
     assert.deepStrictEqual(exports.map(e => e.n), ['a', 'abstract']);
   });
 
+  test('a comparison before a generic with a prefix operator at a line break', () => {
+    for (const [source, names] of [
+      [`export const alpha = value < other, beta = fn<A, keyof
+B>, gamma = other > value;`, ['alpha', 'beta', 'gamma']],
+      [`export const alpha = value < other, beta = call<A, abstract
+new () => B>(x), gamma = other > value, delta = 1;`, ['alpha', 'beta', 'gamma', 'delta']],
+      [`export const { alpha = value < other, beta = fn<A, keyof
+B>, gamma = other > value } = obj;`, ['alpha', 'beta', 'gamma']]
+    ]) {
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), names, source);
+    }
+  });
+
   test('as / satisfies as plain identifiers and comparisons stay runtime', () => {
     for (const [source, names] of [
       [`export const a = as < b, c = 1;`, ['a', 'c']],

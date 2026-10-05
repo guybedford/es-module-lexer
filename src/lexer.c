@@ -1865,20 +1865,17 @@ static bool isTsTypeAnglePrefixContinuation (
   }
   if (continuation) {
     continuation = false;
+    // The tightest list spanning the comma: an earlier comparison's '<' can
+    // pair with a later '>' (`a < b, fn<A, keyof\nB>, c = d > e`), and taking
+    // it would hide every binding up to that '>'.
+    char16_t* angleEnd = NULL;
     pos = (char16_t*)export_statement_start;
     while (pos < comma) {
       char16_t ch = *pos;
       if (ch == '<') {
         char16_t* angleStart = pos;
-        if (skipTsBalanced()) {
-          if (comma < pos) {
-            if (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd)
-              tsTypeAngleEnd = pos;
-            continuation = true;
-            break;
-          }
-          continue;
-        }
+        if (skipTsBalanced() && comma < pos && (angleEnd == NULL || pos < angleEnd))
+          angleEnd = pos;
         pos = angleStart;
       } else if (ch == '(' || ch == '[' || ch == '{') {
         if (skipTsBalanced())
@@ -1887,6 +1884,11 @@ static bool isTsTypeAnglePrefixContinuation (
         skipTsTrivia(ch, false);
       }
       pos++;
+    }
+    if (angleEnd != NULL) {
+      if (tsTypeAngleEnd == NULL || angleEnd > tsTypeAngleEnd)
+        tsTypeAngleEnd = angleEnd;
+      continuation = true;
     }
   }
   has_error = previousHasError;
