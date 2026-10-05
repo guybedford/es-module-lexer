@@ -523,7 +523,7 @@ char16_t readExportAs (char16_t* startPos, char16_t* endPos);
 
 char16_t readBindingTarget (char16_t ch);
 void readBindingPattern ();
-char16_t skipExpression (bool asi);
+char16_t skipExpression (bool asi, char16_t bindingClose);
 bool isValueChar (char16_t c);
 
 #ifdef LEX_TS
