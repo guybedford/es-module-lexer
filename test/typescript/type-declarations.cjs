@@ -610,6 +610,15 @@ export const c = 1;`
     }
   });
 
+  test('an uninitialized binding before a line break is complete', () => {
+    for (const next of ['(foo)', '[0]', '`t`', '+1', '.x', 'foo']) {
+      const source = `export let a = 1, b
+${next};`;
+      const [, exports] = parse(source);
+      assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
   test('contextual type operator names remain exported bindings at ASI', () => {
     for (const name of ['abstract', 'infer', 'keyof', 'readonly', 'unique']) {
       const source = `export let a = 1, ${name}
@@ -635,6 +644,16 @@ foo > (bar);`;
       [`export const a = (x as any)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = foo<A, B>(x)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = !<Foo<A, B>>x, z = 1;`, ['a', 'z']],
+      [`export const a = x < y, b = z > (w);`, ['a', 'b']],
+      [`export const a = x < y, b = fn(z) > (w);`, ['a', 'b']],
+      [`export const a = x << y, b = z > (w);`, ['a', 'b']],
+      [`export const a = x < y, b = z >= w;`, ['a', 'b']],
+      [`export let a = x < y, b
+foo > (bar);`, ['a', 'b']],
+      [`export const a = foo<A, B>
+export const c = 1;`, ['a', 'c']],
+      [`export const a = foo<A, B>
+bar, c = 1;`, ['a']],
       [`export const as = 1, satisfies = as < 2, c = 3;`, ['as', 'satisfies', 'c']],
       [`export const a: T = x < y, b = 1;`, ['a', 'b']]
     ]) {

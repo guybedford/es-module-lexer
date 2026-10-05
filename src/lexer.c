@@ -81,6 +81,8 @@ static const char16_t KEYWORDS[] = {
   'e', 'q', 'u', 'i', 'r', 'e',
   'l', 'o', 'b', 'a', 'l',
   's', 'a', 't', 'i', 's', 'f', 'i', 'e', 's',
+  'i', 'm', 'p', 'l', 'e', 'm', 'e', 'n', 't', 's',
+  'a', 's', 's', 'e', 'r', 't', 's',
 #endif
 };
 
@@ -135,6 +137,8 @@ static const char16_t KEYWORDS[] = {
 #define EQUIRE (ODULE + 5)
 #define LOBAL (EQUIRE + 6)
 #define SATISFIES (LOBAL + 5)
+#define IMPLEMENTS (SATISFIES + 9)
+#define ASSERTS (IMPLEMENTS + 10)
 #endif
 
 #ifdef LEX_TS
@@ -143,21 +147,12 @@ static const char16_t KEYWORDS[] = {
 // Zero is inactive; one is a top-level annotation and larger values are its
 // nested generic depth. UINT32_MAX denotes the initializer after an annotation.
 static uint32_t tsExportBindingDepth;
+// End of the furthest type argument or parameter list proven in an export
+// initializer; a depth-0 comma before it is not a binding separator.
 static char16_t* tsTypeAngleEnd;
-static char16_t* tsTypeParameterKeywordEnd;
 
 static void resumeTsExportBindingList ();
-static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate);
-static bool isTsTypeAnglePrefixContinuation (
-  char16_t* start, char16_t* afterEnd, char16_t* operand, char16_t* comma
-) __attribute__((noinline));
-static bool isTsBindingPatternSeparator (char16_t close);
-static bool isTsTypeParameterPrefixKeyword ();
-static bool isTsCallableTypePrefixKeyword ();
-static bool isTsAsyncKeyword ();
-static bool isTsArrowAfterTypeParameters ();
-static void scanTsTypeAngle (bool arrowPrefix) __attribute__((noinline));
-static void resolveTsTypeAngleCandidate (char16_t* candidate);
+static void scanTsTypeAngle () __attribute__((noinline));
 #endif
 
 
@@ -308,9 +303,11 @@ static void resolveTsExportBindingLineBreak (char16_t* lookahead) {
   char16_t* savePos = pos;
   pos = lookahead;
   char16_t ch = commentWhitespace(true);
+  // The closing '>' of a proven type list completes a value.
   bool keep = tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER
     ? tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd ||
-      !isTokenValue(*lastTokenPos) || ch == ',' || expressionContinuesAfterLineBreak(ch)
+      !isTokenValue(*lastTokenPos) && lastTokenPos + 1 != tsTypeAngleEnd ||
+      ch == ',' || expressionContinuesAfterLineBreak(ch)
     : tsTypeOperandPending() || continuesTsTypeAfterLineBreak(ch);
   if (!keep)
     tsExportBindingDepth = 0;
@@ -382,8 +379,7 @@ static void classifyDynamicImportMember (Import* impt) {
 // lastTokenPos. Returns false on a syntax error so the caller can early-exit;
 // always_inline lets that fold into the hot loop without a per-token has_error
 // load (the comment flag, not an early `return`, keeps the fast-path shape).
-static inline __attribute__((always_inline)) bool consumeToken (
-    char16_t ch, bool tsTypeAngleScan, char16_t** tsTypeAngleCandidate) {
+static inline __attribute__((always_inline)) bool consumeToken (char16_t ch, bool tsTypeAngleScan) {
   bool isComment = false;
   switch (ch) {
     case 'e':
@@ -411,21 +407,9 @@ static inline __attribute__((always_inline)) bool consumeToken (
 #endif
       goto skipTokenRun;
     case 'c':
-#ifdef LEX_TS
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 &&
-          isBrOrWsOrPunctuatorNotDot(*(pos + 5)))
-        tsTypeParameterKeywordEnd = pos + 5;
-#endif
       if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
         nextBraceIsClass = true;
       goto skipTokenRun;
-#ifdef LEX_TS
-    case 'f':
-      if (*(pos + 1) == 'u' && keywordStart(pos) && memcmp(pos + 2, UNCTION + 1, 6 * 2) == 0 &&
-          isBrOrWsOrPunctuatorNotDot(*(pos + 8)))
-        tsTypeParameterKeywordEnd = pos + 8;
-      goto skipTokenRun;
-#endif
 #ifdef LEX_TS
     case 't':
       // Bare `type Foo = ...` (no `export`): skip the erased RHS so a buried
@@ -456,27 +440,12 @@ static inline __attribute__((always_inline)) bool consumeToken (
       break;
 #ifdef LEX_TS
     case '<':
-      if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
+      if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER)
         tsExportBindingDepth++;
-      } else if (tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER || tsTypeAngleScan) {
-        bool consecutiveAngle = *(pos - 1) == '<';
-        if (consecutiveAngle) {
-          // Resolve this only if a comma can affect binding parsing. Ordinary
-          // left shifts otherwise retain the tokenizer fast path.
-          *tsTypeAngleCandidate = pos;
-        } else {
-          // `x++ <`, `x-- <` and the non-null `x! <` end an operand, so the
-          // `<` is a comparison; every other operator precedes a type.
-          bool postfixOperator = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
-            *lastTokenPos == '!' && isTokenValue(*(lastTokenPos - 1));
-          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixOperator || isTsTypeParameterPrefixKeyword();
-          bool arrowPrefix = !typeParameterPrefix &&
-            (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
-          if (!typeParameterPrefix && !arrowPrefix)
-            break;
-          scanTsTypeAngle(arrowPrefix);
-        }
-      }
+      // `<<` is a shift; a '<' inside a proven list was covered by its scan.
+      else if ((tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER || tsTypeAngleScan) &&
+          (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && *(pos - 1) != '<')
+        scanTsTypeAngle();
       break;
     case '>':
       if (tsExportBindingDepth > 1 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER && *(pos - 1) != '=')
@@ -506,17 +475,15 @@ static inline __attribute__((always_inline)) bool consumeToken (
 #ifdef LEX_TS
       else if (openTokenDepth == 0 && (tsExportBindingDepth == 1 ||
           tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER &&
-          isTsExportBindingSeparator(tsTypeAngleCandidate))) {
+          (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd))) {
         resumeTsExportBindingList();
       }
 #endif
       break;
     case ';':
 #ifdef LEX_TS
-      if (tsExportBindingDepth != 0 && openTokenDepth == 0) {
+      if (tsExportBindingDepth != 0 && openTokenDepth == 0)
         tsExportBindingDepth = 0;
-        *tsTypeAngleCandidate = NULL;
-      }
 #endif
       break;
     case ')':
@@ -610,8 +577,6 @@ static inline __attribute__((always_inline)) bool consumeToken (
         for (char16_t* commentPos = commentStart; commentPos <= pos; commentPos++) {
           if (isBr(*commentPos)) {
             resolveTsExportBindingLineBreak(isBr(*pos) ? pos : pos + 1);
-            if (tsExportBindingDepth == 0)
-              *tsTypeAngleCandidate = NULL;
             break;
           }
         }
@@ -654,7 +619,6 @@ bool parse () {
   // (while gzip fixes this, still better to have ~10KiB ungzipped over ~20KiB)
   OpenToken openTokenStack_[OPEN_TOKEN_STACK_SIZE];
   Import* dynamicImportStack_[DYNAMIC_IMPORT_STACK_SIZE];
-  char16_t* tsTypeAngleCandidate = NULL;
 
   facade = true;
 #ifndef LEXER_MIN
@@ -667,7 +631,6 @@ bool parse () {
 #ifdef LEX_TS
   tsExportBindingDepth = 0;
   tsTypeAngleEnd = NULL;
-  tsTypeParameterKeywordEnd = NULL;
 #endif
   parse_error = 0;
   has_error = false;
@@ -757,16 +720,13 @@ bool parse () {
 
     if (ch == 32 || ch < 14 && ch > 8) {
 #ifdef LEX_TS
-      if (isBr(ch) && tsExportBindingDepth != 0) {
+      if (isBr(ch) && tsExportBindingDepth != 0)
         resolveTsExportBindingLineBreak(pos);
-        if (tsExportBindingDepth == 0)
-          tsTypeAngleCandidate = NULL;
-      }
 #endif
       continue;
     }
 
-    if (!consumeToken(ch, false, &tsTypeAngleCandidate))
+    if (!consumeToken(ch, false))
       return false;
   }
 
@@ -1680,7 +1640,6 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
   // computed key); that char is the previous token, so a leading '/' is a regex.
   uint32_t baseDepth = openTokenDepth;
   bool lastWasValue = false;
-  char16_t* tsTypeAngleCandidate = NULL;
   lastTokenPos = pos;
   while (pos++ < end) {
     char16_t ch = *pos;
@@ -1689,12 +1648,7 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
     if (openTokenDepth == baseDepth) {
       if (ch == ',') {
 #ifdef LEX_TS
-        if (tsTypeAngleCandidate != NULL) {
-          resolveTsTypeAngleCandidate(tsTypeAngleCandidate);
-          tsTypeAngleCandidate = NULL;
-        }
-        if (bindingClose == '\0' ||
-            (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsBindingPatternSeparator(bindingClose))
+        if (bindingClose == '\0' || tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd)
 #endif
           return ch;
       }
@@ -1706,7 +1660,7 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
     if (isBr(ch))
       continue;
     char16_t* before = lastTokenPos;
-    consumeToken(ch, bindingClose != '\0', &tsTypeAngleCandidate);
+    consumeToken(ch, bindingClose != '\0');
     if (has_error)
       return '\0';
     if (lastTokenPos == before) {
@@ -1832,302 +1786,202 @@ static void resumeTsExportBindingList () {
   pos--;
 }
 
-// A contextual binding name is a type prefix only when the comma is inside a
-// balanced angle list. `abstract` additionally needs a constructor signature.
-static bool isTsTypeAnglePrefixContinuation (
-    char16_t* start, char16_t* afterEnd, char16_t* operand, char16_t* comma) {
-  if (start == NULL || !isTsTypePrefixKeyword(start, afterEnd))
-    return false;
-  char16_t* savePos = pos;
-  bool previousHasError = has_error;
-  uint32_t previousParseError = parse_error;
-  bool continuation = true;
-  if (*start == 'a') {
-    pos = operand;
-    continuation = memcmp(pos, NEW, 3 * 2) == 0 && isTsKeywordSeparator(*(pos + 3));
-    if (continuation) {
-      pos += 3;
-      char16_t ch = commentWhitespace(true);
-      if (ch == '<' && skipTsBalanced())
-        ch = commentWhitespace(true);
-      continuation = ch == '(' && skipTsBalanced();
-      if (continuation) {
-        ch = commentWhitespace(true);
-        continuation = ch == '=' && *(pos + 1) == '>';
-      }
-    }
+// Inside a type list two plain names never sit side by side, so a word may
+// directly precede another only as a type operator or modifier (`keyof T`,
+// `const T`, `abstract new`), and a word may directly follow one only as
+// `extends` or `is`. Spans are [start, afterEnd).
+static bool isTsTypeWordBefore (char16_t* start, char16_t* afterEnd, char16_t* next, char16_t* nextEnd) {
+  size_t len = afterEnd - start;
+  if (len == 8 && memcmp(start, ABSTRACT, 8 * 2) == 0)
+    return nextEnd - next == 3 && memcmp(next, NEW, 3 * 2) == 0;
+  if (isTsTypePrefixKeyword(start, afterEnd))
+    return true;
+  switch (len) {
+    case 2: return *start == 'i' && (start[1] == 's' || start[1] == 'n');
+    case 3: return *start == 'o' && start[1] == 'u' && start[2] == 't';
+    case 5: return *start == 'c' && memcmp(start + 1, ONST, 4 * 2) == 0;
+    case 7: return memcmp(start, ASSERTS, 7 * 2) == 0 || *start == 'e' && memcmp(start + 1, XTENDS, 6 * 2) == 0;
+    default: return false;
   }
-  if (continuation) {
-    continuation = false;
-    pos = (char16_t*)export_statement_start;
-    while (pos < comma) {
-      char16_t ch = *pos;
-      if (ch == '<') {
-        char16_t* angleStart = pos;
-        if (skipTsBalanced()) {
-          if (comma < pos) {
-            if (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd)
-              tsTypeAngleEnd = pos;
-            continuation = true;
-            break;
-          }
-          continue;
-        }
-        pos = angleStart;
-      } else if (ch == '(' || ch == '[' || ch == '{') {
-        if (skipTsBalanced())
-          continue;
-      } else {
-        skipTsTrivia(ch, false);
-      }
-      pos++;
-    }
-  }
-  has_error = previousHasError;
-  parse_error = previousParseError;
-  pos = savePos;
-  return continuation;
 }
 
-// pos AT a depth-0 ',' of an export binding initializer; a pure peek. The
-// tokenizer cannot tell a type argument list from comparisons, so its commas
-// (`new Map<K, V>()`, `x as Foo<A, B>`) surface here too. A binding separator
-// is followed by declarators all the way to a `=`, `:` or the statement end,
-// which no type argument list tail (`V>()`, `B, C>`) satisfies.
-static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
-  if (*tsTypeAngleCandidate != NULL) {
-    resolveTsTypeAngleCandidate(*tsTypeAngleCandidate);
-    *tsTypeAngleCandidate = NULL;
-  }
-  if (tsTypeAngleEnd != NULL && pos < tsTypeAngleEnd)
-    return false;
-  char16_t* savePos = pos;
-  bool previousHasError = has_error;
-  uint32_t previousParseError = parse_error;
-  bool separator = false;
-  while (pos++ < end) {
-    char16_t ch = commentWhitespace(true);
-    char16_t* targetStart = NULL;
-    if (ch == '{' || ch == '[') {
-      if (!skipTsBalanced())
-        break;
-    } else {
-      targetStart = pos;
-      readToWsOrPunctuator(ch);
-      if (pos == targetStart)
-        break;
-    }
-    char16_t* targetEnd = pos;
-    ch = commentWhitespace(true);
-    if (ch == ',')
+static bool isTsTypeWordAfter (char16_t* start, char16_t* afterEnd) {
+  size_t len = afterEnd - start;
+  return len == 2 && *start == 'i' && start[1] == 's' ||
+    len == 7 && *start == 'e' && memcmp(start + 1, XTENDS, 6 * 2) == 0;
+}
+
+// `new (...) => T` and `import('m')` are the only words a '(' may follow.
+static bool isTsTypeCallWord (char16_t* start, char16_t* afterEnd) {
+  size_t len = afterEnd - start;
+  return len == 3 && memcmp(start, NEW, 3 * 2) == 0 || len == 6 && memcmp(start, IMPORT, 6 * 2) == 0;
+}
+
+// pos AT '<'. Reads the list the way TypeScript's speculative type argument
+// parse does, failing at the first token no type can contain: an expression or
+// statement operator, an unbalanced closer, a call on a plain name, or two
+// plain names in a row. Succeeds with pos AT the char after the closing '>'
+// and *typeDefault set when a `=` default sat at the top level of the list.
+static bool skipTsTypeList (bool* typeDefault) {
+  int depth = 0;
+  char16_t* wordStart = NULL;
+  char16_t* wordEnd = NULL;
+  while (pos <= end) {
+    char16_t ch = *pos;
+    if (isBrOrWs(ch)) {
+      pos++;
       continue;
-    if (ch == '=') {
-      separator = *(pos + 1) != '=' && *(pos + 1) != '>';
-    } else if (ch == ':' || ch == '!' && *(pos + 1) == ':' || ch == ';' || pos > end) {
-      separator = true;
-    } else if (!expressionContinuesAfterLineBreak(ch)) {
-      // ASI ends an uninitialized declarator
-      while (targetEnd < pos && !isBr(*targetEnd))
-        targetEnd++;
-      separator = targetEnd < pos &&
-        !isTsTypeAnglePrefixContinuation(targetStart, targetEnd, pos, savePos);
     }
-    break;
-  }
-  if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
-    tsTypeAngleEnd = pos;
-  has_error = previousHasError;
-  parse_error = previousParseError;
-  pos = savePos;
-  return separator;
-}
-
-// pos AT a depth-0 comma in a destructuring default; a pure peek. A pattern
-// separator must begin one complete binding element before the pattern closer.
-static bool isTsBindingPatternSeparator (char16_t close) {
-  char16_t* savePos = pos;
-  bool previousHasError = has_error;
-  uint32_t previousParseError = parse_error;
-  bool separator = false;
-  pos++;
-  char16_t ch = commentWhitespace(true);
-element:
-  if (ch == close) {
-    separator = true;
-    goto done;
-  }
-  if (close == ']' && ch == ',') {
-    pos++;
-    ch = commentWhitespace(true);
-    goto element;
-  }
-  if (ch == '.' && *(pos + 1) == '.' && *(pos + 2) == '.') {
-    pos += 3;
-    ch = commentWhitespace(true);
-    goto target;
-  }
-  if (close == '}') {
-    bool shorthand = false;
-    if (ch == '[') {
-      if (!skipTsBalanced())
-        goto done;
-      ch = commentWhitespace(true);
-    } else if (isQuote(ch)) {
-      stringLiteral(ch);
-      pos++;
-      ch = commentWhitespace(true);
-    } else if (ch >= '0' && ch <= '9') {
-      ch = *(++pos);
-      while ((ch >= '0' && ch <= '9') || ch == '.' || ch == '_' ||
-             ch == 'e' || ch == 'E' || ch == 'n' ||
-             ch == 'x' || ch == 'X' || ch == 'b' || ch == 'B' || ch == 'o' || ch == 'O' ||
-             (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') ||
-             ((ch == '+' || ch == '-') && (*(pos - 1) == 'e' || *(pos - 1) == 'E')))
-        ch = *(++pos);
-      ch = commentWhitespace(true);
-    } else {
-      char16_t* keyStart = pos;
-      readToWsOrPunctuator(ch);
-      if (pos == keyStart)
-        goto done;
-      shorthand = true;
-      ch = commentWhitespace(true);
+    if (isTokenRunChar(ch)) {
+      char16_t* start = pos;
+      if (readToWsOrPunctuator(ch) == '\0' && pos <= end)
+        return false;
+      if (wordStart != NULL && !isTsTypeWordBefore(wordStart, wordEnd, start, pos) && !isTsTypeWordAfter(start, pos))
+        return false;
+      wordStart = start;
+      wordEnd = pos;
+      continue;
     }
-    if (ch != ':') {
-      if (shorthand && ch == ',') {
-        pos++;
-        ch = commentWhitespace(true);
-        goto element;
-      }
-      separator = shorthand && (ch == '=' || ch == close);
-      goto done;
-    }
-    pos++;
-    ch = commentWhitespace(true);
-  }
-target:
-  if (ch == '{' || ch == '[') {
-    if (!skipTsBalanced())
-      goto done;
-  } else {
-    char16_t* targetStart = pos;
-    readToWsOrPunctuator(ch);
-    if (pos == targetStart)
-      goto done;
-  }
-  ch = commentWhitespace(true);
-  if (ch == ',') {
-    pos++;
-    ch = commentWhitespace(true);
-    goto element;
-  }
-  separator = ch == '=' || ch == close;
-done:
-  if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
-    tsTypeAngleEnd = pos;
-  has_error = previousHasError;
-  parse_error = previousParseError;
-  pos = savePos;
-  return separator;
-}
-
-// `async <T>() => ...` and `function <T>() {}` put a type parameter list after
-// a token that otherwise reads as a value.
-static bool isTsTypeParameterPrefixKeyword () {
-  if (tsTypeParameterKeywordEnd == NULL || tsTypeParameterKeywordEnd > pos)
-    return false;
-  char16_t* anglePos = pos;
-  pos = tsTypeParameterKeywordEnd;
-  tsTypeParameterKeywordEnd = NULL;
-  char16_t ch = commentWhitespace(true);
-  if (ch == '*') {
-    pos++;
-    ch = commentWhitespace(true);
-  }
-  if (pos != anglePos) {
-    char16_t* nameStart = pos;
-    readToWsOrPunctuator(ch);
-    if (pos == nameStart || commentWhitespace(true) != '<' || pos != anglePos) {
-      pos = anglePos;
-      return false;
-    }
-  }
-  pos = anglePos;
-  return true;
-}
-
-static bool isTsCallableTypePrefixKeyword () {
-  if (*lastTokenPos == 'w')
-    return readPrecedingKeywordn(lastTokenPos, NEW, 3);
-  if (*lastTokenPos != 's')
-    return false;
-  return readPrecedingKeyword1(lastTokenPos - 1, 'a') ||
-    readPrecedingKeywordn(lastTokenPos, SATISFIES, 9);
-}
-
-static bool isTsAsyncKeyword () {
-  char16_t* tokenEnd = lastTokenPos;
-  return *tokenEnd == 'c' && tokenEnd - 4 >= source && memcmp(tokenEnd - 3, SYNC, 4 * 2) == 0 &&
-    readPrecedingKeyword1(tokenEnd - 4, 'a');
-}
-
-// pos AT the char after a balanced `<...>` following `async`; a pure peek.
-static bool isTsArrowAfterTypeParameters () {
-  char16_t* savePos = pos;
-  char16_t ch = commentWhitespace(true);
-  if (ch != '(' || !skipTsBalanced()) {
-    pos = savePos;
-    return false;
-  }
-  ch = commentWhitespace(true);
-  if (ch == ':') {
-    while (++pos <= end) {
-      ch = *pos;
-      if (ch == '=' && *(pos + 1) == '>')
+    switch (ch) {
+      case '<':
+        if (*(pos + 1) == '=')
+          return false;
+        depth++;
         break;
-      if (ch == '<' || ch == '(' || ch == '[' || ch == '{') {
+      case '>':
+        if (*(pos + 1) == '=')
+          return false;
+        if (--depth == 0) {
+          pos++;
+          return true;
+        }
+        break;
+      case '(':
+        if (wordStart != NULL && !isTsTypeCallWord(wordStart, wordEnd))
+          return false;
+      case '[':
+      case '{':
         if (!skipTsBalanced())
-          break;
-        pos--;
-      } else {
-        skipTsTrivia(ch, false);
-      }
+          return false;
+        wordStart = NULL;
+        continue;
+      case '=':
+        if (*(pos + 1) == '>')
+          pos++;
+        else if (*(pos + 1) == '=')
+          return false;
+        else if (depth == 1)
+          *typeDefault = true;
+        break;
+      case '-':
+        if (!(*(pos + 1) >= '0' && *(pos + 1) <= '9'))
+          return false;
+        break;
+      case '&':
+      case '|':
+        if (*(pos + 1) == ch)
+          return false;
+        break;
+      case '?':
+        if (*(pos + 1) == '?' || *(pos + 1) == '.')
+          return false;
+        break;
+      case '/':
+      case '\'':
+      case '"':
+      case '`':
+        if (!skipTsTrivia(ch, false) || has_error)
+          return false;
+        break;
+      case ',':
+      case ':':
+      case '.':
+        break;
+      default:
+        return false;
     }
+    wordStart = NULL;
+    pos++;
   }
-  bool arrow = *pos == '=' && *(pos + 1) == '>';
-  pos = savePos;
-  return arrow;
+  return false;
 }
 
-static void scanTsTypeAngle (bool arrowPrefix) {
+// pos AT the char after a balanced list that followed a value. It is a type
+// argument list only where TypeScript reads one: before a call or tagged
+// template, a class body or heritage clause, a line break, or a token that
+// cannot start an expression. `<`, `>`, `+` and `-` never follow (shift and
+// unary ambiguity). A list with a default is a type parameter list, which only
+// a function or class continues.
+static bool canFollowTsTypeList (bool typeDefault) {
+  char16_t* start = pos;
+  char16_t ch = commentWhitespace(true);
+  if (ch == '{')
+    return true;
+  if (ch == '(') {
+    if (!typeDefault)
+      return true;
+    if (!skipTsBalanced())
+      return false;
+    ch = commentWhitespace(true);
+    return ch == '{' || ch == ':' || ch == '=' && *(pos + 1) == '>';
+  }
+  bool lineBreak = false;
+  for (char16_t* p = start; p < pos; p++) {
+    if (isBr(*p)) {
+      lineBreak = true;
+      break;
+    }
+  }
+  if (isTokenRunChar(ch) && !(ch >= '0' && ch <= '9') && ch != '\\') {
+    char16_t* wordStart = pos;
+    readToWsOrPunctuator(ch);
+    size_t len = pos - wordStart;
+    if (len == 7 && *wordStart == 'e' && memcmp(wordStart + 1, XTENDS, 6 * 2) == 0 ||
+        len == 10 && memcmp(wordStart, IMPLEMENTS, 10 * 2) == 0)
+      return true;
+    if (typeDefault)
+      return false;
+    return lineBreak ||
+      len == 2 && (*wordStart == 'i' && wordStart[1] == 'n' || *wordStart == 'a' && wordStart[1] == 's') ||
+      len == 9 && memcmp(wordStart, SATISFIES, 9 * 2) == 0 ||
+      len == 10 && memcmp(wordStart, INSTAN, 6 * 2) == 0 && wordStart[6] == 'c' && wordStart[7] == 'e' &&
+        wordStart[8] == 'o' && wordStart[9] == 'f';
+  }
+  if (typeDefault)
+    return false;
+  if (ch == '`')
+    return true;
+  if (ch == '<' || ch == '>' || ch == '+' || ch == '-')
+    return false;
+  if (lineBreak)
+    return true;
+  if (ch == '!')
+    return *(pos + 1) == '=';
+  return ch != '[' && !isQuote(ch) && !(ch >= '0' && ch <= '9') && ch != '~' && ch != '@' && ch != '#' && ch != '\\';
+}
+
+// pos AT a '<' in an export initializer or destructuring default; a pure peek
+// that extends tsTypeAngleEnd when the list is a type. In operand position no
+// JS token starts with '<', so any balanced list is a type assertion or type
+// parameter list. After a value it is type arguments only if TypeScript would
+// read it so. Postfix `++`, `--` and the non-null `!` end an operand.
+static void scanTsTypeAngle () {
   char16_t* anglePos = pos;
   bool previousHasError = has_error;
   uint32_t previousParseError = parse_error;
-  bool valid = skipTsBalanced();
-  if (valid && arrowPrefix)
-    valid = isTsArrowAfterTypeParameters();
-  if (valid && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
-    tsTypeAngleEnd = pos;
+  char16_t prev = *lastTokenPos;
+  bool postfixOperator = (prev == '+' || prev == '-') && *(lastTokenPos - 1) == prev ||
+    prev == '!' && isTokenValue(*(lastTokenPos - 1));
+  bool operand = !isTokenValue(prev) && !postfixOperator;
+  bool typeDefault = false;
+  if (skipTsTypeList(&typeDefault) && !has_error) {
+    char16_t* listEnd = pos;
+    if ((operand || canFollowTsTypeList(typeDefault)) && (tsTypeAngleEnd == NULL || listEnd > tsTypeAngleEnd))
+      tsTypeAngleEnd = listEnd;
+  }
   has_error = previousHasError;
   parse_error = previousParseError;
   pos = anglePos;
-}
-
-// Resolves a consecutive-angle candidate only when the current comma can be a
-// binding separator. The scan is speculative and must not commit lexer errors.
-static void resolveTsTypeAngleCandidate (char16_t* candidate) {
-  if (candidate >= pos)
-    return;
-  char16_t* commaPos = pos;
-  pos = candidate;
-  bool previousHasError = has_error;
-  uint32_t previousParseError = parse_error;
-  if (skipTsBalanced() && isTsArrowAfterTypeParameters() &&
-      (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
-    tsTypeAngleEnd = pos;
-  has_error = previousHasError;
-  parse_error = previousParseError;
-  pos = commaPos;
 }
 #endif
 
