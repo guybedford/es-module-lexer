@@ -703,6 +703,32 @@ bar, c = 1;`, ['a']],
     }
   });
 
+  test('nested type prefix lookahead selects the tightest list spanning its comma', () => {
+    for (const depth of [0, 1, 2, 8, 128]) {
+      for (const operand of [
+        'keyof\nB', 'keyof/*\n*/B', 'abstract\nnew () => B',
+        'keyof\nBox<A, B>', 'keyof\n{ left: "<"; right: ">" }',
+        'readonly\n[A, B]', 'keyof\n`left${Box<A>}right>`'
+      ]) {
+        const generic = `${'Box<'.repeat(depth)}A, ${operand}${'>'.repeat(depth)}`;
+        const source = `export const a = x < y ? fn<${generic}>() : z, b = z > w;`;
+        assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+      }
+    }
+  });
+
+  test('type prefix lookahead ignores completed lists and opaque delimiters', () => {
+    for (const prefix of [
+      'fn<Box<A, B>>() + ',
+      'fn<() => Box<A, B>, [A, B], { left: "<"; right: ">" }>() + ',
+      'fn<`left${Box<A>}right>`>() + ',
+      'x < y ? '
+    ]) {
+      const source = `export const a = ${prefix}fn<A, keyof\nBox<A, B>>()${prefix[0] === 'x' ? ' : z' : ''}, b = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
   test('abstract constructor types need no whitespace after new', () => {
     for (const constructor of ['new()=>B', 'new<T>()=>B', 'new/*c*/()=>B']) {
       const source = `export const a = fn<A, abstract\n${constructor}>(), b = 1;`;
