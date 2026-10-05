@@ -308,9 +308,12 @@ static void resolveTsExportBindingLineBreak (char16_t* lookahead) {
   char16_t* savePos = pos;
   pos = lookahead;
   char16_t ch = commentWhitespace(true);
+  // The '>' a separator lookahead stopped at closes a type argument list, which
+  // completes a value.
   bool keep = tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER
     ? tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd ||
-      !isTokenValue(*lastTokenPos) || ch == ',' || expressionContinuesAfterLineBreak(ch)
+      !isTokenValue(*lastTokenPos) && !(*lastTokenPos == '>' && lastTokenPos == tsTypeAngleEnd) ||
+      ch == ',' || expressionContinuesAfterLineBreak(ch)
     : tsTypeOperandPending() || continuesTsTypeAfterLineBreak(ch);
   if (!keep)
     tsExportBindingDepth = 0;
@@ -467,8 +470,11 @@ static inline __attribute__((always_inline)) bool consumeToken (
         } else {
           // `x++ <`, `x-- <` and the non-null `x! <` end an operand, so the
           // `<` is a comparison; every other operator precedes a type.
+          char16_t* operatorStart = lastTokenPos;
+          if (*lastTokenPos == '!')
+            while (*(operatorStart - 1) == '!') operatorStart--;
           bool postfixOperator = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
-            *lastTokenPos == '!' && isTokenValue(*(lastTokenPos - 1));
+            *lastTokenPos == '!' && isTokenValue(*(operatorStart - 1));
           bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixOperator || isTsTypeParameterPrefixKeyword();
           bool arrowPrefix = !typeParameterPrefix &&
             (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
@@ -1925,8 +1931,9 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
       separator = *(pos + 1) != '=' && *(pos + 1) != '>';
     } else if (ch == ':' || ch == '!' && *(pos + 1) == ':' || ch == ';' || pos > end) {
       separator = true;
-    } else if (!expressionContinuesAfterLineBreak(ch)) {
-      // ASI ends an uninitialized declarator
+    } else if (!continuesTsTypeAfterLineBreak(ch) && ch != '>') {
+      // ASI ends an uninitialized declarator: nothing but a type continuation
+      // (`B\n>()`, `B\n[]`) can follow a bare binding across a line break.
       while (targetEnd < pos && !isBr(*targetEnd))
         targetEnd++;
       separator = targetEnd < pos &&
