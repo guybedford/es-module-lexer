@@ -576,7 +576,9 @@ export const y = 1;`;
       [`export const { a = 1, nested: { b } } = obj;`, ['a', 'b']],
       [`export const { a = 1, ...rest } = obj;`, ['a', 'rest']],
       [`export const [a = 1, , b] = arr;`, ['a', 'b']],
-      [`export const { a = x < y, b = 1, c = y > z } = obj;`, ['a', 'b', 'c']]
+      [`export const { a = x < y, b = 1, c = y > z } = obj;`, ['a', 'b', 'c']],
+      [`export const { a = 1 << 2, b = x >> (y) } = obj;`, ['a', 'b']],
+      [`export const { a = x as Map<K, V>[], b } = obj;`, ['a', 'b']]
     ]) {
       const [, exports] = parse(source);
       assert.deepStrictEqual(exports.map(e => e.n), names, source);
@@ -647,6 +649,11 @@ foo > (bar);`;
       [`export const a = x < y, b = z > (w);`, ['a', 'b']],
       [`export const a = x < y, b = fn(z) > (w);`, ['a', 'b']],
       [`export const a = x << y, b = z > (w);`, ['a', 'b']],
+      [`export const a = x << y, b = z >> (w);`, ['a', 'b']],
+      [`export const a = 1 << 2, b = x >> (y + 1);`, ['a', 'b']],
+      [`export const a = x as Map<K, V>[], b = 1;`, ['a', 'b']],
+      [`export const a = x as Foo<A, B>['k'], b = 1;`, ['a', 'b']],
+      [`export const a = foo<A, <T>() => T>(), b = 1;`, ['a', 'b']],
       [`export const a = x < y, b = z >= w;`, ['a', 'b']],
       [`export let a = x < y, b
 foo > (bar);`, ['a', 'b']],

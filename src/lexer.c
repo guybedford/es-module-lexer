@@ -1824,6 +1824,10 @@ static bool isTsTypeCallWord (char16_t* start, char16_t* afterEnd) {
 // and *typeDefault set when a `=` default sat at the top level of the list.
 static bool skipTsTypeList (bool* typeDefault) {
   int depth = 0;
+  // Depths opened by a '<' with no name before it: a generic function type's
+  // parameter list, so its close must be followed by '('. This is what
+  // separates `foo<<T>() => T>()` from the shift in `x << y, b = z >> (w)`.
+  uint32_t bareDepths = 0;
   char16_t* wordStart = NULL;
   char16_t* wordEnd = NULL;
   while (pos <= end) {
@@ -1844,13 +1848,23 @@ static bool skipTsTypeList (bool* typeDefault) {
     }
     switch (ch) {
       case '<':
-        if (*(pos + 1) == '=')
+        if (*(pos + 1) == '=' || ++depth > 32)
           return false;
-        depth++;
+        if (depth > 1 && wordStart == NULL)
+          bareDepths |= 1u << depth;
         break;
       case '>':
         if (*(pos + 1) == '=')
           return false;
+        if (bareDepths & 1u << depth) {
+          bareDepths &= ~(1u << depth);
+          char16_t* closePos = pos;
+          pos++;
+          bool paren = commentWhitespace(true) == '(';
+          pos = closePos;
+          if (!paren)
+            return false;
+        }
         if (--depth == 0) {
           pos++;
           return true;
@@ -1910,8 +1924,9 @@ static bool skipTsTypeList (bool* typeDefault) {
 // argument list only where TypeScript reads one: before a call or tagged
 // template, a class body or heritage clause, a line break, or a token that
 // cannot start an expression. `<`, `>`, `+` and `-` never follow (shift and
-// unary ambiguity). A list with a default is a type parameter list, which only
-// a function or class continues.
+// unary ambiguity). `{` and `[` are accepted so class bodies and the array and
+// indexed-access types after `as` need no context. A list with a default is a
+// type parameter list, which only a function or class continues.
 static bool canFollowTsTypeList (bool typeDefault) {
   char16_t* start = pos;
   char16_t ch = commentWhitespace(true);
@@ -1957,7 +1972,7 @@ static bool canFollowTsTypeList (bool typeDefault) {
     return true;
   if (ch == '!')
     return *(pos + 1) == '=';
-  return ch != '[' && !isQuote(ch) && !(ch >= '0' && ch <= '9') && ch != '~' && ch != '@' && ch != '#' && ch != '\\';
+  return !isQuote(ch) && !(ch >= '0' && ch <= '9') && ch != '~' && ch != '@' && ch != '#' && ch != '\\';
 }
 
 // pos AT a '<' in an export initializer or destructuring default; a pure peek
