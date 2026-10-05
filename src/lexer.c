@@ -1899,6 +1899,8 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
   if (tsTypeAngleEnd != NULL && pos < tsTypeAngleEnd)
     return false;
   char16_t* savePos = pos;
+  bool previousHasError = has_error;
+  uint32_t previousParseError = parse_error;
   bool separator = false;
   while (pos++ < end) {
     char16_t ch = commentWhitespace(true);
@@ -1931,6 +1933,8 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
   }
   if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
     tsTypeAngleEnd = pos;
+  has_error = previousHasError;
+  parse_error = previousParseError;
   pos = savePos;
   return separator;
 }
@@ -1939,6 +1943,8 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
 // separator must begin one complete binding element before the pattern closer.
 static bool isTsBindingPatternSeparator (char16_t close) {
   char16_t* savePos = pos;
+  bool previousHasError = has_error;
+  uint32_t previousParseError = parse_error;
   bool separator = false;
   pos++;
   char16_t ch = commentWhitespace(true);
@@ -2016,6 +2022,8 @@ target:
 done:
   if (!separator && (tsTypeAngleEnd == NULL || pos > tsTypeAngleEnd))
     tsTypeAngleEnd = pos;
+  has_error = previousHasError;
+  parse_error = previousParseError;
   pos = savePos;
   return separator;
 }
