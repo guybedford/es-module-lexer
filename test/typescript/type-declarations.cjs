@@ -681,6 +681,35 @@ bar, c = 1;`, ['a']],
     }
   });
 
+  test('non-null assertions can follow trivia and repeat with trivia', () => {
+    for (const operand of [
+      'x !', 'x /*c*/ !', 'x! !', 'x! /*c*/ !', '(x) !', 'fn() !', 'obj.x !', 'arr[0] !'
+    ]) {
+      const source = `export const a = ${operand} < y, b = z > w;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
+  test('type prefix lookahead stays within its initializer', () => {
+    for (const [source, names] of [
+      ['export const a: unknown = fn<A, keyof\nB>(), b = 1;', ['a', 'b']],
+      ['export const a = fn<Foo<A, B>>() + fn<C, keyof\nD>(), b = 1;', ['a', 'b']],
+      ['export const a = x < y ? fn<A, keyof\nB>() : z, b = z > w;', ['a', 'b']],
+      ['export const a = x < y, b = fn<A, keyof\nB>(), c = z > w;', ['a', 'b', 'c']],
+      ['export const a = fn<A, keyof\nB, typeof\nx, readonly\nC[]>(), b = 1;', ['a', 'b']],
+      [`export const a = fn<${'Box<'.repeat(128)}X${'>'.repeat(128)}>() + fn<A, keyof\nB>(), b = 1;`, ['a', 'b']]
+    ]) {
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+    }
+  });
+
+  test('abstract constructor types need no whitespace after new', () => {
+    for (const constructor of ['new()=>B', 'new<T>()=>B', 'new/*c*/()=>B']) {
+      const source = `export const a = fn<A, abstract\n${constructor}>(), b = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
   // JS-superset guards: none of these are type declarations.
   test('type as a plain variable is not a declaration', () => {
     const [, exports] = parse(`export const type = 5;`);
