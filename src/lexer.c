@@ -1898,6 +1898,7 @@ static bool isTsTypeAnglePrefixContinuation (
       pos++;
     }
     if (angleEnd != NULL) {
+      angleEnd--;
       if (tsTypeAngleEnd == NULL || angleEnd > tsTypeAngleEnd)
         tsTypeAngleEnd = angleEnd;
       continuation = true;
@@ -1945,12 +1946,13 @@ static bool isTsExportBindingSeparator (char16_t** tsTypeAngleCandidate) {
       separator = *(pos + 1) != '=' && *(pos + 1) != '>';
     } else if (ch == ':' || ch == '!' && *(pos + 1) == ':' || ch == ';' || pos > end) {
       separator = true;
-    } else if (!continuesTsTypeAfterLineBreak(ch) && ch != '>') {
-      // ASI ends an uninitialized declarator: nothing but a type continuation
-      // (`B\n>()`, `B\n[]`) can follow a bare binding across a line break.
-      while (targetEnd < pos && !isBr(*targetEnd))
-        targetEnd++;
-      separator = targetEnd < pos &&
+    } else if (ch == '[' || !continuesTsTypeAfterLineBreak(ch) && ch != '>') {
+      // Postfix arrays and indexed access cannot start on a new line after a
+      // complete type. A prefix such as `keyof\n[]` still awaits its operand.
+      char16_t* lineBreak = targetEnd;
+      while (lineBreak < pos && !isBr(*lineBreak))
+        lineBreak++;
+      separator = lineBreak < pos &&
         !isTsTypeAnglePrefixContinuation(targetStart, targetEnd, pos, savePos);
     }
     break;

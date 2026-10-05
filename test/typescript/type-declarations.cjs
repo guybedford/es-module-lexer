@@ -710,6 +710,55 @@ bar, c = 1;`, ['a']],
     }
   });
 
+  test('line-leading arrays after a bare binding end the declaration', () => {
+    for (const source of [
+      'export let a = 1, b\n[0];',
+      'export let a = 1, b\n[];',
+      'export let a = x < y, b\n[0];',
+      'export let a = fn<A, B>(), b\n[0];',
+      'export let a = x < (y + z), b\n[0] > (w);',
+      'export let a = 1, b\n[0]',
+      'export let a = 1, b\n[]',
+      'export let a = 1, b/*\n*/[0];',
+      'export let a = 1, b//comment\n[];',
+      'export let a = 1, keyof\n[];'
+    ]) {
+      const names = source.includes('keyof') ? ['a', 'keyof'] : ['a', 'b'];
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+    }
+  });
+
+  test('array type operands preserve prefix keywords and their token boundary', () => {
+    for (const type of [
+      'B[]', 'B[0]', 'B[][]', 'B[] | A', 'B[0] | A',
+      'keyof\n[]', 'keyof \n[]', 'keyof /*comment*/\n[]',
+      'readonly\n[number]', 'readonly /*\n*/[number]',
+      'keyof /*comment*/\nB', 'readonly /*comment*/\nB[]',
+      'typeof /*comment*/\nx', 'abstract /*comment*/\nnew () => B'
+    ]) {
+      const source = `export const a = fn<A, ${type}>(), b = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['a', 'b'], source);
+    }
+  });
+
+  test('completed instantiations with type prefixes preserve ASI and value continuations', () => {
+    for (const type of [
+      'keyof\nB', 'keyof /*comment*/\nB',
+      'readonly\nB[]', 'readonly /*comment*/\nB[]',
+      'typeof\nx', 'abstract\nnew () => B'
+    ]) {
+      for (const [next, names] of [
+        ['\nbar, c = 1;', ['a']],
+        ['/*\n*/bar, c = 1;', ['a']],
+        ['\n(w), b = 1;', ['a', 'b']],
+        ['\n[0], b = 1;', ['a', 'b']]
+      ]) {
+        const source = `export const a = fn<A, ${type}>${next}`;
+        assert.deepStrictEqual(parse(source)[1].map(e => e.n), names, source);
+      }
+    }
+  });
+
   // JS-superset guards: none of these are type declarations.
   test('type as a plain variable is not a declaration', () => {
     const [, exports] = parse(`export const type = 5;`);
