@@ -313,9 +313,9 @@ static void resolveTsExportBindingLineBreak (char16_t* lookahead) {
   // The '>' a separator lookahead stopped at closes a type argument list, which
   // completes a value.
   bool keep = tsExportBindingDepth == TS_EXPORT_BINDING_INITIALIZER
-    ? tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd ||
+    ? ch == ',' || expressionContinuesAfterLineBreak(ch) ||
       !isTokenValue(*lastTokenPos) && !(*lastTokenPos == '>' && lastTokenPos == tsTypeAngleEnd) ||
-      ch == ',' || expressionContinuesAfterLineBreak(ch)
+      tsTypeAngleEnd != NULL && lookahead < tsTypeAngleEnd
     : tsTypeOperandPending() || continuesTsTypeAfterLineBreak(ch);
   if (!keep)
     tsExportBindingDepth = 0;
@@ -348,7 +348,7 @@ static inline __attribute__((always_inline)) bool isPromiseMember (const char16_
 // never dereferences in real JS and marks a type-position `import()` type.
 // Called at the closing paren; a pure peek, so pos is restored.
 static void classifyDynamicImportMember (Import* impt) {
-  if (impt->type_only || impt->type_value_certain)
+  if (impt->type_value_certain || impt->type_only)
     return;
   char16_t* savePos = pos;
   pos++;
@@ -416,13 +416,14 @@ static inline __attribute__((always_inline)) bool consumeToken (
 #endif
       goto skipTokenRun;
     case 'c':
+      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0) {
+        if (isBrOrWs(*(pos + 5)))
+          nextBraceIsClass = true;
 #ifdef LEX_TS
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 &&
-          isBrOrWsOrPunctuatorNotDot(*(pos + 5)))
-        tsTypeParameterKeywordEnd = pos + 5;
+        if (isBrOrWsOrPunctuatorNotDot(*(pos + 5)))
+          tsTypeParameterKeywordEnd = pos + 5;
 #endif
-      if (*(pos + 1) == 'l' && keywordStart(pos) && memcmp(pos + 2, LASS + 1, 3 * 2) == 0 && isBrOrWs(*(pos + 5)))
-        nextBraceIsClass = true;
+      }
       goto skipTokenRun;
 #ifdef LEX_TS
     case 'f':
@@ -475,9 +476,9 @@ static inline __attribute__((always_inline)) bool consumeToken (
         } else {
           // `x++ <`, `x-- <` and the non-null `x! <` end an operand, so the
           // `<` is a comparison; every other operator precedes a type.
-          bool postfixOperator = (*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
-            *lastTokenPos == '!' && tsPostfixNonNull;
-          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) && !postfixOperator || isTsTypeParameterPrefixKeyword();
+          bool typeParameterPrefix = !isTokenValue(*lastTokenPos) &&
+            !((*lastTokenPos == '+' || *lastTokenPos == '-') && *(lastTokenPos - 1) == *lastTokenPos ||
+              *lastTokenPos == '!' && tsPostfixNonNull) || isTsTypeParameterPrefixKeyword();
           bool arrowPrefix = !typeParameterPrefix &&
             (isTsAsyncKeyword() || isTsCallableTypePrefixKeyword());
           if (!typeParameterPrefix && !arrowPrefix)
@@ -487,11 +488,11 @@ static inline __attribute__((always_inline)) bool consumeToken (
       }
       break;
     case '>':
-      if (tsExportBindingDepth > 1 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER && *(pos - 1) != '=')
+      if (*(pos - 1) != '=' && tsExportBindingDepth > 1 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER)
         tsExportBindingDepth--;
       break;
     case '=':
-      if (tsExportBindingDepth == 1 && openTokenDepth == 0 && *(pos + 1) != '>') {
+      if (openTokenDepth == 0 && *(pos + 1) != '>' && tsExportBindingDepth == 1) {
         tsExportBindingDepth = TS_EXPORT_BINDING_INITIALIZER;
         tsExportInitializerStart = pos;
       }
@@ -523,7 +524,7 @@ static inline __attribute__((always_inline)) bool consumeToken (
       break;
     case ';':
 #ifdef LEX_TS
-      if (tsExportBindingDepth != 0 && openTokenDepth == 0) {
+      if (openTokenDepth == 0 && tsExportBindingDepth != 0) {
         tsExportBindingDepth = 0;
         *tsTypeAngleCandidate = NULL;
       }
@@ -616,7 +617,7 @@ static inline __attribute__((always_inline)) bool consumeToken (
 #endif
       isComment = handleSlash();
 #ifdef LEX_TS
-      if (isComment && tsExportBindingDepth != 0 && openTokenDepth == 0) {
+      if (isComment && openTokenDepth == 0 && tsExportBindingDepth != 0) {
         for (char16_t* commentPos = commentStart; commentPos <= pos; commentPos++) {
           if (isBr(*commentPos)) {
             resolveTsExportBindingLineBreak(isBr(*pos) ? pos : pos + 1);
@@ -806,39 +807,16 @@ void tryParseImportStatement () {
   char16_t ch = commentWhitespace(true);
 
 #ifdef LEX_TS
-  // `import type ...` is type-only unless `type` is really the binding: a value
-  // default import named `type` (`import type,`, `import type =`, and
-  // `import type from 'x'` where `from` is the keyword) keeps a runtime edge.
-  // Only `import type from from 'x'` (default binding named `from`) is type-only.
   bool typeOnly = false;
-  if (ch == 't' && isTsTypeKeyword(pos)) {
-    char16_t* savePos = pos;
-    pos += 4;
-    char16_t nextCh = commentWhitespace(true);
-    bool typeIsBinding = nextCh == ',' || nextCh == '=';
-    // `import type from ...`: `from` is the keyword and `type` the default
-    // binding only when a string follows; `import type from from 'x'` binds
-    // `from` and stays type-only.
-    if (!typeIsBinding && nextCh == 'f' && memcmp(pos + 1, ROM, 3 * 2) == 0 &&
-        (isBrOrWs(*(pos + 4)) || isQuote(*(pos + 4)) || *(pos + 4) == '/')) {
-      char16_t* fromPos = pos;
-      pos += 4;
-      typeIsBinding = isQuote(commentWhitespace(true));
-      pos = fromPos;
-    }
-    if (!typeIsBinding) {
-      typeOnly = true;
-      ch = nextCh;
-    } else {
-      pos = savePos;
-    }
-  }
 #endif
 
   char16_t* maybePhasePos = pos;
 
   int phase_keyword = 0;
 
+#ifdef LEX_TS
+  importPhase:
+#endif
   if (ch == '.') {
     // import.meta
     pos++;
@@ -1021,43 +999,68 @@ void tryParseImportStatement () {
       return;
     }
 #ifdef LEX_TS
-    // TS import-equals: `import A = require('m')` keeps a runtime CJS edge
-    // (type-only under an `import type` modifier); a namespace alias RHS
-    // (`import A = N.M`) is erased.
-    if (phase_keyword == 0 && isTsIdentifierStart(ch)) {
-      char16_t* clausePos = pos;
-      readImportName(ch);
-      if (pos != clausePos) {
-        char16_t eqCh = commentWhitespace(true);
-        if (eqCh == '=' && *(pos + 1) != '=') {
-          pos++;
-          char16_t rhCh = commentWhitespace(true);
-          if (rhCh == 'r' && memcmp(pos + 1, EQUIRE, 6 * 2) == 0 && !isIdentifierCodeUnit(*(pos + 7))) {
-            char16_t* requirePos = pos;
-            pos += 7;
-            if (commentWhitespace(true) == '(') {
-              pos++;
-              char16_t quote = commentWhitespace(true);
-              if (isQuote(quote)) {
-                readImportString(startPos, quote, false);
-                if (has_error)
-                  return;
-                if (typeOnly && import_write_head)
-                  import_write_head->type_only = true;
-                pos++;
-                if (commentWhitespace(true) != ')')
-                  pos--;
-                return;
-              }
-            }
-            pos = requirePos;
-          }
-          skipTsErasedTail(true, false);
-          pos--;
-          return;
+    if (!isQuote(ch) && ch != '*') {
+      // A default binding named `type` keeps its runtime edge; a type modifier
+      // resumes the same phase/clause dispatch after the erased keyword.
+      if (ch == 't' && !typeOnly && isTsTypeKeyword(pos)) {
+        char16_t* savePos = pos;
+        pos += 4;
+        char16_t nextCh = commentWhitespace(true);
+        bool typeIsBinding = nextCh == ',' || nextCh == '=';
+        if (!typeIsBinding && nextCh == 'f' && memcmp(pos + 1, ROM, 3 * 2) == 0 &&
+            (isBrOrWs(*(pos + 4)) || isQuote(*(pos + 4)) || *(pos + 4) == '/')) {
+          char16_t* fromPos = pos;
+          pos += 4;
+          typeIsBinding = isQuote(commentWhitespace(true));
+          pos = fromPos;
         }
-        pos = clausePos;
-        ch = *pos;
+        if (!typeIsBinding) {
+          typeOnly = true;
+          ch = nextCh;
+          maybePhasePos = pos;
+          phase_keyword = 0;
+          goto importPhase;
+        }
+        pos = savePos;
+      }
+      // TS import-equals: `import A = require('m')` keeps a runtime CJS edge
+      // (type-only under an `import type` modifier); a namespace alias RHS
+      // (`import A = N.M`) is erased.
+      if (phase_keyword == 0 && isTsIdentifierStart(ch)) {
+        char16_t* clausePos = pos;
+        readImportName(ch);
+        if (pos != clausePos) {
+          char16_t eqCh = commentWhitespace(true);
+          if (eqCh == '=' && *(pos + 1) != '=') {
+            pos++;
+            char16_t rhCh = commentWhitespace(true);
+            if (rhCh == 'r' && memcmp(pos + 1, EQUIRE, 6 * 2) == 0 && !isIdentifierCodeUnit(*(pos + 7))) {
+              char16_t* requirePos = pos;
+              pos += 7;
+              if (commentWhitespace(true) == '(') {
+                pos++;
+                char16_t quote = commentWhitespace(true);
+                if (isQuote(quote)) {
+                  readImportString(startPos, quote, false);
+                  if (has_error)
+                    return;
+                  if (typeOnly && import_write_head)
+                    import_write_head->type_only = true;
+                  pos++;
+                  if (commentWhitespace(true) != ')')
+                    pos--;
+                  return;
+                }
+              }
+              pos = requirePos;
+            }
+            skipTsErasedTail(true, false);
+            pos--;
+            return;
+          }
+          pos = clausePos;
+          ch = *pos;
+        }
       }
     }
 #endif
@@ -1148,7 +1151,7 @@ static inline __attribute__((always_inline)) bool tryTsTypeModifier (char16_t* c
 }
 
 static inline __attribute__((always_inline)) bool isTsTypeOnlySpecifier (bool typeOnlyStatement, char16_t* ch) {
-  return typeOnlyStatement || (*ch == 't' && tryTsTypeModifier(ch));
+  return *ch == 't' && !typeOnlyStatement ? tryTsTypeModifier(ch) : typeOnlyStatement;
 }
 
 // Consumes a comment, string, or template literal so no bracket, angle, or
@@ -1700,13 +1703,14 @@ char16_t skipExpression (bool asi, char16_t bindingClose) {
       continue;
     if (openTokenDepth == baseDepth) {
       if (ch == ',') {
+        if (bindingClose == '\0')
+          return ch;
 #ifdef LEX_TS
         if (tsTypeAngleCandidate != NULL) {
           resolveTsTypeAngleCandidate(tsTypeAngleCandidate);
           tsTypeAngleCandidate = NULL;
         }
-        if (bindingClose == '\0' ||
-            (tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsBindingPatternSeparator(bindingClose))
+        if ((tsTypeAngleEnd == NULL || pos >= tsTypeAngleEnd) && isTsBindingPatternSeparator(bindingClose))
 #endif
           return ch;
       }
@@ -2181,27 +2185,8 @@ bool tryParseExportStatement () {
 #endif
 
 #ifdef LEX_TS
-  // `export type { ... }`, `export type { ... } from` and `export type * as ns
-  // from` are type-only re-exports: every name they introduce is a type. The
-  // `type` keyword is only the modifier when a clause (`{` or `*`) follows; an
-  // identifier after it (`export type T = ...`) is a type alias declaration,
-  // handled by tryTsTypeDeclaration alongside `export interface Foo`.
   bool typeOnlyStatement = false;
-  if (ch == 't' && isTsTypeKeyword(pos)) {
-    char16_t* savePos = pos;
-    pos += 4;
-    char16_t nextCh = commentWhitespace(true);
-    if (nextCh == '{' || nextCh == '*') {
-      typeOnlyStatement = true;
-      ch = nextCh;
-    } else {
-      pos = savePos;
-      if (tryTsTypeDeclaration(false))
-        return true;
-    }
-  }
-  else if (ch == 'i' && tryTsTypeDeclaration(false))
-    return true;
+  exportClause:
 #endif
 
   if (ch == '{') {
@@ -2276,50 +2261,22 @@ bool tryParseExportStatement () {
     export_all = export_write_head == prev_export_write_head;
   }
   else {
-    facade = false;
 #ifdef LEX_TS
-    // `export declare ...` is an ambient declaration: erased, with its name a
-    // type-only export.
-    if (ch == 'd' && memcmp(pos + 1, ECLARE, 6 * 2) == 0 && isTsKeywordSeparator(*(pos + 7))) {
-      pos += 7;
-      tsAmbientExportDeclaration();
-      return true;
-    }
-    // `abstract` is a value-level class modifier.
-    if (ch == 'a' && memcmp(pos, ABSTRACT, 8 * 2) == 0 && isTsKeywordSeparator(*(pos + 8))) {
-      pos += 8;
-      ch = commentWhitespace(true);
-    }
-    if ((ch == 'e' || ch == 'n') && tryTsValueDeclarationName(ch))
-      return false;
+    exportDeclaration:
 #endif
     switch (ch) {
       // export default ...
       case 'd': {
+#ifdef LEX_TS
+        if (*(pos + 2) != 'f')
+          break;
+#endif
+        facade = false;
         const char16_t* startPos = pos;
         pos += 7;
         ch = commentWhitespace(true);
         bool localName = false;
         switch (ch) {
-#ifdef LEX_TS
-          case 'i': {
-            // `export default interface Foo {}`: a type-only default export
-            // with the interface name as its local name.
-            Export* prev = export_write_head;
-            if (tryTsTypeDeclaration(false)) {
-              if (export_write_head != prev) {
-                export_write_head->start = startPos;
-                export_write_head->end = startPos + 7;
-              }
-              else {
-                addExport(startPos, startPos + 7, NULL, NULL);
-                export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
-              }
-              return true;
-            }
-            break;
-          }
-#endif
           // export default async? function*? name? (){}
           case 'a':
             if (memcmp(pos + 1, SYNC, 4 * 2) == 0 && isWsNotBr(*(pos + 5))) {
@@ -2355,6 +2312,25 @@ bool tryParseExportStatement () {
               localName = true;
             }
             break;
+#ifdef LEX_TS
+          case 'i': {
+            // `export default interface Foo {}`: a type-only default export
+            // with the interface name as its local name.
+            Export* prev = export_write_head;
+            if (tryTsTypeDeclaration(false)) {
+              if (export_write_head != prev) {
+                export_write_head->start = startPos;
+                export_write_head->end = startPos + 7;
+              }
+              else {
+                addExport(startPos, startPos + 7, NULL, NULL);
+                export_write_head->import_name_ty |= TYPE_ONLY_EXPORT;
+              }
+              return true;
+            }
+            break;
+          }
+#endif
         }
         if (localName) {
           const char16_t* localStartPos = pos;
@@ -2371,10 +2347,15 @@ bool tryParseExportStatement () {
       }
       // export async? function*? name () {
       case 'a':
+#ifdef LEX_TS
+        if (*(pos + 1) != 's')
+          break;
+#endif
         pos += 5;
         commentWhitespace(false);
       // fallthrough
       case 'f':
+        facade = false;
         pos += 8;
         ch = commentWhitespace(true);
         if (ch == '*') {
@@ -2389,6 +2370,7 @@ bool tryParseExportStatement () {
 
       // export class name ...
       case 'c':
+        facade = false;
         if (memcmp(pos + 1, LASS, 4 * 2) == 0 && isBrOrWsOrPunctuatorNotDot(*(pos + 5))) {
           pos += 5;
           ch = commentWhitespace(true);
@@ -2439,8 +2421,42 @@ bool tryParseExportStatement () {
       }
 
       default:
-        return false;
+        break;
     }
+#ifdef LEX_TS
+    // Type modifiers reuse the JS clause parser after their erased keyword.
+    if (ch == 't' && isTsTypeKeyword(pos)) {
+      char16_t* savePos = pos;
+      pos += 4;
+      char16_t nextCh = commentWhitespace(true);
+      if (nextCh == '{' || nextCh == '*') {
+        typeOnlyStatement = true;
+        ch = nextCh;
+        goto exportClause;
+      }
+      pos = savePos;
+      if (tryTsTypeDeclaration(false))
+        return true;
+    }
+    else if (ch == 'i' && tryTsTypeDeclaration(false))
+      return true;
+    facade = false;
+    if (ch == 'd' && memcmp(pos + 1, ECLARE, 6 * 2) == 0 && isTsKeywordSeparator(*(pos + 7))) {
+      pos += 7;
+      tsAmbientExportDeclaration();
+      return true;
+    }
+    if (ch == 'a' && memcmp(pos, ABSTRACT, 8 * 2) == 0 && isTsKeywordSeparator(*(pos + 8))) {
+      pos += 8;
+      ch = commentWhitespace(true);
+      goto exportDeclaration;
+    }
+    if ((ch == 'e' || ch == 'n') && tryTsValueDeclarationName(ch))
+      return false;
+#else
+    facade = false;
+#endif
+    return false;
   }
 
 #ifdef LEX_TS
