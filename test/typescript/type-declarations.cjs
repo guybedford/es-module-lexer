@@ -646,6 +646,8 @@ foo > (bar);`;
       [`export const a = (x as any)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = foo<A, B>(x)! < y, b = z > w;`, ['a', 'b']],
       [`export const a = !<Foo<A, B>>x, z = 1;`, ['a', 'z']],
+      [`export const a = x!! < y, b = z > w;`, ['a', 'b']],
+      [`export const a = !!<Foo<A, B>>x, z = 1;`, ['a', 'z']],
       [`export const a = x < y, b = z > (w);`, ['a', 'b']],
       [`export const a = x < y, b = fn(z) > (w);`, ['a', 'b']],
       [`export const a = x << y, b = z > (w);`, ['a', 'b']],

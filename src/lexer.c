@@ -1985,8 +1985,11 @@ static void scanTsTypeAngle () {
   bool previousHasError = has_error;
   uint32_t previousParseError = parse_error;
   char16_t prev = *lastTokenPos;
+  char16_t* operatorStart = lastTokenPos;
+  if (prev == '!')
+    while (*(operatorStart - 1) == '!') operatorStart--;
   bool postfixOperator = (prev == '+' || prev == '-') && *(lastTokenPos - 1) == prev ||
-    prev == '!' && isTokenValue(*(lastTokenPos - 1));
+    prev == '!' && isTokenValue(*(operatorStart - 1));
   bool operand = !isTokenValue(prev) && !postfixOperator;
   bool typeDefault = false;
   if (skipTsTypeList(&typeDefault) && !has_error) {
