@@ -57,6 +57,7 @@ static const char16_t KEYWORDS[] = {
   'u', 'n', 'c', 't', 'i', 'o', 'n',
   'o', 'u', 'r', 'c', 'e',
   'e', 'f', 'e', 'r',
+  's', 's', 'e', 'r', 't',
   ';',
 #ifdef LEX_TS
   'y', 'p', 'e',
@@ -110,8 +111,9 @@ static const char16_t KEYWORDS[] = {
 #define UNCTION (SYNC + 4)
 #define OURCE (UNCTION + 7)
 #define EFER (OURCE + 5)
+#define SSERT (EFER + 4)
 // Program start and opaque declaration erasure are statement boundaries.
-#define STATEMENT_END (EFER + 4)
+#define STATEMENT_END (SSERT + 5)
 #ifdef LEX_TS
 #define YPE (STATEMENT_END + 1)
 #define NTERFACE (YPE + 3)
@@ -247,9 +249,9 @@ static inline __attribute__((always_inline)) bool handleSlash () {
 }
 
 static inline __attribute__((always_inline)) bool isTokenRunChar (char16_t ch) {
-  // Fold ASCII case; NBSP is the only non-ASCII whitespace recognized here.
+  // Fold ASCII case.
   return (char16_t)((ch | 32) - 'a') < 26 || (char16_t)(ch - '0') < 10 ||
-    ch == '$' || ch == '_' || ch == '\\' || (ch > 127 && ch != 160);
+    ch == '$' || ch == '_' || ch == '\\' || (ch > 127 && !isBrOrWs(ch));
 }
 
 static inline __attribute__((always_inline)) bool isTokenValue (char16_t ch) {
@@ -699,7 +701,7 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (ch == 32 || ch < 14 && ch > 8) {
+    if (isBrOrWs(ch)) {
       continue;
     }
 
@@ -767,7 +769,7 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (ch == 32 || ch < 14 && ch > 8) {
+    if (isBrOrWs(ch)) {
 #ifdef LEX_TS
       if (isBr(ch) && tsExportBindingDepth != 0) {
         resolveTsExportBindingLineBreak(pos);
@@ -2991,13 +2993,27 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     import_write_head->import_ty = phase_keyword == 1 ? StaticSourcePhase : StaticDeferPhase;
   }
   pos++;
-  ch = commentWhitespace(false);
-  if (!(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
+  const char16_t* triviaStart = pos;
+  ch = commentWhitespace(true);
+  char16_t* attrIndex = pos;
+  int keywordLength;
+  if (ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h') {
+    keywordLength = 4;
+  }
+  else if (ch == 'a' && memcmp(pos + 1, SSERT, 5 * 2) == 0) {
+    for (const char16_t* cursor = triviaStart; cursor < attrIndex; cursor++) {
+      if (isBr(*cursor)) {
+        pos--;
+        return;
+      }
+    }
+    keywordLength = 6;
+  }
+  else {
     pos--;
     return;
   }
-  char16_t* attrIndex = pos;
-  pos += 4;
+  pos += keywordLength;
   ch = commentWhitespace(true);
   if (ch != '{') {
     pos = attrIndex;
@@ -3006,11 +3022,12 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   const char16_t* attrStart = pos;
 #ifndef LEXER_MIN
   Attribute* attr_write_head = NULL;
-  Attribute* attr_write_head_last = NULL;
 #endif
-  do {
-    pos++;
+  pos++;
+  while (true) {
     ch = commentWhitespace(true);
+    if (ch == '}')
+      break;
     const char16_t* key_start;
     const char16_t* key_end;
     if (ch == '\'') {
@@ -3031,6 +3048,8 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       key_start = pos;
       ch = readToWsOrPunctuator(ch);
       key_end = pos;
+      if (ch != ':')
+        ch = commentWhitespace(true);
     }
     if (ch != ':') {
       pos = attrIndex;
@@ -3067,7 +3086,6 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       import_write_head->attributes = attr;
     else
       attr_write_head->next = attr;
-    attr_write_head_last = attr_write_head;
     attr_write_head = attr;
 #endif
     pos++;
@@ -3080,7 +3098,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       break;
     pos = attrIndex;
     return;
-  } while (true);
+  }
   import_write_head->attr_index = attrStart;
   import_write_head->statement_end = pos + 1;
 }
@@ -3360,17 +3378,17 @@ void lineComment () {
   p++;
   if (p > end || isBr(*p)) goto lineCommentEnd;
   p++;
-  const v128_t newline = wasm_i16x8_splat('\n');
   const v128_t carriage_return = wasm_i16x8_splat('\r');
-  const v128_t zero = wasm_i16x8_splat(0);
+  const v128_t line_separator = wasm_i16x8_splat(0x2028);
+  const v128_t pair_mask = wasm_i16x8_splat(-2);
   for (;;) {
     v128_t chunk = wasm_v128_load(p);
     uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(
-        wasm_i16x8_eq(chunk, zero),
-        wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return))));
+        wasm_u16x8_le(chunk, carriage_return),
+        wasm_i16x8_eq(wasm_v128_and(chunk, pair_mask), line_separator)));
     if (mask) {
       p += __builtin_ctz(mask);
-      if (*p != 0 || p > end) {
+      if (isBr(*p) || p > end) {
         pos = p;
         return;
       }
@@ -3386,7 +3404,9 @@ lineCommentEnd:
 #else
   while (pos++ < end) {
     char16_t ch = *pos;
-    if (ch == '\n' || ch == '\r')
+    if ((uint32_t)(ch - 14) < 0x2028 - 14)
+      continue;
+    if (isBr(ch))
       return;
   }
 #endif
@@ -3402,7 +3422,7 @@ void stringLiteral (char16_t quote) {
       if (ch == '\r' && *(pos + 1) == '\n')
         pos++;
     }
-    else if (isBr(ch))
+    else if (ch == '\n' || ch == '\r')
       break;
   }
   syntaxError();
@@ -3455,28 +3475,37 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
-// Note: non-asii BR and whitespace checks omitted for perf / footprint
-// if there is a significant user need this can be reconsidered
-bool isBr (char16_t c) {
-  return c == '\r' || c == '\n';
+static __attribute__((noinline)) bool isUnicodeBr (char16_t c) {
+  return (c | 1) == 0x2029;
 }
 
-bool isWsNotBr (char16_t c) {
-  return c == 9 || c == 11 || c == 12 || c == 32 || c == 160;
+__attribute__((always_inline)) bool isBr (char16_t c) {
+  return __builtin_expect(c < 128, true) ? c == '\r' || c == '\n' : isUnicodeBr(c);
 }
 
-bool isBrOrWs (char16_t c) {
-  // (c - 9) < 5 is the 9..13 range as one unsigned compare: fewer wasm ops than
-  // `c > 8 && c < 14` at every inlined copy of this hot helper.
-  return (char16_t)(c - 9) < 5 || c == 32 || c == 160;
+static __attribute__((noinline)) bool isUnicodeWs (char16_t c, bool br) {
+  return c == 0x1680 || (char16_t)(c - 0x2000) < 11 || c == 0x202F ||
+    c == 0x205F || c == 0x3000 || c == 0xFEFF || br && isUnicodeBr(c);
+}
+
+__attribute__((always_inline)) bool isWsNotBr (char16_t c) {
+  if (__builtin_expect(c < 128, true))
+    return c == 9 || c == 11 || c == 12 || c == 32;
+  return c == 160 || isUnicodeWs(c, false);
+}
+
+__attribute__((always_inline)) bool isBrOrWs (char16_t c) {
+  if (__builtin_expect(c < 128, true))
+    return c == 32 || c > 8 && c < 14;
+  return c == 160 || isUnicodeWs(c, true);
 }
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
-  return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
+  return isBrOrWs(c) || isPunctuator(c) && c != '.';
 }
 
 bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
-  return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
+  return isBrOrWs(*c) || isPunctuator(*c) && (isSpread(c) || *c != '.');
 }
 
 // Detects whether the character sequence ending at `pos` (inclusive) ends a

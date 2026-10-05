@@ -48,6 +48,16 @@ suite('Full build API', () => {
     assert.deepStrictEqual(imports[0].attributes, [['type', 'json']]);
   });
 
+  test('empty attribute clauses retain offsets without attribute pairs', () => {
+    for (const keyword of ['with', 'assert']) {
+      const source = `import 'pkg' ${keyword} {};`;
+      const [[imported]] = parse(source);
+      assert.strictEqual(imported.attributes, null);
+      assert.strictEqual(imported.attributesStart, source.indexOf('{'));
+      assert.strictEqual(source.slice(imported.attributesStart, imported.importEnd), '{}');
+    }
+  });
+
   test('phase imports', () => {
     const source = `import source s from './s.js';\nimport defer * as d from './d.js';\nimport.source('./ds.js');\nimport.defer('./dd.js');`;
     const [imports] = parse(source);

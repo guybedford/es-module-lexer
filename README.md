@@ -306,6 +306,10 @@ Non-erasable TypeScript (`enum`, runtime `namespace`, parameter properties, lega
 The `attributesStart` (`a` in the minimal build) field provides the index of the start of the `{`
 attributes bracket, or -1 for no attributes.
 
+Static imports and re-exports support `with` and legacy `assert` clauses.
+Line terminators can precede `with`, but cannot precede `assert`.
+Empty clauses and trailing commas retain the complete clause offsets.
+
 In the full build, the list of attribute key and value pairs of a static import is provided on the `attributes`
 field (dynamic import records report `attributes: null`, with `attributesStart` locating the options argument):
 
