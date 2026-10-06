@@ -1156,6 +1156,7 @@ static inline __attribute__((always_inline)) bool isTsTypeOnlySpecifier (bool ty
 // candidate char; returns true and leaves pos AT the last consumed char when it
 // was one, false with pos unchanged otherwise. Templates are skipped whole,
 // including `${ ... }` substitutions, via skipTsBalanced on the inner brace.
+// All starters lie in '"'..'`', so callers can reject ordinary type text first.
 bool skipTsTrivia (char16_t ch, bool stopAtLineBreak) {
   if (ch == '/') {
     char16_t next = *(pos + 1);
@@ -1245,7 +1246,7 @@ bool skipTsBalanced () {
         if (!skipTsBalanced())
           return false;
         continue;
-      } else if (skipTsTrivia(ch, false)) {
+      } else if (ch >= '"' && ch <= '`' && skipTsTrivia(ch, false)) {
         // pos left AT the last consumed char; fall through to the pos++ below.
       }
       pos++;
@@ -1263,7 +1264,7 @@ bool skipTsBalanced () {
       if (!skipTsBalanced())
         return false;
       pos--;
-    } else {
+    } else if (ch >= '"' && ch <= '`') {
       skipTsTrivia(ch, false);
     }
   }
@@ -1425,7 +1426,7 @@ void skipTsErasedTail (bool operandPending, bool commaTerminates) {
       continue;
     }
     bool multilineComment = ch == '/' && *(pos + 1) == '*';
-    if (skipTsTrivia(ch, true)) {
+    if (ch >= '"' && ch <= '`' && skipTsTrivia(ch, true)) {
       bool sawLineBreak = ch == '/' && isBr(*pos);
       if (sawLineBreak && multilineComment) {
         // blockComment starts scanning after its opening position.
@@ -1873,26 +1874,31 @@ static bool isTsTypeAnglePrefixContinuation (
   }
   if (continuation) {
     continuation = false;
-    // The tightest list spanning the comma: an earlier comparison's '<' can
-    // pair with a later '>' (`a < b, fn<A, keyof\nB>, c = d > e`), and taking
-    // it would hide every binding up to that '>'.
+    // Close the innermost list open at the comma. An earlier comparison's '<'
+    // may pair with a later '>', but must not hide bindings after this list.
     char16_t* angleEnd = NULL;
+    uint32_t angleDepth = 0;
+    uint32_t commaDepth = 0;
     pos = tsExportInitializerStart;
-    while (pos < comma) {
+    while (pos <= end) {
+      if (pos >= comma && commaDepth == 0) {
+        if (angleDepth == 0)
+          break;
+        commaDepth = angleDepth;
+      }
       char16_t ch = *pos;
       if (ch == '<') {
-        char16_t* angleStart = pos;
-        if (skipTsBalanced()) {
-          if (pos <= comma)
-            continue;
-          if (angleEnd == NULL || pos < angleEnd)
-            angleEnd = pos;
+        angleDepth++;
+      } else if (ch == '>' && *(pos - 1) != '=' && angleDepth != 0) {
+        if (--angleDepth < commaDepth) {
+          angleEnd = pos + 1;
+          break;
         }
-        pos = angleStart;
       } else if (ch == '(' || ch == '[' || ch == '{') {
-        if (skipTsBalanced())
-          continue;
-      } else {
+        if (!skipTsBalanced())
+          break;
+        continue;
+      } else if (ch >= '"' && ch <= '`') {
         skipTsTrivia(ch, false);
       }
       pos++;
@@ -2112,7 +2118,7 @@ static bool isTsArrowAfterTypeParameters () {
         if (!skipTsBalanced())
           break;
         pos--;
-      } else {
+      } else if (ch >= '"' && ch <= '`') {
         skipTsTrivia(ch, false);
       }
     }
