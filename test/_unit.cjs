@@ -863,30 +863,7 @@ suite('Lexer', () => {
     assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
     assert.strictEqual(imports[1].n, 'foo.json');
     assert.strictEqual(imports[2].n, './asdf');
-    assert.strictEqual(imports[2].a, -1);
-    assert.strictEqual(exports.length, 1);
-    assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
-  });
-
-  test('Import attributes', () => {
-    const source = `
-      import json from "./foo.json" with { type: "json" };
-      import("foo.json" , { with: { type: "json" } });
-
-      import test from './asdf'
-      with { not: 'an assertion!' }
-      export var p = 5;
-    `
-    const [imports, exports] = parse(source);
-    assert.strictEqual(imports.length, 3);
-    assert.strictEqual(imports[0].n, './foo.json');
-    assert.strictEqual(source.substring(imports[0].s, imports[0].e), './foo.json');
-    assert.strictEqual(source.substring(imports[0].a, imports[0].se), '{ type: "json" }');
-    assert.strictEqual(source.substring(imports[1].a, imports[1].se), '{ with: { type: "json" } })');
-    assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
-    assert.strictEqual(imports[1].n, 'foo.json');
-    assert.strictEqual(imports[2].n, './asdf');
-    assert.strictEqual(imports[2].a, -1);
+    assert.strictEqual(source.substring(imports[2].a, imports[2].se), "{ not: 'an assertion!' }");
     assert.strictEqual(exports.length, 1);
     assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
   });
@@ -981,6 +958,18 @@ suite('Lexer', () => {
       }
     `);
     assert.strictEqual(imports.length, 0);
+  });
+
+  test('Unicode whitespace after break and continue labels keeps regex opaque', () => {
+    for (const keyword of ['break', 'continue']) {
+      for (const whitespace of ['\u1680', '\u2000', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF']) {
+        const source = `label: while (true) { ${keyword}${whitespace}label\n` +
+          '/import("hidden")/.test(""); }\nimport("visible");';
+        const [imports] = parse(source);
+        assert.strictEqual(imports.length, 1, source);
+        assert.strictEqual(imports[0].n, 'visible', source);
+      }
+    }
   });
 
   test('Program-leading block keeps the following regex opaque', () => {
