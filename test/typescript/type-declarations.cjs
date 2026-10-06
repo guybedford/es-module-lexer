@@ -29,6 +29,17 @@ suite('TS type declarations', () => {
     }
   });
 
+  test('Unicode whitespace preserves pending type operands across line breaks', () => {
+    for (const whitespace of ['\u1680', '\u2000', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF']) {
+      const source = `type T = keyof${whitespace}\nimport('erased').T;\nimport('runtime'); export const next = 1;`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 1, source);
+      assert.strictEqual(imports[0].n, 'runtime', source);
+      assert.strictEqual(imports[0].tp, false, source);
+      assert.strictEqual(exports.at(-1).n, 'next', source);
+    }
+  });
+
   test('export type alias is type-only', () => {
     const [, exports] = parse(`export type Foo = Bar;`);
     assert.deepStrictEqual(exports.map(e => e.n), ['Foo']);

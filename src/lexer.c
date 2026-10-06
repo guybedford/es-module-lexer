@@ -57,7 +57,6 @@ static const char16_t KEYWORDS[] = {
   'u', 'n', 'c', 't', 'i', 'o', 'n',
   'o', 'u', 'r', 'c', 'e',
   'e', 'f', 'e', 'r',
-  's', 's', 'e', 'r', 't',
   ';',
 #ifdef LEX_TS
   'y', 'p', 'e',
@@ -111,9 +110,8 @@ static const char16_t KEYWORDS[] = {
 #define UNCTION (SYNC + 4)
 #define OURCE (UNCTION + 7)
 #define EFER (OURCE + 5)
-#define SSERT (EFER + 4)
 // Program start and opaque declaration erasure are statement boundaries.
-#define STATEMENT_END (SSERT + 5)
+#define STATEMENT_END (EFER + 4)
 #ifdef LEX_TS
 #define YPE (STATEMENT_END + 1)
 #define NTERFACE (YPE + 3)
@@ -649,8 +647,20 @@ static inline __attribute__((always_inline)) bool consumeToken (
       templateString();
       break;
     default:
-      if (!isTokenRunChar(ch))
+      if (!isTokenRunChar(ch)) {
+        // Non-ASCII characters outside token runs are whitespace.
+        if (ch > 127) {
+#ifdef LEX_TS
+          if (tsExportBindingDepth != 0 && isBr(ch)) {
+            resolveTsExportBindingLineBreak(pos);
+            if (tsExportBindingDepth == 0)
+              *tsTypeAngleCandidate = NULL;
+          }
+#endif
+          return true;
+        }
         break;
+      }
     skipTokenRun:
       while (isTokenRunChar(*(pos + 1))) pos++;
   }
@@ -701,7 +711,7 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (isBrOrWs(ch)) {
+    if (ch == 32 || ch < 14 && ch > 8) {
       continue;
     }
 
@@ -752,6 +762,8 @@ bool parse () {
         // fallthrough
       }
       default:
+        if (ch > 127 && isBrOrWs(ch))
+          continue;
         // as soon as we hit a non-module token, we go to main parser
         facade = false;
         pos--;
@@ -769,9 +781,9 @@ bool parse () {
   while (pos++ < end) {
     ch = *pos;
 
-    if (isBrOrWs(ch)) {
+    if (ch == 32 || ch < 14 && ch > 8) {
 #ifdef LEX_TS
-      if (isBr(ch) && tsExportBindingDepth != 0) {
+      if (tsExportBindingDepth != 0 && isBr(ch)) {
         resolveTsExportBindingLineBreak(pos);
         if (tsExportBindingDepth == 0)
           tsTypeAngleCandidate = NULL;
@@ -2993,27 +3005,13 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     import_write_head->import_ty = phase_keyword == 1 ? StaticSourcePhase : StaticDeferPhase;
   }
   pos++;
-  const char16_t* triviaStart = pos;
   ch = commentWhitespace(true);
-  char16_t* attrIndex = pos;
-  int keywordLength;
-  if (ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h') {
-    keywordLength = 4;
-  }
-  else if (ch == 'a' && memcmp(pos + 1, SSERT, 5 * 2) == 0) {
-    for (const char16_t* cursor = triviaStart; cursor < attrIndex; cursor++) {
-      if (isBr(*cursor)) {
-        pos--;
-        return;
-      }
-    }
-    keywordLength = 6;
-  }
-  else {
+  if (!(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
     pos--;
     return;
   }
-  pos += keywordLength;
+  char16_t* attrIndex = pos;
+  pos += 4;
   ch = commentWhitespace(true);
   if (ch != '{') {
     pos = attrIndex;
@@ -3404,7 +3402,8 @@ lineCommentEnd:
 #else
   while (pos++ < end) {
     char16_t ch = *pos;
-    if ((uint32_t)(ch - 14) < 0x2028 - 14)
+    // CR, LF, LS and PS share bit 3 and differ only in bits 0x2027.
+    if ((ch & 0xDFD8) != 8)
       continue;
     if (isBr(ch))
       return;
@@ -3475,12 +3474,21 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
-static __attribute__((noinline)) bool isUnicodeBr (char16_t c) {
+#ifdef LEXER_SIMD
+static inline __attribute__((always_inline))
+#else
+static __attribute__((noinline))
+#endif
+bool isUnicodeBr (char16_t c) {
   return (c | 1) == 0x2029;
 }
 
 __attribute__((always_inline)) bool isBr (char16_t c) {
-  return __builtin_expect(c < 128, true) ? c == '\r' || c == '\n' : isUnicodeBr(c);
+  return __builtin_expect(c < 128, true) ? c == '\r' || c == '\n' :
+#ifndef LEXER_SIMD
+    c <= 0x2029 &&
+#endif
+    isUnicodeBr(c);
 }
 
 static __attribute__((noinline)) bool isUnicodeWs (char16_t c, bool br) {

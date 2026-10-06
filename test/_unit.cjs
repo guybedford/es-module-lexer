@@ -960,6 +960,18 @@ suite('Lexer', () => {
     assert.strictEqual(imports.length, 0);
   });
 
+  test('Unicode whitespace after break and continue labels keeps regex opaque', () => {
+    for (const keyword of ['break', 'continue']) {
+      for (const whitespace of ['\u1680', '\u2000', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF']) {
+        const source = `label: while (true) { ${keyword}${whitespace}label\n` +
+          '/import("hidden")/.test(""); }\nimport("visible");';
+        const [imports] = parse(source);
+        assert.strictEqual(imports.length, 1, source);
+        assert.strictEqual(imports[0].n, 'visible', source);
+      }
+    }
+  });
+
   test('Program-leading block keeps the following regex opaque', () => {
     const [imports] = parse(`{}\n/import('m')/.test(x);`);
     assert.deepStrictEqual(imports.map(impt => impt.n), []);
