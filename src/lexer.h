@@ -553,9 +553,11 @@ char16_t readToWsOrPunctuator (char16_t ch);
 
 bool isQuote (char16_t ch);
 
+#ifdef LEXER_MIN
 bool isBr (char16_t c);
 bool isWsNotBr (char16_t c);
 bool isBrOrWs (char16_t c);
+#endif
 bool isBrOrWsOrPunctuator (char16_t c);
 bool isSpread (char16_t* c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
