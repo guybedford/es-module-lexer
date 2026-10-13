@@ -851,7 +851,7 @@ suite('Lexer', () => {
       import("foo.json" , { with: { type: "json" } });
 
       import test from './asdf'
-      with { not: 'an assertion!' }
+      with { type: 'json' }
       export var p = 5;
     `
     const [imports, exports] = parse(source);
@@ -863,7 +863,7 @@ suite('Lexer', () => {
     assert.strictEqual(source.substring(imports[1].s, imports[1].e), '"foo.json"');
     assert.strictEqual(imports[1].n, 'foo.json');
     assert.strictEqual(imports[2].n, './asdf');
-    assert.strictEqual(source.substring(imports[2].a, imports[2].se), "{ not: 'an assertion!' }");
+    assert.strictEqual(source.substring(imports[2].a, imports[2].se), "{ type: 'json' }");
     assert.strictEqual(exports.length, 1);
     assertExportIs(source, exports[0], {n: 'p', ln: 'p', a: false});
   });
