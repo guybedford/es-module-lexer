@@ -44,7 +44,7 @@ suite('TS regex / division', () => {
 
   test('prefix ! before a regex still starts a regex', () => {
     // A quote inside the regex would corrupt lexing if it were read as division.
-    const [, exports] = parse(`export const f = (s: string) => !/"/.test(s);\nexport const g = (s: string) => { return!/"/.test(s) };\nexport default !/"/.test(s);\nfunction h() {}\n!/"/.test(s);\nif (s) !/"/.test(s);\nexport const i = s !== /"/;`);
-    assert.deepStrictEqual(exports.map(e => e.n), ['f', 'g', 'default', 'i']);
+    const [, exports] = parse(`export const f = (s: string) => !/"/.test(s);\nexport const g = (s: string) => { return!/"/.test(s) };\nexport default !/"/.test(s);\nfunction h() {}\n!/"/.test(s);\nif (s) !/"/.test(s);\nexport const i = s !== /"/;\nl: for (;;) { break l\n!/"/.test(s) }\nexport const j = s != /"/;`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['f', 'g', 'default', 'i', 'j']);
   });
 });

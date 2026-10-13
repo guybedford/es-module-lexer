@@ -213,10 +213,12 @@ static void collectStaticImportBindings (
 
 // True when the last token cannot end an operand, so the token at pos starts
 // a new one: a `/` here is a regular expression and (in TS) a `!` is a prefix
-// operator rather than a postfix non-null assertion.
-static inline __attribute__((always_inline)) bool lastTokenEndsExpression () {
+// operator rather than a postfix non-null assertion. Outlined: it is reached
+// from two consumeToken cases and inlining it twice per copy costs code size.
+static bool lastTokenEndsExpression () __attribute__((noinline));
+static bool lastTokenEndsExpression () {
   char16_t lastToken = *lastTokenPos;
-  return isExpressionPunctuator(lastToken) &&
+  if (isExpressionPunctuator(lastToken) &&
       !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
       !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-')
 #ifdef LEX_TS
@@ -230,7 +232,15 @@ static inline __attribute__((always_inline)) bool lastTokenEndsExpression () {
       isExpressionKeyword(lastTokenPos) ||
       lastToken == '/' && lastSlashWasDivision ||
       !lastToken ||
-      export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end;
+      export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end)
+    return true;
+  // `break label` / `continue label`: the label ends the statement.
+  char16_t* tokenPos = lastTokenPos;
+  while (tokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--tokenPos)));
+  if (!isWsNotBr(*tokenPos))
+    return false;
+  while (tokenPos > source && isWsNotBr(*(--tokenPos)));
+  return isBreakOrContinue(tokenPos);
 }
 
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
@@ -245,11 +255,6 @@ static inline __attribute__((always_inline)) bool handleSlash () {
     lastSlashWasDivision = false;
   }
   else {
-    while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
-    if (isWsNotBr(*lastTokenPos)) {
-      while (lastTokenPos > source && isWsNotBr(*(--lastTokenPos)));
-      if (isBreakOrContinue(lastTokenPos)) { regularExpression(); lastSlashWasDivision = false; return false; }
-    }
     lastSlashWasDivision = true;
   }
   return false;
@@ -472,8 +477,9 @@ static inline __attribute__((always_inline)) bool consumeToken (
     case '!':
       // Postfix non-null assertion exactly where a `/` would be a division:
       // `a!`, `a[0]!`, `f()!`, `a!!`, but prefix after `return`, `if (x)`,
-      // a statement-closing `}` or `export default`.
-      tsPostfixNonNull = !lastTokenEndsExpression();
+      // a statement-closing `}` or `export default`. `!=` / `!==` (the
+      // common case) is one operator, so it is never a non-null assertion.
+      tsPostfixNonNull = *(pos + 1) != '=' && !lastTokenEndsExpression();
       break;
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
