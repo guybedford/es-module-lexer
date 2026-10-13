@@ -475,11 +475,19 @@ static inline __attribute__((always_inline)) bool consumeToken (
       break;
 #ifdef LEX_TS
     case '!':
-      // Postfix non-null assertion exactly where a `/` would be a division:
-      // `a!`, `a[0]!`, `f()!`, `a!!`, but prefix after `return`, `if (x)`,
-      // a statement-closing `}` or `export default`. `!=` / `!==` (the
-      // common case) is one operator, so it is never a non-null assertion.
+      // Unlike division, a postfix assertion cannot cross a line break.
+      // `!=` and `!==` never contain a postfix assertion.
       tsPostfixNonNull = *(pos + 1) != '=' && !lastTokenEndsExpression();
+      if (tsPostfixNonNull) {
+        char16_t* triviaPos = pos;
+        while (triviaPos > lastTokenPos) {
+          char16_t trivia = *(--triviaPos);
+          if (isBr(trivia) || trivia == 0x2028 || trivia == 0x2029) {
+            tsPostfixNonNull = false;
+            break;
+          }
+        }
+      }
       break;
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {

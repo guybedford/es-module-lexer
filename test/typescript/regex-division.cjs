@@ -47,4 +47,27 @@ suite('TS regex / division', () => {
     const [, exports] = parse(`export const f = (s: string) => !/"/.test(s);\nexport const g = (s: string) => { return!/"/.test(s) };\nexport default !/"/.test(s);\nfunction h() {}\n!/"/.test(s);\nif (s) !/"/.test(s);\nexport const i = s !== /"/;\nl: for (;;) { break l\n!/"/.test(s) }\nexport const j = s != /"/;`);
     assert.deepStrictEqual(exports.map(e => e.n), ['f', 'g', 'default', 'i', 'j']);
   });
+
+  test('a line break before ! keeps it prefix', () => {
+    for (const trivia of ['\n', '\r', '\r\n', '/*\n*/', '// comment\n', '\u2028', '\u2029']) {
+      for (const operand of ['a', 'a[0]', 'f()', '(a)', '`value`', 'a++', 'a!']) {
+        const body = `const a = [1]; ${operand}${trivia}!/"/.test(s);`;
+        for (const source of [
+          `${body} export const after = 1;`,
+          `export const run = () => { ${body} }; export const after = 1;`
+        ]) {
+          const [imports, exports] = parse(source);
+          assert.deepStrictEqual(imports, [], source);
+          assert.deepStrictEqual(exports.map(e => e.n), source.startsWith('export') ? ['run', 'after'] : ['after'], source);
+        }
+      }
+    }
+  });
+
+  test('same-line assertions keep division across following line breaks', () => {
+    for (const operand of ['a!', 'a /*comment*/ !', 'a! /*comment*/ !']) {
+      const source = `export const half = ${operand}\n/ 2; export const after = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['half', 'after'], source);
+    }
+  });
 });
