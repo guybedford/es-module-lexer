@@ -211,6 +211,28 @@ static void collectStaticImportBindings (
 );
 #endif
 
+// True when the last token cannot end an operand, so the token at pos starts
+// a new one: a `/` here is a regular expression and (in TS) a `!` is a prefix
+// operator rather than a postfix non-null assertion.
+static inline __attribute__((always_inline)) bool lastTokenEndsExpression () {
+  char16_t lastToken = *lastTokenPos;
+  return isExpressionPunctuator(lastToken) &&
+      !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
+      !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-')
+#ifdef LEX_TS
+      // `a! / 2`: a postfix non-null assertion ends an operand (#262).
+      && !(lastToken == '!' && tsPostfixNonNull)
+#endif
+      ||
+      lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
+      lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
+      isExpressionKeyword(lastTokenPos) ||
+      lastToken == '/' && lastSlashWasDivision ||
+      !lastToken ||
+      export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end;
+}
+
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
 // resolves '/' with the exact main-loop logic. Returns true for a comment
 // (caller must not update lastTokenPos).
@@ -218,20 +240,7 @@ static inline __attribute__((always_inline)) bool handleSlash () {
   char16_t next_ch = *(pos + 1);
   if (next_ch == '/') { lineComment(); return true; }
   if (next_ch == '*') { blockComment(true); return true; }
-  char16_t lastToken = *lastTokenPos;
-  if (isExpressionPunctuator(lastToken) &&
-      !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
-      !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
-      lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
-      lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
-      isExpressionKeyword(lastTokenPos) ||
-      lastToken == '/' && lastSlashWasDivision ||
-      !lastToken) {
-    regularExpression();
-    lastSlashWasDivision = false;
-  }
-  else if (export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end) {
+  if (lastTokenEndsExpression()) {
     regularExpression();
     lastSlashWasDivision = false;
   }
@@ -461,7 +470,10 @@ static inline __attribute__((always_inline)) bool consumeToken (
       break;
 #ifdef LEX_TS
     case '!':
-      tsPostfixNonNull = isTokenValue(*lastTokenPos) || *lastTokenPos == '!' && tsPostfixNonNull;
+      // Postfix non-null assertion exactly where a `/` would be a division:
+      // `a!`, `a[0]!`, `f()!`, `a!!`, but prefix after `return`, `if (x)`,
+      // a statement-closing `}` or `export default`.
+      tsPostfixNonNull = !lastTokenEndsExpression();
       break;
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {

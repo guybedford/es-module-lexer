@@ -26,4 +26,25 @@ suite('TS regex / division', () => {
     assert.strictEqual(imports[0].tp, false);
     assert.deepStrictEqual(exports.map(e => e.n), ['d', 'e']);
   });
+
+  // #262: a `/` after a postfix non-null assertion is a division, not a regex.
+  test('division after a postfix non-null assertion', () => {
+    const [, exports] = parse(`export const half = (a: number[]) => a[0]! / 2`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['half']);
+    const [, exports2] = parse(`export const half = (a?: number) => a! / 2`);
+    assert.deepStrictEqual(exports2.map(e => e.n), ['half']);
+    const [, exports3] = parse(`export let x = 4; x! /= 2`);
+    assert.deepStrictEqual(exports3.map(e => e.n), ['x']);
+  });
+
+  test('division after non-null assertions on calls, parens, templates and chained !', () => {
+    const [, exports] = parse(`export const a = f()! / 2, b = (o)! / 2, c = \`\${o}\`! / 2, d = o!! / 2, e = o! / /"/.source.length, g = 1;`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'c', 'd', 'e', 'g']);
+  });
+
+  test('prefix ! before a regex still starts a regex', () => {
+    // A quote inside the regex would corrupt lexing if it were read as division.
+    const [, exports] = parse(`export const f = (s: string) => !/"/.test(s);\nexport const g = (s: string) => { return!/"/.test(s) };\nexport default !/"/.test(s);\nfunction h() {}\n!/"/.test(s);\nif (s) !/"/.test(s);\nexport const i = s !== /"/;`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['f', 'g', 'default', 'i']);
+  });
 });
