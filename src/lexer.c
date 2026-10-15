@@ -28,6 +28,29 @@ static uint32_t template_scan_count;
 #endif
 static bool template_raw_cr;
 
+#ifndef LEXER_MIN
+static inline __attribute__((always_inline)) bool isBr (char16_t c) {
+  return __builtin_expect(c < 128, true) ? c == '\r' || c == '\n' : (c | 1) == 0x2029;
+}
+
+static __attribute__((noinline)) bool isUnicodeWs (char16_t c) {
+  return c == 0x1680 || (char16_t)(c - 0x2000) < 11 || c == 0x202F ||
+    c == 0x205F || c == 0x3000 || c == 0xFEFF;
+}
+
+static inline __attribute__((always_inline)) bool isWsNotBr (char16_t c) {
+  if (__builtin_expect(c < 128, true))
+    return c == 9 || c == 11 || c == 12 || c == 32;
+  return c == 160 || isUnicodeWs(c);
+}
+
+static inline __attribute__((always_inline)) bool isBrOrWs (char16_t c) {
+  if (__builtin_expect(c < 128, true))
+    return (char16_t)(c - 9) < 5 || c == 32;
+  return c == 160 || isBr(c) || isUnicodeWs(c);
+}
+#endif
+
 // Keep the keyword tails in one object so the fastcomp memory image is
 // contiguous and build/gen-asm-in.mjs can extract it without spanning gaps.
 static const char16_t KEYWORDS[] = {
@@ -261,9 +284,14 @@ static inline __attribute__((always_inline)) bool handleSlash () {
 }
 
 static inline __attribute__((always_inline)) bool isTokenRunChar (char16_t ch) {
-  // Fold ASCII case; NBSP is the only non-ASCII whitespace recognized here.
+  // Fold ASCII case.
   return (char16_t)((ch | 32) - 'a') < 26 || (char16_t)(ch - '0') < 10 ||
-    ch == '$' || ch == '_' || ch == '\\' || (ch > 127 && ch != 160);
+    ch == '$' || ch == '_' || ch == '\\' ||
+#ifndef LEXER_MIN
+    (ch > 127 && !isBrOrWs(ch));
+#else
+    (ch > 127 && ch != 160);
+#endif
 }
 
 static inline __attribute__((always_inline)) bool isTokenValue (char16_t ch) {
@@ -673,8 +701,22 @@ static inline __attribute__((always_inline)) bool consumeToken (
       templateString();
       break;
     default:
-      if (!isTokenRunChar(ch))
+      if (!isTokenRunChar(ch)) {
+#ifndef LEXER_MIN
+        // Non-ASCII characters outside token runs are whitespace.
+        if (ch > 127) {
+#ifdef LEX_TS
+          if (tsExportBindingDepth != 0 && isBr(ch)) {
+            resolveTsExportBindingLineBreak(pos);
+            if (tsExportBindingDepth == 0)
+              *tsTypeAngleCandidate = NULL;
+          }
+#endif
+          return true;
+        }
+#endif
         break;
+      }
     skipTokenRun:
       while (isTokenRunChar(*(pos + 1))) pos++;
   }
@@ -776,6 +818,8 @@ bool parse () {
         // fallthrough
       }
       default:
+        if (ch > 127 && isBrOrWs(ch))
+          continue;
         // as soon as we hit a non-module token, we go to main parser
         facade = false;
         pos--;
@@ -795,7 +839,7 @@ bool parse () {
 
     if (ch == 32 || ch < 14 && ch > 8) {
 #ifdef LEX_TS
-      if (isBr(ch) && tsExportBindingDepth != 0) {
+      if (tsExportBindingDepth != 0 && isBr(ch)) {
         resolveTsExportBindingLineBreak(pos);
         if (tsExportBindingDepth == 0)
           tsTypeAngleCandidate = NULL;
@@ -3391,14 +3435,17 @@ void lineComment () {
   const v128_t newline = wasm_i16x8_splat('\n');
   const v128_t carriage_return = wasm_i16x8_splat('\r');
   const v128_t zero = wasm_i16x8_splat(0);
+  const v128_t line_separator = wasm_i16x8_splat(0x2028);
+  const v128_t pair_mask = wasm_i16x8_splat(-2);
   for (;;) {
     v128_t chunk = wasm_v128_load(p);
     uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(
-        wasm_i16x8_eq(chunk, zero),
-        wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return))));
+        wasm_v128_or(wasm_i16x8_eq(chunk, zero), wasm_i16x8_eq(chunk, newline)),
+        wasm_v128_or(wasm_i16x8_eq(chunk, carriage_return),
+          wasm_i16x8_eq(wasm_v128_and(chunk, pair_mask), line_separator))));
     if (mask) {
       p += __builtin_ctz(mask);
-      if (*p != 0 || p > end) {
+      if (isBr(*p) || p > end) {
         pos = p;
         return;
       }
@@ -3414,7 +3461,14 @@ lineCommentEnd:
 #else
   while (pos++ < end) {
     char16_t ch = *pos;
+#ifndef LEXER_MIN
+    // CR, LF, LS and PS share bit 3 and differ only in bits 0x2027.
+    if ((ch & 0xDFD8) != 8)
+      continue;
+    if (isBr(ch))
+#else
     if (ch == '\n' || ch == '\r')
+#endif
       return;
   }
 #endif
@@ -3430,7 +3484,11 @@ void stringLiteral (char16_t quote) {
       if (ch == '\r' && *(pos + 1) == '\n')
         pos++;
     }
+#ifdef LEXER_MIN
     else if (isBr(ch))
+#else
+    else if (ch == '\n' || ch == '\r')
+#endif
       break;
   }
   syntaxError();
@@ -3483,6 +3541,7 @@ char16_t readToWsOrPunctuator (char16_t ch) {
   return ch;
 }
 
+#ifdef LEXER_MIN
 // Note: non-asii BR and whitespace checks omitted for perf / footprint
 // if there is a significant user need this can be reconsidered
 bool isBr (char16_t c) {
@@ -3499,12 +3558,22 @@ bool isBrOrWs (char16_t c) {
   return (char16_t)(c - 9) < 5 || c == 32 || c == 160;
 }
 
+#endif
+
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
+#ifndef LEXER_MIN
+  return isBrOrWs(c) || isPunctuator(c) && c != '.';
+#else
   return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
+#endif
 }
 
 bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
+#ifndef LEXER_MIN
+  return isBrOrWs(*c) || isPunctuator(*c) && (isSpread(c) || *c != '.');
+#else
   return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
+#endif
 }
 
 // Detects whether the character sequence ending at `pos` (inclusive) ends a
