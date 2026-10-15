@@ -1,0 +1,54 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Release type'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+concurrency: create-release
+
+jobs:
+  verify-branch:
+    name: 'Verify Main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "$GITHUB_REF_NAME" != 'main' ]; then
+            echo "Releases must be dispatched from main, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+  test:
+    needs: verify-branch
+    uses: ./.github/workflows/build.yml
+
+  create-release:
+    name: 'Bump, Tag and Push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # RELEASE_TOKEN, not GITHUB_TOKEN: pushes from the default token do not trigger publish.yml
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - name: Bump Version
+        run: npm version "${{ inputs.type }}" --no-git-tag-version
+      - name: Commit, Tag and Push
+        run: |
+          VERSION="$(npm pkg get version | tr -d '"')"
+          git config user.name 'Guy Bedford'
+          git config user.email 'guybedford@gmail.com'
+          git add package.json
+          git commit -m "$VERSION"
+          git tag "$VERSION"
+          git push --atomic origin main "$VERSION"

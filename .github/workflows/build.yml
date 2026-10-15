@@ -5,6 +5,7 @@ on:
     branches: [main, v3]
   pull_request:
     branches: [main, v3]
+  workflow_call:
 
 env:
   EMCC_VERSION: "6.0.0"

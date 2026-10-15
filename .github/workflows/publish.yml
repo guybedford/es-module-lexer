@@ -1,0 +1,72 @@
+name: Publish
+
+on:
+  push:
+    tags: '[0-9]+.[0-9]+.[0-9]+*'
+
+env:
+  EMCC_VERSION: "6.0.0"
+  EMCC_FASTCOMP_VERSION: "1.40.1-fastcomp"
+
+jobs:
+  publish:
+    name: 'Publish to npm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: 'https://registry.npmjs.org'
+      - name: Verify Tag Matches Version
+        run: |
+          PKG_VERSION="$(npm pkg get version | tr -d '"')"
+          if [ "$PKG_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+      - name: Install Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd ./emsdk
+          ./emsdk install ${{ env.EMCC_VERSION }}
+          ./emsdk activate ${{ env.EMCC_VERSION }}
+      - name: Install Emscripten Fastcomp
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git emsdk-fastcomp --branch 3.1.29
+          cd ./emsdk-fastcomp
+          ./emsdk install ${{ env.EMCC_FASTCOMP_VERSION }}
+          ./emsdk activate ${{ env.EMCC_FASTCOMP_VERSION }}
+      - name: npm Install
+        run: npm install
+      - name: Setup Chomp
+        uses: guybedford/chomp-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Chomp Build
+        env:
+          EMSDK_PATH: './emsdk'
+          EMSDK_FASTCOMP_PATH: './emsdk-fastcomp'
+        run: chomp build
+      # Trusted publishing (OIDC) requires npm >= 11.5.1
+      - name: Update npm
+        run: npm install -g npm@latest
+      - name: Publish
+        run: |
+          case "$GITHUB_REF_NAME" in
+            *-*) npm publish --tag next ;;
+            *) npm publish ;;
+          esac
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            *-*) PRERELEASE=--prerelease ;;
+            *) PRERELEASE= ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes $PRERELEASE
