@@ -2991,7 +2991,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
     import_write_head->import_ty = phase_keyword == 1 ? StaticSourcePhase : StaticDeferPhase;
   }
   pos++;
-  ch = commentWhitespace(false);
+  ch = commentWhitespace(true);
   if (!(ch == 'w' && *(pos + 1) == 'i' && *(pos + 2) == 't' && *(pos + 3) == 'h')) {
     pos--;
     return;
@@ -3006,11 +3006,12 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
   const char16_t* attrStart = pos;
 #ifndef LEXER_MIN
   Attribute* attr_write_head = NULL;
-  Attribute* attr_write_head_last = NULL;
 #endif
-  do {
-    pos++;
+  pos++;
+  while (true) {
     ch = commentWhitespace(true);
+    if (ch == '}')
+      break;
     const char16_t* key_start;
     const char16_t* key_end;
     if (ch == '\'') {
@@ -3031,6 +3032,8 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       key_start = pos;
       ch = readToWsOrPunctuator(ch);
       key_end = pos;
+      if (ch != ':')
+        ch = commentWhitespace(true);
     }
     if (ch != ':') {
       pos = attrIndex;
@@ -3067,7 +3070,6 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       import_write_head->attributes = attr;
     else
       attr_write_head->next = attr;
-    attr_write_head_last = attr_write_head;
     attr_write_head = attr;
 #endif
     pos++;
@@ -3080,7 +3082,7 @@ void readImportString (const char16_t* ss, char16_t ch, int phase_keyword) {
       break;
     pos = attrIndex;
     return;
-  } while (true);
+  }
   import_write_head->attr_index = attrStart;
   import_write_head->statement_end = pos + 1;
 }
