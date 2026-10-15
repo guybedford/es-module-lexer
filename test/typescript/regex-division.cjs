@@ -26,4 +26,48 @@ suite('TS regex / division', () => {
     assert.strictEqual(imports[0].tp, false);
     assert.deepStrictEqual(exports.map(e => e.n), ['d', 'e']);
   });
+
+  // #262: a `/` after a postfix non-null assertion is a division, not a regex.
+  test('division after a postfix non-null assertion', () => {
+    const [, exports] = parse(`export const half = (a: number[]) => a[0]! / 2`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['half']);
+    const [, exports2] = parse(`export const half = (a?: number) => a! / 2`);
+    assert.deepStrictEqual(exports2.map(e => e.n), ['half']);
+    const [, exports3] = parse(`export let x = 4; x! /= 2`);
+    assert.deepStrictEqual(exports3.map(e => e.n), ['x']);
+  });
+
+  test('division after non-null assertions on calls, parens, templates and chained !', () => {
+    const [, exports] = parse(`export const a = f()! / 2, b = (o)! / 2, c = \`\${o}\`! / 2, d = o!! / 2, e = o! / /"/.source.length, g = 1;`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['a', 'b', 'c', 'd', 'e', 'g']);
+  });
+
+  test('prefix ! before a regex still starts a regex', () => {
+    // A quote inside the regex would corrupt lexing if it were read as division.
+    const [, exports] = parse(`export const f = (s: string) => !/"/.test(s);\nexport const g = (s: string) => { return!/"/.test(s) };\nexport default !/"/.test(s);\nfunction h() {}\n!/"/.test(s);\nif (s) !/"/.test(s);\nexport const i = s !== /"/;\nl: for (;;) { break l\n!/"/.test(s) }\nexport const j = s != /"/;`);
+    assert.deepStrictEqual(exports.map(e => e.n), ['f', 'g', 'default', 'i', 'j']);
+  });
+
+  test('a line break before ! keeps it prefix', () => {
+    for (const trivia of ['\n', '\r', '\r\n', '/*\n*/', '// comment\n', '\u2028', '\u2029']) {
+      for (const operand of ['a', 'a[0]', 'f()', '(a)', '`value`', 'a++', 'a!']) {
+        const body = `const a = [1]; ${operand}${trivia}!/"/.test(s);`;
+        for (const source of [
+          `${body} export const after = 1;`,
+          `export const run = () => { ${body} }; export const after = 1;`
+        ]) {
+          const [imports, exports] = parse(source);
+          assert.deepStrictEqual(imports, [], source);
+          assert.deepStrictEqual(exports.map(e => e.n), source.startsWith('export') ? ['run', 'after'] : ['after'], source);
+        }
+      }
+    }
+  });
+
+  test('same-line assertions keep division across following line breaks', () => {
+    for (const operand of ['a!', 'a /*comment*/ !', 'a! /*comment*/ !']) {
+      const source = `export const half = ${operand}\n/ 2; export const after = 1;`;
+      assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['half', 'after'], source);
+    }
+  });
 });

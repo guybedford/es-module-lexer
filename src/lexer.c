@@ -211,6 +211,38 @@ static void collectStaticImportBindings (
 );
 #endif
 
+// True when the last token cannot end an operand, so the token at pos starts
+// a new one: a `/` here is a regular expression and (in TS) a `!` is a prefix
+// operator rather than a postfix non-null assertion. Outlined: it is reached
+// from two consumeToken cases and inlining it twice per copy costs code size.
+static bool lastTokenEndsExpression () __attribute__((noinline));
+static bool lastTokenEndsExpression () {
+  char16_t lastToken = *lastTokenPos;
+  if (isExpressionPunctuator(lastToken) &&
+      !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
+      !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-')
+#ifdef LEX_TS
+      // `a! / 2`: a postfix non-null assertion ends an operand (#262).
+      && !(lastToken == '!' && tsPostfixNonNull)
+#endif
+      ||
+      lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
+      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
+      lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
+      isExpressionKeyword(lastTokenPos) ||
+      lastToken == '/' && lastSlashWasDivision ||
+      !lastToken ||
+      export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end)
+    return true;
+  // `break label` / `continue label`: the label ends the statement.
+  char16_t* tokenPos = lastTokenPos;
+  while (tokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--tokenPos)));
+  if (!isWsNotBr(*tokenPos))
+    return false;
+  while (tokenPos > source && isWsNotBr(*(--tokenPos)));
+  return isBreakOrContinue(tokenPos);
+}
+
 // Division / regex ambiguity + comment dispatch, shared so skipExpression
 // resolves '/' with the exact main-loop logic. Returns true for a comment
 // (caller must not update lastTokenPos).
@@ -218,29 +250,11 @@ static inline __attribute__((always_inline)) bool handleSlash () {
   char16_t next_ch = *(pos + 1);
   if (next_ch == '/') { lineComment(); return true; }
   if (next_ch == '*') { blockComment(true); return true; }
-  char16_t lastToken = *lastTokenPos;
-  if (isExpressionPunctuator(lastToken) &&
-      !(lastToken == '.' && (*(lastTokenPos - 1) >= '0' && *(lastTokenPos - 1) <= '9')) &&
-      !(lastToken == '+' && *(lastTokenPos - 1) == '+') && !(lastToken == '-' && *(lastTokenPos - 1) == '-') ||
-      lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
-      lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
-      isExpressionKeyword(lastTokenPos) ||
-      lastToken == '/' && lastSlashWasDivision ||
-      !lastToken) {
-    regularExpression();
-    lastSlashWasDivision = false;
-  }
-  else if (export_write_head != NULL && lastTokenPos >= export_write_head->start && lastTokenPos <= export_write_head->end) {
+  if (lastTokenEndsExpression()) {
     regularExpression();
     lastSlashWasDivision = false;
   }
   else {
-    while (lastTokenPos > source && !isBrOrWsOrPunctuatorNotDot(*(--lastTokenPos)));
-    if (isWsNotBr(*lastTokenPos)) {
-      while (lastTokenPos > source && isWsNotBr(*(--lastTokenPos)));
-      if (isBreakOrContinue(lastTokenPos)) { regularExpression(); lastSlashWasDivision = false; return false; }
-    }
     lastSlashWasDivision = true;
   }
   return false;
@@ -461,7 +475,19 @@ static inline __attribute__((always_inline)) bool consumeToken (
       break;
 #ifdef LEX_TS
     case '!':
-      tsPostfixNonNull = isTokenValue(*lastTokenPos) || *lastTokenPos == '!' && tsPostfixNonNull;
+      // Unlike division, a postfix assertion cannot cross a line break.
+      // `!=` and `!==` never contain a postfix assertion.
+      tsPostfixNonNull = *(pos + 1) != '=' && !lastTokenEndsExpression();
+      if (tsPostfixNonNull) {
+        char16_t* triviaPos = pos;
+        while (triviaPos > lastTokenPos) {
+          char16_t trivia = *(--triviaPos);
+          if (isBr(trivia) || trivia == 0x2028 || trivia == 0x2029) {
+            tsPostfixNonNull = false;
+            break;
+          }
+        }
+      }
       break;
     case '<':
       if (tsExportBindingDepth != 0 && tsExportBindingDepth != TS_EXPORT_BINDING_INITIALIZER) {
