@@ -1980,6 +1980,11 @@ function x() {
   test('Export analysis bounds malformed identifier escapes', () => {
     if (min) return;
     const source = String.raw`/* ${'x'.repeat(5000)} */ export { x }; import { value as \u } from './malformed';`;
+    if (process.env.BINDINGS) {
+      assert.throws(() => parse(source), { message: /^Parse error/ });
+      assert.strictEqual(parse('export { x };')[1][0].n, 'x');
+      return;
+    }
     const [, exports] = parse(source);
 
     assert.strictEqual(exports.length, 1);

@@ -222,6 +222,51 @@ exports[0];
 exports[1];
 ```
 
+### Import bindings
+
+Use `es-module-lexer/bindings` to collect imported and local names. Use
+`es-module-lexer/bindings/js` for the asm.js build. The Wasm entry point supports
+both ESM and CommonJS.
+
+```js
+import { init, parse } from 'es-module-lexer/bindings';
+
+await init();
+
+const source = "import main, { a, b as c } from './dep.js';";
+const [[imported]] = parse(source);
+
+imported.bindings.map(binding => binding.importName); // ['default', 'a', 'b']
+imported.bindings.map(binding => binding.localName); // ['main', 'a', 'c']
+source.slice(imported.clauseStart, imported.clauseEnd); // 'main, { a, b as c }'
+
+const renamed = imported.bindings[2];
+source.slice(renamed.importNameStart, renamed.importNameEnd); // 'b'
+source.slice(renamed.localStart, renamed.localEnd); // 'c'
+```
+
+Each static import record adds `bindings`, `clauseStart`, and `clauseEnd`.
+Clause ranges exclude the `import` keyword, type and phase modifiers, the `from`
+keyword, and surrounding comments or whitespace. All ranges use UTF-16 offsets
+with exclusive ends. Name ranges retain quotes and escape sequences. Names are
+decoded.
+
+A binding's `type` is `named`, `default`, `namespace`, or `source`. Default
+bindings use `importName: 'default'`. Namespace and source bindings use
+`importName: null`. Only named bindings have an explicit imported-name token;
+other kinds use `-1` for `importNameStart` and `importNameEnd`.
+
+TypeScript type-only statements and specifiers set each binding's `typeOnly`.
+TypeScript `import name = require('module')` declarations report a namespace
+binding. Their clause range covers the local name.
+
+Side-effect imports and reexports have empty binding arrays and clause ranges
+of `-1`. Empty named clauses retain their range. Dynamic imports and
+`import.meta` records have no binding fields.
+
+This entry point uses a separate build. The default and minimal builds do not
+include binding collection or add fields to their records.
+
 ### Export Analysis
 
 Detached exports are resolved after the complete module is lexed. An imported

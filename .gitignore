@@ -5,5 +5,9 @@ package-lock.json
 yarn.lock
 src/lexer.js
 src/lexer.min.js
+src/lexer.bindings.js
+src/lexer.bindings.js.map
+src/import-bindings.js
+src/import-bindings.js.map
 src/*.mem
 src/lexer.js.map

@@ -9,6 +9,9 @@ import type {
   ImportSpecifier as MinimalImportSpecifier,
   ExportSpecifier as MinimalExportSpecifier,
 } from '../types/lexer.minimal.js';
+import { parse as bindingsParse } from 'es-module-lexer/bindings';
+import { parse as asmBindingsParse } from 'es-module-lexer/bindings/js';
+import type { ImportBinding } from 'es-module-lexer/bindings';
 
 declare const imported: Import;
 
@@ -91,3 +94,20 @@ parse('').then;
 
 const minimalSyncImports: ReadonlyArray<MinimalImportSpecifier> = minimalParse('')[0];
 minimalSyncImports;
+
+for (const bindingParse of [bindingsParse, asmBindingsParse]) {
+  const [imports] = bindingParse("import { a } from 'a'");
+  for (const imported of imports) {
+    if (imported.type === 'static' || imported.type === 'reexport-star') {
+      imported.bindings satisfies ReadonlyArray<ImportBinding>;
+      imported.clauseStart satisfies number;
+      imported.clauseEnd satisfies number;
+    }
+    else {
+      // @ts-expect-error Only static import records carry bindings.
+      imported.bindings;
+    }
+  }
+}
+// @ts-expect-error The default parser does not collect bindings.
+parse('')[0][0].bindings;

@@ -3,12 +3,12 @@ const assert = require('node:assert/strict');
 let parse;
 const commonjs = !!process.env.CJS;
 const minimal = !!process.env.MINIMAL;
+const bindings = !!process.env.BINDINGS;
 
 suite('No string code generation', () => {
   suiteSetup(async () => {
-    const lexer = commonjs
-      ? require(minimal ? '../../dist/lexer.minimal.cjs' : '../../dist/lexer.cjs')
-      : await import(minimal ? '../../dist/lexer.minimal.js' : '../../dist/lexer.js');
+    const specifier = minimal ? 'es-module-lexer/minimal' : bindings ? 'es-module-lexer/bindings' : 'es-module-lexer';
+    const lexer = commonjs ? require(specifier) : await import(specifier);
     await lexer.init();
     parse = lexer.parse;
     assert.throws(() => eval('1'), EvalError);
@@ -57,6 +57,13 @@ suite('No string code generation', () => {
 
     const [unsafeImports] = parse("import(`raw\rreturn` + suffix)");
     assert.strictEqual(minimal ? unsafeImports[0].n : unsafeImports[0].specifier, undefined);
+  });
+
+  test('decodes imported and local binding names', function () {
+    if (!bindings) this.skip();
+    const [[record]] = parse(String.raw`import { "escaped\u002dname" as local\u0041 } from 'module'`);
+    assert.strictEqual(record.bindings[0].importName, 'escaped-name');
+    assert.strictEqual(record.bindings[0].localName, 'localA');
   });
 
   test('rejects invalid module strings', () => {

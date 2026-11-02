@@ -5,9 +5,10 @@
 // TARGET.
 import { readFileSync, writeFileSync } from 'fs';
 import { minify } from 'terser';
+import { inlineBindings } from './inline-bindings.mjs';
 
 const wasmBuffer = readFileSync(process.env.WASM);
-const jsSource = readFileSync(process.env.SRC, 'utf8');
+const jsSource = inlineBindings(readFileSync(process.env.SRC, 'utf8'));
 const pjson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 const jsSourceProcessed = jsSource.replace('WASM_BINARY', wasmBuffer.toString('base64'));

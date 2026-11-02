@@ -7,6 +7,7 @@
 // Shared by the full and minimal asm builds; paths and the MINIMAL flag come
 // from env: SRC, LAYOUT, OUT, MINIMAL.
 import { readFileSync, writeFileSync } from 'fs';
+import { inlineBindings } from './inline-bindings.mjs';
 
 const SRC = process.env.SRC;
 const LAYOUT = process.env.LAYOUT;
@@ -14,6 +15,7 @@ const OUT = process.env.TARGET;
 const MINIMAL = process.env.MINIMAL === '1';
 
 const layout = readFileSync(LAYOUT, 'utf8');
+/** @param {string} name */
 const constant = name => {
   const m = layout.match(new RegExp(name + ' ?= ?(\\d+)'));
   if (!m) throw new Error(`${name} not found in ${LAYOUT}`);
@@ -43,7 +45,7 @@ const tail = best.start + words.length * 2;
 if (tail === mem.length - 1 && mem[tail] >= 0x20 && mem[tail] <= 0x7e)
   words += String.fromCharCode(mem[tail]);
 
-let out = readFileSync(SRC, 'utf8')
+let out = inlineBindings(readFileSync(SRC, 'utf8'))
   .replace('{{WORDS}}', JSON.stringify(words))
   .replace('{{OFFSET}}', GLOBAL_BASE + best.start)
   .replace('{{STATIC_TOP}}', STACK_BASE);
@@ -51,5 +53,7 @@ let out = readFileSync(SRC, 'utf8')
 // minimal variant: flip the build-time flag so terser drops the full-only paths
 if (MINIMAL)
   out = out.replace('const MINIMAL = false', 'const MINIMAL = true');
+if (process.env.BINDINGS === '1')
+  out = out.replace('const BINDINGS = false', 'const BINDINGS = true');
 
 writeFileSync(OUT, out);

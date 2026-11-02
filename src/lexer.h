@@ -74,6 +74,27 @@ struct TemplateSpan {
 typedef struct TemplateSpan TemplateSpan;
 #endif
 
+#ifdef LEXER_BINDINGS
+// Distinguish shorthand without making aliased bindings compare ranges in JS.
+#define SHORTHAND_IMPORT_BINDING 8
+
+struct ImportBinding {
+  uint32_t import_start;
+  uint32_t import_end;
+  uint32_t local_start;
+  uint32_t local_end;
+  uint32_t type;
+  struct ImportBinding* next;
+};
+typedef struct ImportBinding ImportBinding;
+
+_Static_assert(sizeof(ImportBinding) == 24 && offsetof(ImportBinding, import_start) == 0 &&
+  offsetof(ImportBinding, import_end) == 4 && offsetof(ImportBinding, local_start) == 8 &&
+  offsetof(ImportBinding, local_end) == 12 && offsetof(ImportBinding, type) == 16 &&
+  offsetof(ImportBinding, next) == 20,
+  "The bindings readers use six little-endian 32-bit words");
+#endif
+
 struct Import {
   const char16_t* start;
   const char16_t* end;
@@ -102,6 +123,11 @@ struct Import {
   // ",", so a concatenation (`a${x}` + b) is rejected at finalization.
   const char16_t* template_close;
   uint16_t specifier_template_depth;
+#endif
+#ifdef LEXER_BINDINGS
+  ImportBinding* bindings;
+  const char16_t* clause_start;
+  const char16_t* clause_end;
 #endif
   struct Import* next;
 };
@@ -199,6 +225,10 @@ const char16_t* sa (uint32_t utf16Len) {
   // ensure source is null terminated
   *(char16_t*)(source + utf16Len) = '\0';
   analysis_base = (void*)sourceEnd;
+#ifdef LEXER_BINDINGS
+  // asm.js addresses the binding records through 32-bit typed-array indices.
+  analysis_base = (void*)(((uintptr_t)analysis_base + 3) & ~(uintptr_t)3);
+#endif
   analysis_head = analysis_base;
 #if defined(__wasm__) && !defined(LEXER_MIN)
   analysis_limit = (uintptr_t)__builtin_wasm_memory_size(0) << 16;
@@ -297,6 +327,11 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
   import->specifier_template_depth = 0;
 #endif
   import->next = NULL;
+#ifdef LEXER_BINDINGS
+  import->bindings = NULL;
+  import->clause_start = NULL;
+  import->clause_end = NULL;
+#endif
 #ifndef LEXER_MIN
   import_count++;
   if (dynamic == IMPORT_META || dynamic == STANDARD_IMPORT)
@@ -377,6 +412,20 @@ uint32_t id () {
 uint32_t ip () {
   return import_read_head->string_flags;
 }
+
+#ifdef LEXER_BINDINGS
+uintptr_t ib () {
+  return (uintptr_t)import_read_head->bindings;
+}
+
+int32_t bcs () {
+  return import_read_head->clause_start ? import_read_head->clause_start - source : -1;
+}
+
+int32_t bce () {
+  return import_read_head->clause_end ? import_read_head->clause_end - source : -1;
+}
+#endif
 
 #ifndef LEXER_MIN
 // The last span node rt() returned. template_span_started distinguishes "not

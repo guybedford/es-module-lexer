@@ -1,16 +1,17 @@
 let lexerParse;
 
 const minimal = !!process.env.MINIMAL;
+const bindings = !!process.env.BINDINGS;
 
 async function loadLexer() {
   if (lexerParse) return;
   if (process.env.ASM) {
     ({ parse: lexerParse } = await import(
-      minimal ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js'
+      minimal ? '../dist/lexer.minimal.asm.js' : bindings ? '../dist/lexer.bindings.asm.js' : '../dist/lexer.asm.js'
     ));
   }
   else {
-    const lexer = await import(minimal ? '../dist/lexer.minimal.js' : '../dist/lexer.js');
+    const lexer = await import(minimal ? '../dist/lexer.minimal.js' : bindings ? '../dist/lexer.bindings.js' : '../dist/lexer.js');
     await lexer.init();
     lexerParse = lexer.parse;
   }

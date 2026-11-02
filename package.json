@@ -17,6 +17,16 @@
       "types": "./types/lexer.d.ts",
       "default": "./dist/lexer.asm.js"
     },
+    "./bindings": {
+      "types": "./types/lexer.bindings.d.ts",
+      "module": "./dist/lexer.bindings.js",
+      "import": "./dist/lexer.bindings.js",
+      "require": "./dist/lexer.bindings.cjs"
+    },
+    "./bindings/js": {
+      "types": "./types/lexer.bindings.d.ts",
+      "default": "./dist/lexer.bindings.asm.js"
+    },
     "./minimal": {
       "types": "./types/lexer.minimal.d.ts",
       "module": "./dist/lexer.minimal.js",

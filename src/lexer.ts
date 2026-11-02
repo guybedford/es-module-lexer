@@ -4,6 +4,9 @@
 // exports. `as boolean` keeps both branches type-checked rather than narrowed
 // to the false literal.
 const MINIMAL = false as boolean;
+const BINDINGS = false as boolean;
+import type { StaticImport as StaticImportWithBindings } from './lexer.bindings.js';
+import { readImportBindings } from './import-bindings.js';
 
 /** A static import using any syntax variation: `import .. from 'module'`. */
 export type StaticImportType = 1;
@@ -481,6 +484,9 @@ export function parse (source: string, name = '@'): readonly [
     throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, wasm.e()).split('\n').length}:${wasm.e() - source.lastIndexOf('\n', wasm.e() - 1)}`), { idx: wasm.e() });
 
   const imports: Import[] = [], exports: Export[] = [];
+  if (BINDINGS) {
+    var bindingView: DataView | undefined;
+  }
   while (wasm.ri()) {
     const s = wasm.is(), e = wasm.ie(), importType = wasm.it(), t = importType & 15;
     const a = wasm.ai(), d = wasm.id(), ss = wasm.ss(), se = wasm.se();
@@ -514,7 +520,17 @@ export function parse (source: string, name = '@'): readonly [
         if (at.length === 0) at = null;
       }
       const phase: ImportPhase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
+      if (BINDINGS) {
+        const bindingPtr = wasm.ib();
+        const bindings = bindingPtr === 0 ? [] : readImportBindings(
+          source, bindingView || (bindingView = new DataView(wasm.memory.buffer)), bindingPtr, decodeBindingName
+        );
+        const record: StaticImportWithBindings = { type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16), bindings, clauseStart: wasm.bcs(), clauseEnd: wasm.bce() };
+        imports.push(record);
+      }
+      else {
+        imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n!, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
+      }
     }
   }
   let exportPtr = wasm.re();
@@ -586,6 +602,10 @@ export function parse (source: string, name = '@'): readonly [
     catch (e) {
       throw Object.assign(new Error(`Parse error ${name}:${source.slice(0, idx).split('\n').length}:${idx - source.lastIndexOf('\n', idx - 1)}`), { idx });
     }
+  }
+
+  function decodeBindingName (start: number, end: number): string {
+    return decode(start, end, start);
   }
 
   function decodeIfQuoted (start: number, end: number): string {
@@ -715,6 +735,9 @@ let wasm: {
   te(): number;
   /** resetTemplateSpans */
   rts(): void;
+  ib(): number;
+  bcs(): number;
+  bce(): number;
 };
 
 const getWasmBytes = () => (

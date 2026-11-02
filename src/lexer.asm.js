@@ -2,7 +2,10 @@
 // this to `true`; terser then folds away the full-only getter reads (ip/ess/f/
 // ms/attributes/export analysis), matching the stripped LEXER_MIN wasm/asm
 // exports.
+import { readImportBindings } from './import-bindings.js';
+
 const MINIMAL = false;
+const BINDINGS = false;
 
 let asm, asmBuffer, allocSize = 2<<19, addr;
 
@@ -29,6 +32,10 @@ let source, name;
 // The asm.js module needs no compilation step; kept for the shared wasm build API.
 export const init = () => Promise.resolve();
 
+/**
+ * @param {string} _source
+ * @param {string} _name
+ */
 export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
@@ -66,6 +73,9 @@ export function parse (_source, _name = '@') {
   }
 
   const imports = [], exports = [];
+  if (BINDINGS) {
+    var bindingView;
+  }
   while (asm.ri()) {
     const s = asm.is(), e = asm.ie(), importType = asm.it(), t = importType & 15;
     const a = asm.ai(), d = asm.id(), ss = asm.ss(), se = asm.se();
@@ -99,7 +109,16 @@ export function parse (_source, _name = '@') {
         at = at.length > 0 ? at : null;
       }
       const phase = t === 4/*StaticSourcePhase*/ ? 'source' : t === 6/*StaticDeferPhase*/ ? 'defer' : null;
-      imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
+      if (BINDINGS) {
+        const bindingPtr = asm.ib();
+        const bindings = bindingPtr === 0 ? [] : readImportBindings(
+          source, bindingView || (bindingView = new DataView(asmBuffer)), bindingPtr, readString
+        );
+        imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16), bindings, clauseStart: asm.bcs(), clauseEnd: asm.bce() });
+      }
+      else {
+        imports.push({ type: t === 8/*StaticReexportStar*/ ? 'reexport-star' : 'static', specifier: n, phase, start: s, end: e, importStart: ss, importEnd: se, attributes: at, attributesStart: a, typeOnly: !!(importType & 16) });
+      }
     }
   }
   let exportType;

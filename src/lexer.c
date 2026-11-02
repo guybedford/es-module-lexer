@@ -170,6 +170,12 @@ static uint32_t export_bucket_mask;
 
 static int skipBracedEscape ();
 static void resolvePendingExports ();
+#ifdef LEXER_BINDINGS
+static Import* binding_import;
+static ImportBinding** binding_tail;
+static bool bindings_collected;
+static void collectImportBindings ();
+#endif
 
 static inline __attribute__((always_inline)) bool isIdentifierCodeUnit (char16_t ch) {
   return ch >= '0' && ch <= '9' ||
@@ -693,6 +699,9 @@ bool parse () {
   char16_t* tsTypeAngleCandidate = NULL;
 
   facade = true;
+#ifdef LEXER_BINDINGS
+  bindings_collected = false;
+#endif
 #ifndef LEXER_MIN
   hasModuleSyntax = false;
 #endif
@@ -818,6 +827,13 @@ bool parse () {
     if (has_error)
       return false;
   }
+#endif
+
+#ifdef LEXER_BINDINGS
+  if (!bindings_collected)
+    collectImportBindings();
+  if (has_error)
+    return false;
 #endif
 
   // succeess
@@ -2695,6 +2711,28 @@ static void resolveBinding (
   uint32_t import_index,
   bool type_only
 ) {
+#ifdef LEXER_BINDINGS
+  if (binding_import != NULL) {
+    if (has_error)
+      return;
+    ensureAnalysisCapacity(sizeof(ImportBinding));
+    if (has_error)
+      return;
+    ImportBinding* binding = (ImportBinding*)analysis_head;
+    analysis_head += sizeof(ImportBinding);
+    binding->import_start = import_start ? import_start - source : UINT32_MAX;
+    binding->import_end = import_end ? import_end - source : UINT32_MAX;
+    binding->local_start = local_start - source;
+    binding->local_end = local_end - source;
+    binding->type = import_name_ty | (type_only ? TYPE_ONLY_EXPORT : 0);
+    if (local_start == import_start && local_end == import_end)
+      binding->type |= SHORTHAND_IMPORT_BINDING;
+    binding->next = NULL;
+    *binding_tail = binding;
+    binding_tail = &binding->next;
+    binding_import->clause_end = local_end;
+  }
+#endif
   if (export_buckets == NULL)
     return;
   uint32_t binding_hash = identifierNameHash(local_start, local_end);
@@ -2746,9 +2784,13 @@ static char16_t collectNamedImportBindings (uint32_t import_index, bool type_onl
 
 // The main loop only needs to know where the clause ends. Binding structure is
 // worth reading in the deferred pass, which is also the only caller holding a
-// table to resolve it against, so a table is what selects the reader.
+// table to resolve it against. Binding collection also needs the full reader.
 static char16_t readImportClause (uint32_t import_index, bool type_only_statement) {
   has_import_bindings = true;
+#ifdef LEXER_BINDINGS
+  if (binding_import != NULL)
+    return collectNamedImportBindings(import_index, type_only_statement);
+#endif
   return export_buckets == NULL
     ? skipImportClause()
     : collectNamedImportBindings(import_index, type_only_statement);
@@ -2830,6 +2872,10 @@ static void collectStaticImportBindings (
   bool type_only_statement
 ) {
   has_import_bindings = true;
+#ifdef LEXER_BINDINGS
+  if (binding_import != NULL)
+    binding_import->clause_start = pos;
+#endif
   if (phase_keyword == 1) {
     const char16_t* local_start = pos;
     readImportName(ch);
@@ -2856,6 +2902,10 @@ static void collectStaticImportBindings (
   if (ch == '{') {
     pos++;
     readImportClause(import_index, type_only_statement);
+#ifdef LEXER_BINDINGS
+    if (binding_import != NULL)
+      binding_import->clause_end = pos + 1;
+#endif
   }
   else if (ch == '*')
     collectNamespaceImportBinding(import_index, NamespaceImport, type_only_statement);
@@ -2890,6 +2940,28 @@ static void collectStaticImportBindingsFromRecord (Import* impt, uint32_t import
     collectStaticImportBindings(ch, 0, import_index, typeOnly);
   }
 }
+
+#ifdef LEXER_BINDINGS
+static void collectImportBindings () {
+  char16_t* parse_end = pos;
+  uint32_t import_index = 0;
+  for (Import* impt = first_import; impt != NULL; impt = impt->next, import_index++) {
+    if (impt->dynamic != STANDARD_IMPORT || *impt->statement_start != 'i')
+      continue;
+    binding_import = impt;
+    binding_tail = &impt->bindings;
+    collectStaticImportBindingsFromRecord(impt, import_index);
+    // A TypeScript import-equals declaration receives the require namespace.
+    if (!has_error && *pos == '=' && impt->bindings != NULL)
+      impt->bindings->type = (impt->bindings->type & TYPE_ONLY_EXPORT) | NamespaceImport;
+    binding_import = NULL;
+    if (has_error)
+      break;
+  }
+  pos = parse_end;
+  bindings_collected = true;
+}
+#endif
 
 // A clause export that no import binding claimed is a local export after all.
 static inline __attribute__((always_inline)) void markExportLocal (Export* exprt) {
@@ -2937,6 +3009,13 @@ static void resolvePendingExports () {
     export_buckets[bucket_index] = exprt;
   }
 
+#ifdef LEXER_BINDINGS
+  collectImportBindings();
+  if (has_error) {
+    export_buckets = NULL;
+    return;
+  }
+#else
   char16_t* parse_end = pos;
   uint32_t import_index = 0;
   for (Import* impt = first_import; impt != NULL; impt = impt->next, import_index++) {
@@ -2947,6 +3026,7 @@ static void resolvePendingExports () {
       break;
   }
   pos = parse_end;
+#endif
 
   // resolveExport() keeps the count, so a fully resolved table skips this.
   if (pending_export_count != 0) {
@@ -3391,11 +3471,17 @@ void lineComment () {
   const v128_t newline = wasm_i16x8_splat('\n');
   const v128_t carriage_return = wasm_i16x8_splat('\r');
   const v128_t zero = wasm_i16x8_splat(0);
+#ifdef LEXER_BINDINGS
+  const v128_t separator_mask = wasm_i16x8_splat(0xfffe);
+  const v128_t line_separator = wasm_i16x8_splat(0x2028);
+#endif
   for (;;) {
     v128_t chunk = wasm_v128_load(p);
-    uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(
-        wasm_i16x8_eq(chunk, zero),
-        wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return))));
+    v128_t breaks = wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return));
+#ifdef LEXER_BINDINGS
+    breaks = wasm_v128_or(breaks, wasm_i16x8_eq(wasm_v128_and(chunk, separator_mask), line_separator));
+#endif
+    uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(wasm_i16x8_eq(chunk, zero), breaks));
     if (mask) {
       p += __builtin_ctz(mask);
       if (*p != 0 || p > end) {
@@ -3414,7 +3500,11 @@ lineCommentEnd:
 #else
   while (pos++ < end) {
     char16_t ch = *pos;
+#ifdef LEXER_BINDINGS
+    if (isBr(ch))
+#else
     if (ch == '\n' || ch == '\r')
+#endif
       return;
   }
 #endif
@@ -3430,7 +3520,7 @@ void stringLiteral (char16_t quote) {
       if (ch == '\r' && *(pos + 1) == '\n')
         pos++;
     }
-    else if (isBr(ch))
+    else if (ch == '\r' || ch == '\n')
       break;
   }
   syntaxError();
@@ -3485,25 +3575,52 @@ char16_t readToWsOrPunctuator (char16_t ch) {
 
 // Note: non-asii BR and whitespace checks omitted for perf / footprint
 // if there is a significant user need this can be reconsidered
+#ifdef LEXER_BINDINGS
+static inline bool isUnicodeWhitespace (char16_t c) {
+  return c == 0x1680 || (char16_t)(c - 0x2000) <= 0xA ||
+    c == 0x202F || c == 0x205F || c == 0x3000 || c == 0xFEFF;
+}
+#endif
+
 bool isBr (char16_t c) {
+#ifdef LEXER_BINDINGS
+  if ((c & ~1) == 0x2028)
+    return true;
+#endif
   return c == '\r' || c == '\n';
 }
 
 bool isWsNotBr (char16_t c) {
+#ifdef LEXER_BINDINGS
+  if (c >= 0x1680)
+    return isUnicodeWhitespace(c);
+#endif
   return c == 9 || c == 11 || c == 12 || c == 32 || c == 160;
 }
 
 bool isBrOrWs (char16_t c) {
+#ifdef LEXER_BINDINGS
+  if (c >= 0x1680)
+    return (c & ~1) == 0x2028 || isUnicodeWhitespace(c);
+#endif
   // (c - 9) < 5 is the 9..13 range as one unsigned compare: fewer wasm ops than
   // `c > 8 && c < 14` at every inlined copy of this hot helper.
   return (char16_t)(c - 9) < 5 || c == 32 || c == 160;
 }
 
 bool isBrOrWsOrPunctuatorNotDot (char16_t c) {
+#ifdef LEXER_BINDINGS
+  if (c >= 0x1680)
+    return isBrOrWs(c);
+#endif
   return c > 8 && c < 14 || c == 32 || c == 160 || isPunctuator(c) && c != '.';
 }
 
 bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
+#ifdef LEXER_BINDINGS
+  if (*c >= 0x1680)
+    return isBrOrWs(*c);
+#endif
   return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
 }
 

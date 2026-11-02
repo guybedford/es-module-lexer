@@ -12,7 +12,8 @@ name = 'build'
 deps = [
   'dist/lexer.js', 'dist/lexer.cjs', 'dist/lexer.asm.js',
   'dist/lexer.minimal.js', 'dist/lexer.minimal.cjs', 'dist/lexer.minimal.asm.js',
-  'types/lexer.d.ts', 'types/lexer.minimal.d.ts'
+  'types/lexer.d.ts', 'types/lexer.minimal.d.ts', 'types/lexer.bindings.d.ts',
+  'dist/lexer.bindings.js', 'dist/lexer.bindings.cjs', 'dist/lexer.bindings.asm.js'
 ]
 
 [[task]]
@@ -90,11 +91,12 @@ node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser
 # generate the .js file, tsc is still needed to generate the d.ts file.
 name = 'build:types'
 target = 'types/lexer.d.ts'
-dep = 'src/lexer.ts'
+deps = ['src/lexer.ts', 'src/lexer.bindings.ts', 'src/import-bindings.ts']
 # `--types node` is explicit: TypeScript 6 no longer auto-includes @types/node
 # for a file passed on the command line, so `Buffer` (lexer.ts) would error.
 run = '''
   tsc --strict --declaration --emitDeclarationOnly --types node --outdir types src/lexer.ts
+  rm types/import-bindings.d.ts
 '''
 
 [[task]]
@@ -106,13 +108,13 @@ run = 'node build/gen-min-dts.mjs'
 
 [[task]]
 target = 'dist/lexer.js'
-deps = ['src/lexer.js', 'lib/lexer.wasm', 'package.json']
+deps = ['src/lexer.js', 'src/import-bindings.js', 'build/inline-bindings.mjs', 'lib/lexer.wasm', 'package.json']
 env = { SRC = 'src/lexer.js', WASM = 'lib/lexer.wasm' }
 run = 'node build/embed-wasm.mjs'
 
 [[task]]
 target = 'dist/lexer.minimal.js'
-deps = ['src/lexer.min.js', 'lib/lexer.min.wasm', 'package.json']
+deps = ['src/lexer.min.js', 'src/import-bindings.js', 'build/inline-bindings.mjs', 'lib/lexer.min.wasm', 'package.json']
 env = { SRC = 'src/lexer.min.js', WASM = 'lib/lexer.min.wasm' }
 run = 'node build/embed-wasm.mjs'
 
@@ -233,7 +235,7 @@ run = """
 # Resolve the wrapper's {{OFFSET}}/{{STATIC_TOP}}/{{WORDS}} from the actual
 # fastcomp layout (see build/gen-asm-in.mjs), rather than hardcoding them.
 target = 'lib/lexer.asm.in.js'
-deps = ['src/lexer.asm.js', 'lib/lexer.layout.js', 'build/gen-asm-in.mjs']
+deps = ['src/lexer.asm.js', 'src/import-bindings.js', 'lib/lexer.layout.js', 'build/gen-asm-in.mjs', 'build/inline-bindings.mjs']
 env = { SRC = 'src/lexer.asm.js', LAYOUT = 'lib/lexer.layout.js', MINIMAL = '0' }
 run = 'node build/gen-asm-in.mjs'
 
@@ -241,7 +243,7 @@ run = 'node build/gen-asm-in.mjs'
 # Minimal asm.js wrapper prelude: same derivation, against the minimal layout,
 # with the MINIMAL build-time flag flipped on.
 target = 'lib/lexer.min.asm.in.js'
-deps = ['src/lexer.asm.js', 'lib/lexer.min.layout.js', 'build/gen-asm-in.mjs']
+deps = ['src/lexer.asm.js', 'src/import-bindings.js', 'lib/lexer.min.layout.js', 'build/gen-asm-in.mjs', 'build/inline-bindings.mjs']
 env = { SRC = 'src/lexer.asm.js', LAYOUT = 'lib/lexer.min.layout.js', MINIMAL = '1' }
 run = 'node build/gen-asm-in.mjs'
 
@@ -262,6 +264,10 @@ name = 'test'
 deps = [
   'test:wasm', 'test:asm', 'test:minimal:wasm', 'test:minimal:asm',
   'test:types', 'test:ts:wasm', 'test:ts:asm',
+  'test:bindings:wasm', 'test:bindings:asm', 'test:bindings:cjs',
+  'test:bindings:ts:wasm', 'test:bindings:ts:asm',
+  'test:bindings:no-eval', 'test:bindings:no-eval:cjs',
+  'test:bindings:fuzz',
   'test:no-eval', 'test:no-eval:cjs',
   'test:no-eval:minimal', 'test:no-eval:minimal:cjs'
 ]
@@ -277,7 +283,7 @@ run = '''
 
 [[task]]
 name = 'test:types'
-deps = ['types/lexer.d.ts', 'types/lexer.minimal.d.ts', 'test/types.ts']
+deps = ['types/lexer.d.ts', 'types/lexer.minimal.d.ts', 'types/lexer.bindings.d.ts', 'test/types.ts']
 run = 'tsc --strict --noEmit --module nodenext --moduleResolution nodenext test/types.ts'
 
 [[task]]
@@ -349,3 +355,145 @@ run = '${{ WABT_PATH }}/bin/wasm2wat lib/lexer.wasm -o lib/lexer.wat'
 name = 'footprint'
 deps = ['dist/lexer.js', 'dist/lexer.asm.js', 'dist/lexer.minimal.js', 'dist/lexer.minimal.asm.js']
 template = 'footprint'
+
+[[task]]
+target = 'dist/lexer.bindings.asm.js'
+dep = 'lib/lexer.bindings.asm.js'
+template = 'terser'
+[task.template-options]
+module = true
+compress = { ecma = 6, unsafe = true }
+output = { preamble = '/* es-module-lexer #PJSON_VERSION */' }
+
+[[task]]
+target = 'dist/lexer.bindings.cjs'
+deps = ['dist/lexer.bindings.js']
+run = 'babel dist/lexer.bindings.js | terser -c -m -o dist/lexer.bindings.cjs'
+
+[[task]]
+name = 'build:swc-bindings'
+target = 'src/lexer.bindings.js'
+dep = 'src/lexer.ts'
+run = '''
+node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.parser.importAssertions=true -C jsc.parser.topLevelAwait=true -C jsc.parser.importMeta=true -C jsc.parser.privateMethod=true -C jsc.parser.dynamicImport=true -C jsc.target=es2016 -C jsc.experimental.keepImportAttributes=true
+node -e "const fs=require('fs');const f='$TARGET';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('BINDINGS = false','BINDINGS = true').replace('BINDINGS=false','BINDINGS=true'))"
+'''
+
+[[task]]
+target = 'types/lexer.bindings.d.ts'
+deps = ['types/lexer.d.ts', 'src/lexer.bindings.ts']
+run = '''
+tsc --strict --declaration --emitDeclarationOnly --types node --outdir types src/lexer.bindings.ts
+rm types/import-bindings.d.ts
+'''
+
+[[task]]
+target = 'dist/lexer.bindings.js'
+deps = ['src/lexer.bindings.js', 'src/import-bindings.js', 'build/inline-bindings.mjs', 'lib/lexer.bindings.wasm', 'package.json']
+env = { SRC = 'src/lexer.bindings.js', WASM = 'lib/lexer.bindings.wasm' }
+run = 'node build/embed-wasm.mjs'
+
+[[task]]
+target = 'lib/lexer.bindings.wasm'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.min.wasm']
+env = { PYTHONHOME = '' }
+run = """
+  ${{ EMSDK_PATH }}/emsdk install 6.0.0
+  ${{ EMSDK_PATH }}/emsdk activate 6.0.0
+
+  ${{ EMSDK_PATH }}/upstream/emscripten/emcc src/lexer.c -o lib/lexer.bindings.wasm -Oz -flto -DLEXER_SIMD -DLEXER_BINDINGS --no-entry -s STANDALONE_WASM=1 -D LEX_TS \
+  -s EXPORTED_FUNCTIONS="['_parse','_sa','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_rt','_te','_rts','_ib','_bcs','_bce','___heap_base']" \
+  -s SUPPORT_LONGJMP=0 -s ALLOW_MEMORY_GROWTH=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+target = 'lib/lexer.bindings.emcc.asm.js'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.min.layout.js']
+env = { PYTHONHOME = '' }
+run = """
+  ${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+  ${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
+
+  ${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -D LEX_TS -DLEXER_BINDINGS -o lib/lexer.bindings.emcc.js -s WASM=0 -Oz --closure 1 \
+  -s EXPORTED_FUNCTIONS="['_parse','_sa','_sal','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_et','_eii','_eit','_ess','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_rt','_te','_rts','_ib','_bcs','_bce','_setSource']" \
+  -s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+  -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -s --separate-asm -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+target = 'lib/lexer.bindings.layout.js'
+deps = ['src/lexer.h', 'src/lexer.c', 'lib/lexer.bindings.emcc.asm.js']
+env = { PYTHONHOME = '' }
+run = """
+  ${{ EMSDK_FASTCOMP_PATH }}/emsdk install 1.40.1-fastcomp
+  ${{ EMSDK_FASTCOMP_PATH }}/emsdk activate 1.40.1-fastcomp
+
+  ${{ EMSDK_FASTCOMP_PATH }}/fastcomp/emscripten/emcc ./src/lexer.c -D LEX_TS -DLEXER_BINDINGS -o lib/lexer.bindings.layout.js -s WASM=0 -Oz --closure 0 \
+  -s EXPORTED_FUNCTIONS="['_parse','_sa','_sal','_e','_ri','_re','_it','_is','_ie','_ss','_ip','_se','_ai','_id','_es','_ee','_els','_ele','_et','_eii','_eit','_ess','_f','_ms','_ra','_rsa','_aks','_ake','_avs','_ave','_rt','_te','_rts','_ib','_bcs','_bce','_setSource']" \
+  -s AGGRESSIVE_VARIABLE_ELIMINATION=1 -s GLOBAL_BASE=8 \
+  -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s TOTAL_STACK=4997968 -Wno-logical-op-parentheses -Wno-parentheses
+"""
+
+[[task]]
+target = 'lib/lexer.bindings.asm.in.js'
+deps = ['src/lexer.asm.js', 'src/import-bindings.js', 'lib/lexer.bindings.layout.js', 'build/gen-asm-in.mjs', 'build/inline-bindings.mjs']
+env = { SRC = 'src/lexer.asm.js', LAYOUT = 'lib/lexer.bindings.layout.js', MINIMAL = '0', BINDINGS = '1' }
+run = 'node build/gen-asm-in.mjs'
+
+[[task]]
+target = 'lib/lexer.bindings.asm.js'
+deps = ['lib/lexer.bindings.emcc.asm.js', 'lib/lexer.bindings.asm.in.js', 'build/combine-asm.mjs']
+env = { ASM_IN = 'lib/lexer.bindings.asm.in.js', EMCC = 'lib/lexer.bindings.emcc.asm.js' }
+run = 'node build/combine-asm.mjs'
+
+[[task]]
+name = 'test:bindings:wasm'
+deps = ['dist/lexer.bindings.js']
+env = { BINDINGS = '1', WASM = '1' }
+run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
+name = 'test:bindings:asm'
+deps = ['dist/lexer.bindings.asm.js']
+env = { BINDINGS = '1', ASM = '1' }
+run = 'mocha -b -u tdd test/*.cjs'
+
+[[task]]
+name = 'test:bindings:cjs'
+deps = ['dist/lexer.bindings.cjs']
+env = { BINDINGS = '1', CJS = '1' }
+run = 'mocha -b -u tdd test/import-bindings.cjs'
+
+[[task]]
+name = 'test:bindings:ts:wasm'
+deps = ['dist/lexer.bindings.js']
+env = { BINDINGS = '1', WASM = '1' }
+run = 'mocha -b -u tdd test/typescript/*.cjs'
+
+[[task]]
+name = 'test:bindings:ts:asm'
+deps = ['dist/lexer.bindings.asm.js']
+env = { BINDINGS = '1', ASM = '1' }
+run = 'mocha -b -u tdd test/typescript/*.cjs'
+
+[[task]]
+name = 'test:bindings:no-eval'
+deps = ['dist/lexer.bindings.js']
+env = { BINDINGS = '1' }
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
+
+[[task]]
+name = 'test:bindings:no-eval:cjs'
+deps = ['dist/lexer.bindings.cjs']
+env = { BINDINGS = '1', CJS = '1' }
+run = 'node --disallow-code-generation-from-strings node_modules/mocha/bin/mocha.js -b -u tdd test/no-eval/index.cjs'
+
+[[task]]
+target = 'src/import-bindings.js'
+dep = 'src/import-bindings.ts'
+run = 'node ./node_modules/@swc/cli/bin/swc.js $DEP -o $TARGET --no-swcrc -C jsc.parser.syntax=typescript -C jsc.target=es2016'
+
+[[task]]
+name = 'test:bindings:fuzz'
+deps = ['dist/lexer.bindings.js', 'dist/lexer.bindings.asm.js', 'test/fuzz-import-bindings.mjs']
+run = 'node test/fuzz-import-bindings.mjs'
