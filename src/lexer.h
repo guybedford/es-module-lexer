@@ -75,6 +75,9 @@ typedef struct TemplateSpan TemplateSpan;
 #endif
 
 #ifdef LEXER_BINDINGS
+// Distinguish shorthand without making aliased bindings compare ranges in JS.
+#define SHORTHAND_IMPORT_BINDING 8
+
 struct ImportBinding {
   uint32_t import_start;
   uint32_t import_end;

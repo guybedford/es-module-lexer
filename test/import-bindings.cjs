@@ -110,6 +110,80 @@ suite('Import bindings', () => {
     assert.deepEqual(record.attributes, [['type', 'json']]);
   });
 
+  test('Unicode line and paragraph separators remain string contents', () => {
+    for (const separator of ['\u2028', '\u2029']) {
+      for (const quote of ['"', "'"]) {
+        const value = `before${separator}after`;
+        const quoted = quote === '"' ? JSON.stringify(value) : `${quote}${value}${quote}`;
+        const [, exports] = parse(`export const data = ${quoted};`);
+        assert.equal(exports[0].name, 'data');
+        const [[sideEffect]] = parse(`import ${quoted};`);
+        assert.equal(sideEffect.specifier, value);
+        const [[dynamic]] = parse(`import(${quoted});`);
+        assert.equal(dynamic.specifier, value);
+        const [[attributes]] = parse(`import 'module' with { ${quoted}: ${quoted} };`);
+        assert.deepEqual(attributes.attributes, [[value, value]]);
+        const [, namedExports] = parse(`const local = 1; export { local as ${quoted} };`);
+        assert.equal(namedExports[0].name, value);
+        const source = `import { ${quoted} as local } from ${quoted};`;
+        const [[record]] = parse(source);
+        assert.equal(record.specifier, value);
+        assert.deepEqual(record.bindings, [{
+          type: 'named', importName: value, localName: 'local',
+          importNameStart: 9, importNameEnd: 9 + quoted.length,
+          localStart: source.indexOf('local'), localEnd: source.indexOf('local') + 5, typeOnly: false
+        }]);
+      }
+    }
+  });
+
+  test('Unicode line terminators end short and long line comments', () => {
+    for (const separator of ['\u2027', '\u2028', '\u2029', '\u202a']) {
+      const terminates = separator === '\u2028' || separator === '\u2029';
+      for (const comment of ['', 'x'.repeat(8), 'x'.repeat(9), 'x'.repeat(16), 'x'.repeat(17),
+        'x'.repeat(31), '😀' + 'x'.repeat(7), 'x'.repeat(9) + '\0']) {
+        const source = `//${comment}${separator}import { hidden } from 'hidden';\nimport { value } from 'm';`;
+        const [imports] = parse(source);
+        assert.deepEqual(imports.map(/** @param {ImportRecord} record */ record => record.bindings[0].localName),
+          terminates ? ['hidden', 'value'] : ['value']);
+      }
+    }
+  });
+
+  test('quoted imported names preserve escaped line continuations', () => {
+    for (const lineBreak of ['\r', '\n', '\r\n', '\u2028', '\u2029']) {
+      for (const quote of ['"', "'"]) {
+        const quoted = `${quote}before\\${lineBreak}after${quote}`;
+        const [[record]] = parse(`import { ${quoted} as local } from ${quoted};`);
+        assert.equal(record.specifier, 'beforeafter');
+        assert.equal(record.bindings[0].importName, 'beforeafter');
+        assert.equal(record.bindings[0].localName, 'local');
+      }
+    }
+  });
+
+  test('raw carriage returns and line feeds remain invalid in quoted strings', () => {
+    for (const lineBreak of ['\r', '\n', '\r\n']) {
+      for (const quote of ['"', "'"]) {
+        const source = `export const data = ${quote}before${lineBreak}after${quote};`;
+        assert.throws(() => parse(source), { message: /^Parse error /, idx: 27 });
+        const [[record]] = parse("import { valid } from 'm';");
+        assert.equal(record.bindings[0].localName, 'valid');
+      }
+    }
+  });
+
+  test('escaped shorthand and aliases decode independently', () => {
+    const source = String.raw`import { \u{61}, b\u0062, \u0063 as d\u0064, "\u0065" as f } from 'm';`;
+    const [[record]] = parse(source);
+    assert.deepEqual(record.bindings.map(/** @param {ImportBinding} binding */ binding =>
+      [binding.importName, binding.localName]), [['a', 'a'], ['bb', 'bb'], ['c', 'dd'], ['e', 'f']]);
+    for (const binding of record.bindings.slice(0, 2)) {
+      assert.equal(binding.importNameStart, binding.localStart);
+      assert.equal(binding.importNameEnd, binding.localEnd);
+    }
+  });
+
   test('ECMAScript whitespace and line terminators delimit import names', () => {
     for (const code of [
       0x9, 0xa, 0xb, 0xc, 0xd, 0x20, 0xa0, 0x1680,

@@ -2725,6 +2725,8 @@ static void resolveBinding (
     binding->local_start = local_start - source;
     binding->local_end = local_end - source;
     binding->type = import_name_ty | (type_only ? TYPE_ONLY_EXPORT : 0);
+    if (local_start == import_start && local_end == import_end)
+      binding->type |= SHORTHAND_IMPORT_BINDING;
     binding->next = NULL;
     *binding_tail = binding;
     binding_tail = &binding->next;
@@ -3469,11 +3471,17 @@ void lineComment () {
   const v128_t newline = wasm_i16x8_splat('\n');
   const v128_t carriage_return = wasm_i16x8_splat('\r');
   const v128_t zero = wasm_i16x8_splat(0);
+#ifdef LEXER_BINDINGS
+  const v128_t separator_mask = wasm_i16x8_splat(0xfffe);
+  const v128_t line_separator = wasm_i16x8_splat(0x2028);
+#endif
   for (;;) {
     v128_t chunk = wasm_v128_load(p);
-    uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(
-        wasm_i16x8_eq(chunk, zero),
-        wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return))));
+    v128_t breaks = wasm_v128_or(wasm_i16x8_eq(chunk, newline), wasm_i16x8_eq(chunk, carriage_return));
+#ifdef LEXER_BINDINGS
+    breaks = wasm_v128_or(breaks, wasm_i16x8_eq(wasm_v128_and(chunk, separator_mask), line_separator));
+#endif
+    uint32_t mask = wasm_i16x8_bitmask(wasm_v128_or(wasm_i16x8_eq(chunk, zero), breaks));
     if (mask) {
       p += __builtin_ctz(mask);
       if (*p != 0 || p > end) {
@@ -3492,7 +3500,11 @@ lineCommentEnd:
 #else
   while (pos++ < end) {
     char16_t ch = *pos;
+#ifdef LEXER_BINDINGS
+    if (isBr(ch))
+#else
     if (ch == '\n' || ch == '\r')
+#endif
       return;
   }
 #endif
@@ -3508,7 +3520,7 @@ void stringLiteral (char16_t quote) {
       if (ch == '\r' && *(pos + 1) == '\n')
         pos++;
     }
-    else if (isBr(ch))
+    else if (ch == '\r' || ch == '\n')
       break;
   }
   syntaxError();
