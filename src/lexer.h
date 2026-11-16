@@ -165,9 +165,7 @@ bool has_import_bindings = false;
 #endif
 void* analysis_base;
 void* analysis_head;
-#ifndef LEXER_MIN
 uintptr_t analysis_limit;
-#endif
 
 bool facade;
 #ifndef LEXER_MIN
@@ -195,16 +193,13 @@ void bail (uint32_t err);
 // allocateSource
 const char16_t* sa (uint32_t utf16Len) {
   sourceLen = utf16Len;
-  const char16_t* sourceEnd = source + utf16Len + 1;
   // ensure source is null terminated
   *(char16_t*)(source + utf16Len) = '\0';
-  // Round the analysis arena up to pointer alignment. sourceEnd is only 2-byte
-  // aligned when utf16Len is even, and the asm.js build accesses record fields
-  // as HEAP32[ptr >> 2], so an unaligned record makes neighbouring fields share
-  // one 32-bit word (and in Wasm unaligned access is just slower).
-  analysis_base = (void*)(((uintptr_t)sourceEnd + sizeof(void*) - 1) & ~(uintptr_t)(sizeof(void*) - 1));
+  // asm.js reads record fields as HEAP32[ptr >> 2], so an even char16 count
+  // keeps the arena 4-byte aligned from the aligned source base.
+  analysis_base = (void*)(source + (utf16Len | 1) + 1);
   analysis_head = analysis_base;
-#if defined(__wasm__) && !defined(LEXER_MIN)
+#ifdef __wasm__
   analysis_limit = (uintptr_t)__builtin_wasm_memory_size(0) << 16;
 #endif
   first_import = NULL;
@@ -221,7 +216,6 @@ const char16_t* sa (uint32_t utf16Len) {
   return source;
 }
 
-#ifndef LEXER_MIN
 #ifdef __wasm__
 // Out of line so each allocation site inlines the bounds test alone: growing is
 // rare enough that its code only costs the record path i-cache.
@@ -257,12 +251,9 @@ static inline void ensureAnalysisCapacity (size_t size) {
     bailAnalysisCapacity();
 }
 #endif
-#endif
 
 void addImport (const char16_t* statement_start, const char16_t* start, const char16_t* end, const char16_t* dynamic) {
-#ifndef LEXER_MIN
   ensureAnalysisCapacity(sizeof(Import));
-#endif
   Import* import = (Import*)(analysis_head);
   analysis_head = analysis_head + sizeof(Import);
   if (import_write_head == NULL)
@@ -309,9 +300,7 @@ void addImport (const char16_t* statement_start, const char16_t* start, const ch
 }
 
 void addExport (const char16_t* start, const char16_t* end, const char16_t* local_start, const char16_t* local_end) {
-#ifndef LEXER_MIN
   ensureAnalysisCapacity(sizeof(Export));
-#endif
   Export* export = (Export*)(analysis_head);
   analysis_head = analysis_head + sizeof(Export);
   if (export_write_head == NULL)

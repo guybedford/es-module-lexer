@@ -2087,6 +2087,20 @@ function x() {
     assert.strictEqual(exports[count - 1].fi, count - 1);
   });
 
+  test('Record-dense sources outgrow the arena in every build', () => {
+    // The minimal records are smaller, but a bare clause still needs several
+    // times its own source bytes.
+    const exportCount = 1000000;
+    const [, exports] = parse(`export{${'a,'.repeat(exportCount)}}`);
+    assert.strictEqual(exports.length, exportCount);
+    assert.strictEqual(exports[exportCount - 1].s, 5 + 2 * exportCount);
+
+    const importCount = 30000;
+    const [imports] = parse(`import'a';`.repeat(importCount));
+    assert.strictEqual(imports.length, importCount);
+    assert.strictEqual(imports[importCount - 1].n, 'a');
+  });
+
   test('Template-span-dense sources report every glob', () => {
     if (min) return;
     // Each statement's Import record and span outgrow its source bytes, so the

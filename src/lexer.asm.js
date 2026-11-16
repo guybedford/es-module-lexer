@@ -44,8 +44,7 @@ export function parse (_source, _name = '@') {
     asm = asmInit(typeof globalThis !== 'undefined' ? globalThis : self, {}, asmBuffer);
     // lexer.c bulk allocates string space + analysis space
     addr = asm.su(allocSize - (2<<17), {{STATIC_TOP}});
-    if (!MINIMAL)
-      asm.sal(allocSize - (2<<17));
+    asm.sal(allocSize - (2<<17));
   }
   const len = source.length + 1;
   asm.ses(addr);
@@ -56,7 +55,7 @@ export function parse (_source, _name = '@') {
   if (!asm.p()) {
     // -1 is the analysis arena running out: nothing is reported, so double the
     // buffer and lex again rather than truncating the records.
-    if (!MINIMAL && asm.e() === -1) {
+    if (asm.e() === -1) {
       allocSize *= 2;
       asm = undefined;
       return parse(_source, _name);
