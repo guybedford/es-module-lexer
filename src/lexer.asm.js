@@ -33,9 +33,10 @@ export function parse (_source, _name = '@') {
   source = _source;
   name = _name;
   // 2 bytes per string code point
-  // + analysis space (2 bytes per code point, grown on overflow below)
+  // + analysis space (2 bytes per code point, grown on overflow below; the
+  //   minimal build has no overflow check so takes its 10 byte worst case)
   // + EMCC stack space (2^18)
-  const analysisSize = Math.max(2 << 17, source.length * 2);
+  const analysisSize = Math.max(2 << 17, MINIMAL ? source.length * 10 + 16 : source.length * 2);
   const memBound = source.length * 2 + analysisSize + (2 << 17);
   if (memBound > allocSize || !asm) {
     while (memBound > allocSize) allocSize *= 2;

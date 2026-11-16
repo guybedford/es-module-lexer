@@ -1182,6 +1182,24 @@ suite('Lexer', () => {
     assert.strictEqual(source.slice(s, e), 'import.meta');
   });
 
+  test('records are correct for odd and even source lengths', () => {
+    // An even source length used to leave the analysis records 2-byte aligned,
+    // which made the asm.js build mix up record fields.
+    for (let pad = 0; pad < 4; pad++) {
+      const source = `import 'a';\nimport.meta.url;\nexport const x = 1, y = 2;${' '.repeat(pad)}`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 2);
+      assert.strictEqual(imports[0].t, 1);
+      assert.strictEqual(imports[0].n, 'a');
+      assert.strictEqual(imports[1].t, 3, `import.meta type, source length ${source.length}`);
+      assert.strictEqual(imports[1].d, -2);
+      assert.strictEqual(source.slice(imports[1].s, imports[1].e), 'import.meta');
+      assert.strictEqual(exports.length, 2);
+      assertExportIs(source, exports[0], { n: 'x', ln: 'x' });
+      assertExportIs(source, exports[1], { n: 'y', ln: 'y' });
+    }
+  });
+
   test('import meta edge cases', () => {
     const source = `
       // Import meta
@@ -2067,6 +2085,20 @@ function x() {
     assert.deepStrictEqual(imports[count - 1].at, [['t', 'j']]);
     assert.strictEqual(exports[count - 1].t, 3);
     assert.strictEqual(exports[count - 1].fi, count - 1);
+  });
+
+  test('Record-dense sources outgrow the arena in every build', () => {
+    // The minimal records are smaller, but a bare clause still needs several
+    // times its own source bytes.
+    const exportCount = 1000000;
+    const [, exports] = parse(`export{${'a,'.repeat(exportCount)}}`);
+    assert.strictEqual(exports.length, exportCount);
+    assert.strictEqual(exports[exportCount - 1].s, 5 + 2 * exportCount);
+
+    const importCount = 30000;
+    const [imports] = parse(`import'a';`.repeat(importCount));
+    assert.strictEqual(imports.length, importCount);
+    assert.strictEqual(imports[importCount - 1].n, 'a');
   });
 
   test('Template-span-dense sources report every glob', () => {
