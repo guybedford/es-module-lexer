@@ -9,6 +9,37 @@ const { init, parse } = require('../_lexer.cjs');
 suite('TS type declarations', () => {
   setup(async () => await init);
 
+  test('Unicode line separators preserve type erasure and runtime edges', () => {
+    for (const separator of ['\u2028', '\u2029']) {
+      for (const prefix of [
+        "type T = import('erased').T",
+        `type T = keyof${separator}import('erased').T`,
+        `type T = A/*${separator}*/`,
+        `type T = A// comment${separator}`,
+        'export declare const gone: number',
+        'export const first: number = 1'
+      ]) {
+        const source = `${prefix}${separator}import('runtime'); export const next = 1;`;
+        const [imports, exports] = parse(source);
+        assert.strictEqual(imports.length, 1, source);
+        assert.strictEqual(imports[0].n, 'runtime', source);
+        assert.strictEqual(imports[0].tp, false, source);
+        assert.strictEqual(exports.at(-1).n, 'next', source);
+      }
+    }
+  });
+
+  test('Unicode whitespace preserves pending type operands across line breaks', () => {
+    for (const whitespace of ['\u1680', '\u2000', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF']) {
+      const source = `type T = keyof${whitespace}\nimport('erased').T;\nimport('runtime'); export const next = 1;`;
+      const [imports, exports] = parse(source);
+      assert.strictEqual(imports.length, 1, source);
+      assert.strictEqual(imports[0].n, 'runtime', source);
+      assert.strictEqual(imports[0].tp, false, source);
+      assert.strictEqual(exports.at(-1).n, 'next', source);
+    }
+  });
+
   test('export type alias is type-only', () => {
     const [, exports] = parse(`export type Foo = Bar;`);
     assert.deepStrictEqual(exports.map(e => e.n), ['Foo']);

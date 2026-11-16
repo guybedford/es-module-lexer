@@ -8,6 +8,9 @@ Outputs the list and locations of exports and import specifiers, including dynam
 
 Supports modern syntax features including import attributes, deferred evaluation, and source phase imports, as well as [lexing type-only TypeScript imports and exports](#typescript) in the full build.
 
+The full builds recognize ECMAScript Unicode whitespace and U+2028/U+2029 line terminators.
+The minimal builds recognize ASCII whitespace and U+00A0, with CR and LF as line terminators.
+
 A very small single JS file (~7KiB Brotli-compressed for the [minimal build](#minimal-build)) that includes inlined WebAssembly for very fast source analysis of ECMAScript module syntax only.
 
 For an example of the performance, Angular 1 (720KiB) is fully parsed in 1ms, in comparison to the fastest JS parser, Acorn which takes over 100ms.
