@@ -7,7 +7,7 @@ if (process.env.ASM) {
   const min = !!process.env.MINIMAL;
 
   suite('asm.js', () => {
-    test('validates without falling back to JavaScript', () => {
+    test('validates without falling back to JavaScript', function () {
       const bundle = pathToFileURL(resolve(
         __dirname,
         min ? '../dist/lexer.minimal.asm.js' : '../dist/lexer.asm.js'
@@ -27,6 +27,9 @@ if (process.env.ASM) {
       ], { encoding: 'utf8', env });
 
       if (child.error) throw child.error;
+      // Node.js 27 no longer accepts the V8 asm.js validation flags.
+      if (child.stderr.includes('bad option: --validate-asm'))
+        this.skip();
       assert.strictEqual(child.status, 0, child.stderr || child.stdout);
       assert.strictEqual(/Invalid asm\.js|Linking failure in asm\.js/.test(child.stderr), false, child.stderr);
     });
