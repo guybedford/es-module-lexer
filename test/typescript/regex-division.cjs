@@ -70,4 +70,17 @@ suite('TS regex / division', () => {
       assert.deepStrictEqual(parse(source)[1].map(e => e.n), ['half', 'after'], source);
     }
   });
+
+  test('for-of keyword after a type annotation or assertion', () => {
+    for (const source of [
+      "for (const x: T of /'/) break; import 'a'",
+      "for (const [a, b]: [T, U] of /'/) break; import 'a'",
+      "for ((x as T) of /'/) break; import 'a'",
+      "for (x! of /'/) break; import 'a'",
+      "for (;a in of / 2;) '/'; import 'a'",
+    ]) {
+      const [imports] = parse(source);
+      assert.strictEqual(imports.length, 1, source);
+    }
+  });
 });
