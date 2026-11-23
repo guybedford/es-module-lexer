@@ -121,6 +121,45 @@ suite('Lexer', () => {
     }
   });
 
+  test('Division of `of` identifier after a keyword in for statement', () => {
+    // The trailing quote only lexes when `/` is division: as a regex opener it
+    // would swallow the quote and leave the string unterminated.
+    const sources = [
+      "for (;a in of / 2;) '/'; import 'a'",
+      "for (;a instanceof of / 2;) '/'; import 'a'",
+      "for (;typeof of / 2;) '/'; import 'a'",
+      "for (;void of / 2;) '/'; import 'a'",
+      "for (;delete of / 2;) '/'; import 'a'",
+      "for (;new of / 2;) '/'; import 'a'",
+      "for (;await of / 2;) '/'; import 'a'",
+      "for (x in of / 2) '/'; import 'a'",
+      "for (x of of / 2) '/'; import 'a'",
+      "for (x of of / 2 / of) '/'; import 'a'",
+    ];
+    for (const source of sources) {
+      const [imports] = parse(source);
+      assert.strictEqual(imports.length, 1, source);
+    }
+  });
+
+  test('for-of with `of` binding retains regex parsing', () => {
+    // The regex bodies only lex as regexes: as division the quote would open
+    // an unterminated string.
+    const sources = [
+      "for (of of /'/) break; import 'a'",
+      "for (var of of /'/) break; import 'a'",
+      "for (let of of /'/) break; import 'a'",
+      "for (const of of /'/) break; import 'a'",
+      "for (x of /'/) break; import 'a'",
+      "for (proof of /'/) break; import 'a'",
+      "for (within of /'/) break; import 'a'",
+    ];
+    for (const source of sources) {
+      const [imports] = parse(source);
+      assert.strictEqual(imports.length, 1, source);
+    }
+  });
+
   test(`Defer phase imports`, () => {
     const source = `
       import defer

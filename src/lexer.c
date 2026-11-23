@@ -3519,7 +3519,27 @@ bool isForOfBinding (char16_t* pos) {
   // Skip whitespace back to the binding's last char.
   while (pos > source && isBrOrWs(*pos))
     pos--;
-  return *pos == ']' || *pos == '}' || *pos == ')' || !isPunctuator(*pos);
+  if (*pos == ']' || *pos == '}' || *pos == ')')
+    return true;
+  if (isPunctuator(*pos))
+    return false;
+  // A preceding operator or declaration keyword makes `of` an identifier:
+  // `for (;a in of / 2;)`, `for (const of of /regex/)`.
+  if (isExpressionKeyword(pos))
+    return false;
+  switch (*pos) {
+    case 'r':
+      // var
+      return !(*(pos - 1) == 'a' && readPrecedingKeyword1(pos - 2, 'v'));
+    case 't':
+      // let, const
+      return !(*(pos - 1) == 'e' && readPrecedingKeyword1(pos - 2, 'l') ||
+          *(pos - 1) == 's' && *(pos - 2) == 'n' && *(pos - 3) == 'o' && readPrecedingKeyword1(pos - 4, 'c'));
+    case 'f':
+      // A preceding `of` that is itself the for-of keyword, `for (x of of / 2)`.
+      return !(readPrecedingKeyword1(pos - 1, 'o') && isForOfBinding(pos - 2));
+  }
+  return true;
 }
 
 bool isSpread (char16_t* c) {
