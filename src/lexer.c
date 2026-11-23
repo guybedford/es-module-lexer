@@ -465,6 +465,13 @@ static inline __attribute__((always_inline)) bool consumeToken (
       }
       goto skipTokenRun;
 #endif
+    case 'o':
+      // An `of` in operator position of a for header is the for-of keyword,
+      // so a following `/` is a regex. Anywhere else it is an identifier.
+      if (*(pos + 1) == 'f' && !isTokenRunChar(*(pos + 2)) && isForHeader() &&
+          !lastTokenEndsExpression() && !isDeclarationKeyword(lastTokenPos))
+        forOfKeywordPos = pos + 1;
+      goto skipTokenRun;
     case '(':
       if (!pushOpenToken(AnyParen, lastTokenPos))
         return false;
@@ -675,15 +682,8 @@ static inline __attribute__((always_inline)) bool consumeToken (
     default:
       if (!isTokenRunChar(ch))
         break;
-    skipTokenRun: {
-      char16_t* tokenStart = pos;
+    skipTokenRun:
       while (isTokenRunChar(*(pos + 1))) pos++;
-      // An `of` in operator position of a for header is the for-of keyword,
-      // so a following `/` is a regex. Anywhere else it is an identifier.
-      if (pos - tokenStart == 1 && *tokenStart == 'o' && *pos == 'f' && isForHeader() &&
-          !lastTokenEndsExpression() && !isDeclarationKeyword(lastTokenPos))
-        forOfKeywordPos = pos;
-    }
   }
   if (!isComment)
     lastTokenPos = pos;
