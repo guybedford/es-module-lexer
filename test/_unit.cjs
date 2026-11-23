@@ -135,6 +135,11 @@ suite('Lexer', () => {
       "for (x in of / 2) '/'; import 'a'",
       "for (x of of / 2) '/'; import 'a'",
       "for (x of of / 2 / of) '/'; import 'a'",
+      "for (;a in /*c*/ of / 2;) '/'; import 'a'",
+      "for (;a in\n// c\nof / 2;) '/'; import 'a'",
+      "for (;a ?? of / 2;) '/'; import 'a'",
+      "for (async of => {}; of / 2;) '/'; import 'a'",
+      "for (let of = 1; of / 2;) '/'; import 'a'",
     ];
     for (const source of sources) {
       const [imports] = parse(source);
@@ -153,6 +158,15 @@ suite('Lexer', () => {
       "for (x of /'/) break; import 'a'",
       "for (proof of /'/) break; import 'a'",
       "for (within of /'/) break; import 'a'",
+      "for (a.in of /'/) break; import 'a'",
+      "for (a.of of /'/) break; import 'a'",
+      "for (using of /'/) break; import 'a'",
+      "for (await using of of /'/) break; import 'a'",
+      "for (x /*c*/ of /'/) break; import 'a'",
+      "for (x\n// in\nof /'/) break; import 'a'",
+      "for (x of /*c*/ /'/) break; import 'a'",
+      "for await (x of /'/) break; import 'a'",
+      "for await (const x of /'/) break; import 'a'",
     ];
     for (const source of sources) {
       const [imports] = parse(source);

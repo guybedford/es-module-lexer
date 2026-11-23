@@ -227,7 +227,7 @@ static bool lastTokenEndsExpression () {
 #endif
       ||
       lastToken == ')' && isParenKeyword(openTokenStack[openTokenDepth].pos) ||
-      openTokenDepth > 0 && openTokenStack[openTokenDepth - 1].token == AnyParen && *(lastTokenPos) == 'f' && *(lastTokenPos - 1) == 'o' && isForOfBinding(lastTokenPos - 2) && readPrecedingKeywordn(openTokenStack[openTokenDepth - 1].pos, FOR, 3) ||
+      lastTokenPos == forOfKeywordPos ||
       lastToken == '}' && (isExpressionTerminator(openTokenStack[openTokenDepth].pos) || openTokenStack[openTokenDepth].token == ClassBrace) ||
       isExpressionKeyword(lastTokenPos) ||
       lastToken == '/' && lastSlashWasDivision ||
@@ -675,8 +675,15 @@ static inline __attribute__((always_inline)) bool consumeToken (
     default:
       if (!isTokenRunChar(ch))
         break;
-    skipTokenRun:
+    skipTokenRun: {
+      char16_t* tokenStart = pos;
       while (isTokenRunChar(*(pos + 1))) pos++;
+      // An `of` in operator position of a for header is the for-of keyword,
+      // so a following `/` is a regex. Anywhere else it is an identifier.
+      if (pos - tokenStart == 1 && *tokenStart == 'o' && *pos == 'f' && isForHeader() &&
+          !lastTokenEndsExpression() && !isDeclarationKeyword(lastTokenPos))
+        forOfKeywordPos = pos;
+    }
   }
   if (!isComment)
     lastTokenPos = pos;
@@ -700,6 +707,7 @@ bool parse () {
   openTokenDepth = 0;
   lastTokenPos = (char16_t*)STATEMENT_END;
   lastSlashWasDivision = false;
+  forOfKeywordPos = NULL;
 #ifdef LEX_TS
   tsExportBindingDepth = 0;
   tsTypeAngleEnd = NULL;
@@ -3507,39 +3515,37 @@ bool isBrOrWsOrPunctuatorOrSpreadNotDot (char16_t* c) {
   return *c > 8 && *c < 14 || *c == 32 || *c == 160 || isPunctuator(*c) && (isSpread(c) || *c != '.');
 }
 
-// Detects whether the character sequence ending at `pos` (inclusive) ends a
-// for-of binding. In valid JS, the for-of `of` keyword always follows a
-// binding that ends with an identifier-tail char, ']', '}', or ')'.
-// Used to disambiguate `for (... of /regex/)` from `for (i = of / 2;;)`.
-bool isForOfBinding (char16_t* pos) {
-  // 'of' must be a complete token: the char before 'o' must be whitespace
-  // or a binding-terminator punctuator (excludes `proof / 2` etc.)
-  if (!isBrOrWs(*pos) && *pos != ']' && *pos != '}' && *pos != ')')
+// The open paren of `for (` or `for await (`.
+bool isForHeader () {
+  if (openTokenDepth == 0 || openTokenStack[openTokenDepth - 1].token != AnyParen)
     return false;
-  // Skip whitespace back to the binding's last char.
-  while (pos > source && isBrOrWs(*pos))
-    pos--;
-  if (*pos == ']' || *pos == '}' || *pos == ')')
-    return true;
-  if (isPunctuator(*pos))
-    return false;
-  // A preceding operator or declaration keyword makes `of` an identifier:
-  // `for (;a in of / 2;)`, `for (const of of /regex/)`.
-  if (isExpressionKeyword(pos))
-    return false;
+  char16_t* curPos = openTokenStack[openTokenDepth - 1].pos;
+  if (*curPos == 't' && readPrecedingKeywordn(curPos - 1, AWAI, 4)) {
+    curPos -= 5;
+    while (curPos > source && isBrOrWs(*curPos))
+      curPos--;
+  }
+  return readPrecedingKeywordn(curPos, FOR, 3);
+}
+
+// Detects var, let, const and `await using`, after which `of` is a binding
+// name. A lone `using` is an identifier in `for (using of xs)`.
+bool isDeclarationKeyword (char16_t* pos) {
   switch (*pos) {
     case 'r':
-      // var
-      return !(*(pos - 1) == 'a' && readPrecedingKeyword1(pos - 2, 'v'));
+      return *(pos - 1) == 'a' && readPrecedingKeyword1(pos - 2, 'v');
     case 't':
-      // let, const
-      return !(*(pos - 1) == 'e' && readPrecedingKeyword1(pos - 2, 'l') ||
-          *(pos - 1) == 's' && *(pos - 2) == 'n' && *(pos - 3) == 'o' && readPrecedingKeyword1(pos - 4, 'c'));
-    case 'f':
-      // A preceding `of` that is itself the for-of keyword, `for (x of of / 2)`.
-      return !(readPrecedingKeyword1(pos - 1, 'o') && isForOfBinding(pos - 2));
+      return *(pos - 1) == 'e' && readPrecedingKeyword1(pos - 2, 'l') ||
+          *(pos - 1) == 's' && *(pos - 2) == 'n' && *(pos - 3) == 'o' && readPrecedingKeyword1(pos - 4, 'c');
+    case 'g':
+      if (*(pos - 1) != 'n' || *(pos - 2) != 'i' || *(pos - 3) != 's' || !readPrecedingKeyword1(pos - 4, 'u'))
+        return false;
+      pos -= 5;
+      while (pos > source && isBrOrWs(*pos))
+        pos--;
+      return *pos == 't' && readPrecedingKeywordn(pos - 1, AWAI, 4);
   }
-  return true;
+  return false;
 }
 
 bool isSpread (char16_t* c) {

@@ -176,6 +176,7 @@ bool hasModuleSyntax;
 bool lastSlashWasDivision;
 uint16_t openTokenDepth;
 char16_t* lastTokenPos;
+char16_t* forOfKeywordPos;
 char16_t* pos;
 char16_t* end;
 OpenToken* openTokenStack;
@@ -565,7 +566,8 @@ bool isBrOrWs (char16_t c);
 bool isBrOrWsOrPunctuator (char16_t c);
 bool isSpread (char16_t* c);
 bool isBrOrWsOrPunctuatorNotDot (char16_t c);
-bool isForOfBinding (char16_t* pos);
+bool isForHeader ();
+bool isDeclarationKeyword (char16_t* pos);
 
 bool readPrecedingKeyword1(char16_t* pos, char16_t c1);
 bool readPrecedingKeywordn(char16_t* pos, const char16_t* compare, size_t n);
